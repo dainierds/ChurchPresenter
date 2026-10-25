@@ -1,3 +1,4 @@
+/* Output Viewport: full screen container with black letterboxing */
 .output-viewport {
   position: absolute;
   top: 0;
@@ -8,8 +9,22 @@
   padding: 0;
   overflow: hidden;
   background-color: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: none !important;
   user-select: none;
+}
+
+/* 1920x1080 Reference Canvas scaled dynamically to fit any display */
+.output-canvas {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex-shrink: 0;
+  transform-origin: center center;
+  overflow: hidden;
+  background-color: #000000;
 }
 
 /* Layer 1: Background */
@@ -17,8 +32,8 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 1920px;
+  height: 1080px;
   z-index: 10;
   transition: opacity 0.25s ease-in-out;
 }
@@ -28,55 +43,49 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 1920px;
+  height: 1080px;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  padding: 6vw 8vw;
-  text-align: center;
+  box-sizing: border-box;
   transition: opacity 0.2s ease-in-out;
 }
 
+.content-inner-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: transform 0.15s ease-out;
+}
+
 .content-title {
-  font-size: 3.5vw;
+  font-size: 56px;
   font-weight: 800;
   color: #ffffff;
-  margin-bottom: 2vw;
-  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.85);
+  margin-bottom: 24px;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.9);
   letter-spacing: -0.01em;
 }
 
 .content-body {
-  font-size: 2.8vw;
-  font-weight: 600;
+  font-size: 64px;
+  font-weight: 700;
   color: #f8fafc;
-  line-height: 1.45;
+  line-height: 1.4;
   white-space: pre-line;
-  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.95);
-  max-width: 90%;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.95);
+  word-break: break-word;
 }
 
 .content-subtitle {
-  font-size: 1.8vw;
-  font-weight: 500;
+  font-size: 32px;
+  font-weight: 600;
   color: #93c5fd;
-  margin-top: 2.5vw;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-}
-
-/* Stage Mode specific adjustments: higher contrast, large lyrics */
-.stage-mode .content-title {
-  font-size: 2.8vw;
-  color: #fbbf24;
-}
-
-.stage-mode .content-body {
-  font-size: 3.6vw;
-  font-weight: 700;
-  color: #ffffff;
+  margin-top: 32px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
 }
 
 /* Layer 3: Overlay (Logo) */
@@ -84,8 +93,8 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 1920px;
+  height: 1080px;
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -99,7 +108,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5vw;
+  gap: 24px;
   animation: logoFadeIn 0.4s ease-out;
 }
 
@@ -109,36 +118,36 @@
 }
 
 .church-logo-icon {
-  width: 12vw;
-  height: 12vw;
-  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.8));
+  width: 180px;
+  height: 180px;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.85));
 }
 
 .church-logo-text {
-  font-size: 3.5vw;
+  font-size: 54px;
   font-weight: 900;
   color: #ffffff;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  text-shadow: 0 6px 20px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.9);
 }
 
 /* Layer 4: Message Layer */
 .layer-message {
   position: absolute;
-  bottom: 5vh;
-  left: 5vw;
-  right: 5vw;
+  bottom: 60px;
+  left: 120px;
+  right: 120px;
   z-index: 40;
-  background: rgba(15, 23, 42, 0.92);
-  border: 2px solid #3b82f6;
-  border-radius: 12px;
-  padding: 1.5vw 2.5vw;
+  background: rgba(15, 23, 42, 0.94);
+  border: 3px solid #3b82f6;
+  border-radius: 16px;
+  padding: 24px 40px;
   color: #ffffff;
-  font-size: 2vw;
+  font-size: 36px;
   font-weight: 700;
   text-align: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
 }
 
 /* Blackout mode */
@@ -146,26 +155,191 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   background-color: #000000;
   z-index: 100;
 }
 
-/* Stress Test Pattern Overlay */
+/* =========================================================
+   STAGE MONITOR VIEW (Confidence Monitor)
+   High contrast, clear layout for platform / choir / musicians
+   ========================================================= */
+.stage-monitor-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 48px;
+  box-sizing: border-box;
+  background-color: #000000;
+  color: #ffffff;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.stage-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #334155;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.stage-badge {
+  font-size: 24px;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 0.08em;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #0284c7;
+}
+
+.stage-song-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #e2e8f0;
+  max-width: 900px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-clock {
+  font-size: 40px;
+  font-weight: 800;
+  color: #fbbf24;
+  font-family: 'Consolas', monospace;
+  background: rgba(30, 41, 59, 0.7);
+  padding: 6px 20px;
+  border-radius: 8px;
+  border: 1px solid #475569;
+}
+
+/* Prominent Stage Operator Alert Banner */
+.stage-operator-alert {
+  background: linear-gradient(90deg, #dc2626, #b91c1c);
+  color: #ffffff;
+  padding: 16px 28px;
+  border-radius: 12px;
+  font-size: 32px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 0 30px rgba(220, 38, 38, 0.7);
+  animation: pulseAlert 1.5s infinite;
+}
+
+@keyframes pulseAlert {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.01); }
+}
+
+.stage-split-panels {
+  display: flex;
+  flex: 1;
+  gap: 32px;
+  height: calc(100% - 130px);
+}
+
+.stage-panel {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  padding: 28px 36px;
+  box-sizing: border-box;
+  background: #090d16;
+  border: 2px solid #1e293b;
+}
+
+.stage-panel-current {
+  flex: 62;
+  border-color: #3b82f6;
+  background: #060911;
+  box-shadow: inset 0 0 40px rgba(59, 130, 246, 0.15);
+}
+
+.stage-panel-next {
+  flex: 38;
+  border-color: #475569;
+  background: #0b0f19;
+}
+
+.stage-panel-label {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #334155;
+}
+
+.stage-panel-current .stage-panel-label {
+  color: #60a5fa;
+}
+
+.stage-panel-next .stage-panel-label {
+  color: #94a3b8;
+}
+
+.stage-panel-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.stage-lyrics-current {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #ffffff;
+  white-space: pre-line;
+  text-align: left;
+  width: 100%;
+}
+
+.stage-lyrics-next {
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #94a3b8;
+  white-space: pre-line;
+  text-align: left;
+  width: 100%;
+}
+
+.stage-lyrics-empty {
+  font-size: 28px;
+  color: #475569;
+  font-style: italic;
+}
+
+/* Stress Test Diagnostics Overlay */
 .stress-test-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 1920px;
+  height: 1080px;
   z-index: 80;
   background-color: rgba(5, 7, 12, 0.88);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 3vw;
-  border: 4px solid #ef4444;
+  padding: 48px;
+  box-sizing: border-box;
+  border: 6px solid #ef4444;
 }
 
 .stress-header {
@@ -175,40 +349,40 @@
 }
 
 .stress-title {
-  font-size: 2vw;
+  font-size: 36px;
   font-weight: 900;
   color: #ef4444;
   letter-spacing: 0.05em;
 }
 
 .stress-role {
-  font-size: 1.6vw;
+  font-size: 24px;
   color: #94a3b8;
-  margin-top: 0.5vw;
+  margin-top: 8px;
 }
 
 .stress-stats {
   display: flex;
-  gap: 3vw;
+  gap: 40px;
   font-family: 'Consolas', 'Courier New', monospace;
 }
 
 .stat-box {
   background: rgba(30, 41, 59, 0.9);
   border: 1px solid #475569;
-  border-radius: 8px;
-  padding: 1vw 1.5vw;
+  border-radius: 12px;
+  padding: 16px 24px;
   text-align: center;
 }
 
 .stat-label {
-  font-size: 1vw;
+  font-size: 16px;
   color: #94a3b8;
-  margin-bottom: 0.4vw;
+  margin-bottom: 6px;
 }
 
 .stat-value {
-  font-size: 2.2vw;
+  font-size: 36px;
   font-weight: 700;
   color: #38bdf8;
 }
@@ -223,14 +397,13 @@
   50% { opacity: 0.3; }
 }
 
-/* Animated smooth moving test square across the middle */
 .stress-animation-track {
   position: relative;
   width: 100%;
-  height: 16vh;
+  height: 160px;
   background: rgba(15, 23, 42, 0.7);
   border: 2px dashed #334155;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -238,16 +411,16 @@
 
 .stress-moving-square {
   position: absolute;
-  width: 12vh;
-  height: 12vh;
+  width: 120px;
+  height: 120px;
   background: linear-gradient(135deg, #3b82f6, #ec4899);
-  border: 3px solid #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 0 25px rgba(59, 130, 246, 0.8);
+  border: 4px solid #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 0 35px rgba(59, 130, 246, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2vw;
+  font-size: 22px;
   font-weight: 800;
   color: white;
 }

@@ -11,14 +11,14 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Selección de stack tecnológico (Electron + Vite + React + TypeScript + SQLite).
 - Diseño de arquitectura de procesos y aislamiento de seguridad.
 
-### Fase 1: Cimientos (En curso / Implementada)
+### Fase 1: Cimientos (Completada)
 - Estructura limpia modular: `main`, `preload`, `renderer/operator`, `renderer/output`, `shared`.
 - Documentación técnica inicial: `ARCHITECTURE.md`, `DECISIONS.md`, `ROADMAP.md`, `README.md`.
 - Configuración de linting, tipado estricto (`tsc`), pruebas unitarias (`vitest`) y script `npm run verify`.
 - Base de datos local SQLite con soporte de migraciones automáticas para configuraciones.
 - Sistema de logs rotativos persistentes en disco (`electron-log`).
 
-### Fase 2: Motor de salidas multipantalla (En curso / Implementada)
+### Fase 2: Motor de salidas multipantalla (Completada)
 - Detección en vivo de pantallas físicas con Electron `screen` API (`display-added`, `display-removed`, `display-metrics-changed`).
 - Modelo de roles de salida (`operator`, `main`, `stage`, `lobby`) extensible y asignable dinámicamente.
 - Persistencia y restauración de asignación de pantallas; tolerancia a pantallas desconectadas.
@@ -29,10 +29,16 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Modo de prueba de estrés animado (contador de fotogramas, reloj en ms, monitor de resolución y registro de bajadas de FPS).
 - Tolerancia a fallos: autorrecuperación de ventanas de salida en caso de cierre anómalo.
 
-### Fase 3: Contenido y canciones
-- Biblioteca de canciones, estrofas, coros y acordes.
-- Formato de temas, plantillas visuales, tipografías y alineación.
-- Búsqueda instantánea y transiciones suaves.
+### Fase 3: Contenido y servicio (Completada)
+- Modelo de datos estructurado en SQLite (Migración 3): Canciones, Grupos (Verso, Coro, Puente, etc.), Arreglos, Presentaciones genéricas, Temas, Fondos, Servicios y Plantillas.
+- Editor de canciones con detección automática de secciones mediante pegado de letra, reordenamiento de grupos, división automática por líneas por diapositiva, deshacer/rehacer (Undo/Redo) y vista previa de tema en vivo. Soporte UTF-8 completo para español.
+- Motor de Temas con tipografía, colores, sombras, contornos, alineación, márgenes de seguridad y sobreescritura específica por rol de salida (ej. Escenario).
+- Escalado universal a 1920x1080 para cualquier resolución y ajuste dinámico de tamaño de texto (auto-fit) para evitar desbordes de márgenes seguros.
+- Gestor de biblioteca de fondos e importación/exportación completa de biblioteca en JSON.
+- Lista de reproducción del servicio (culto) con canciones, presentaciones, diapositivas en blanco y separadores; creación desde plantillas y duplicación de cultos.
+- Panel del operador en 3 zonas (Biblioteca con búsqueda insensible a acentos y tolerante a fallos de tipografía, Lista de Servicio, Cuadrícula de diapositivas con monitores duales de Previo y En Vivo).
+- Atajos de teclado para avance de diapositivas y navegación de listas, y botón "Actualizar en vivo" para canciones editadas mientras están proyectadas.
+- Monitor de Escenario (Confidence Monitor): vista dividida con diapositiva actual en alto contraste, vista previa de la siguiente diapositiva, reloj en tiempo real y banner de alertas del operador.
 
 ### Fase 4: Biblia
 - Múltiples versiones bíblicas locales (RVR1960, NVI, etc.).

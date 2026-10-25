@@ -8,6 +8,7 @@ import { displayManager } from './display-manager'
 import { windowManager } from './window-manager'
 import { registerIpcHandlers } from './ipc-handlers'
 import { shortcutsManager } from './shortcuts-manager'
+import { libraryService } from './library-service'
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -51,6 +52,9 @@ async function initializeApp() {
 
     await databaseService.initialize()
     logger.info('Database initialized.')
+
+    libraryService.initialize()
+    logger.info('LibraryService initialized.')
 
     displayManager.initialize()
     logger.info('DisplayManager initialized.')

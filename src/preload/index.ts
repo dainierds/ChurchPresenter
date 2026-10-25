@@ -7,8 +7,14 @@ import {
   PresenterState,
   RoleAssignment,
   TestSlide,
+  SlideItem,
   AppShortcutsConfig,
-  AppNotification
+  AppNotification,
+  Song,
+  GenericPresentation,
+  ThemeConfig,
+  BackgroundImageItem,
+  ServicePlan
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -52,8 +58,12 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.STATE_TOGGLE_CONTROL, control)
   },
 
-  sendSlide: (slide: TestSlide, targetRoles?: string[]): Promise<PresenterState> => {
-    return ipcRenderer.invoke(IPC_CHANNELS.STATE_SEND_SLIDE, slide, targetRoles)
+  sendSlide: (slide: TestSlide | SlideItem, targetRoles?: string[], nextSlide?: SlideItem): Promise<PresenterState> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STATE_SEND_SLIDE, slide, targetRoles, nextSlide)
+  },
+
+  setOutputMessage: (role: string, message: string, visible: boolean): Promise<PresenterState> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STATE_SET_MESSAGE, role, message, visible)
   },
 
   setStressTestMode: (enabled: boolean): Promise<PresenterState> => {
@@ -91,6 +101,88 @@ const api: ChurchPresenterApi = {
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_EMIT, subscription)
     }
+  },
+
+  // Phase 3: Songs Library
+  getSongs: (): Promise<Song[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SONGS_GET)
+  },
+
+  getSongById: (id: string): Promise<Song | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SONGS_GET_BY_ID, id)
+  },
+
+  saveSong: (song: Song): Promise<Song> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SONGS_SAVE, song)
+  },
+
+  deleteSong: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SONGS_DELETE, id)
+  },
+
+  // Phase 3: Presentations
+  getPresentations: (): Promise<GenericPresentation[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PRESENTATIONS_GET)
+  },
+
+  savePresentation: (presentation: GenericPresentation): Promise<GenericPresentation> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PRESENTATIONS_SAVE, presentation)
+  },
+
+  deletePresentation: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PRESENTATIONS_DELETE, id)
+  },
+
+  // Phase 3: Themes
+  getThemes: (): Promise<ThemeConfig[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_GET)
+  },
+
+  saveTheme: (theme: ThemeConfig): Promise<ThemeConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_SAVE, theme)
+  },
+
+  setDefaultTheme: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_SET_DEFAULT, id)
+  },
+
+  // Phase 3: Background Images
+  getBackgroundImages: (): Promise<BackgroundImageItem[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BACKGROUNDS_GET)
+  },
+
+  importBackgroundImage: (sourcePath: string, name?: string): Promise<BackgroundImageItem> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BACKGROUNDS_IMPORT, sourcePath, name)
+  },
+
+  deleteBackgroundImage: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BACKGROUNDS_DELETE, id)
+  },
+
+  // Phase 3: Services & Templates
+  getServices: (): Promise<ServicePlan[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_GET)
+  },
+
+  saveService: (service: ServicePlan): Promise<ServicePlan> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_SAVE, service)
+  },
+
+  deleteService: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_DELETE, id)
+  },
+
+  getTemplates: (): Promise<ServicePlan[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_GET_TEMPLATES)
+  },
+
+  // Phase 3: Export & Import
+  exportLibrary: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_EXPORT)
+  },
+
+  importLibrary: (jsonData: string): Promise<{ importedSongs: number; importedPresentations: number }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_IMPORT, jsonData)
   },
 
   // Diagnostics & Logging

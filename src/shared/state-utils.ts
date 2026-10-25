@@ -2,7 +2,8 @@ import {
   GlobalControls,
   OutputLayersState,
   PresenterState,
-  TestSlide
+  TestSlide,
+  DEFAULT_THEME
 } from './types'
 
 export function createInitialOutputLayersState(): OutputLayersState {
@@ -35,6 +36,7 @@ export function createInitialPresenterState(): PresenterState {
       stage: createInitialOutputLayersState(),
       lobby: createInitialOutputLayersState()
     },
+    currentTheme: DEFAULT_THEME,
     stressTestMode: false,
     updatedAt: Date.now()
   }

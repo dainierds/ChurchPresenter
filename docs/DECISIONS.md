@@ -129,3 +129,75 @@ Este documento registra cada una de las decisiones arquitectónicas y técnicas 
 - **Auditoría de Seguridad (`npm audit`)**:
   - La actualización a Electron 45 eliminó todas las vulnerabilidades de severidad crítica/alta asociadas a Chromium y descompresión de ejecutables (`extract-zip`).
   - Las advertencias restantes en `npm audit` corresponden exclusivamente a herramientas auxiliares de desarrollo en tiempo de compilación (`tinypool` en Vitest, `tar` en electron-builder y `esbuild` en Vite), las cuales no forman parte del bundle final de producción ni se ejecutan en los clientes ni en tiempo de ejecución.
+
+---
+
+## 12. Aislamiento Estricto de Sandbox (`sandbox: true`)
+
+- **Contexto**: Endurecimiento de seguridad en todas las ventanas de Electron.
+- **Decisión**: Activar `sandbox: true` en la configuración webPreferences de todas las ventanas (`operator`, `output` y overlays).
+- **Motivo**:
+  - Garantiza que los procesos de renderizado se ejecuten en un entorno de sandbox estricto de Chromium, sin acceso a APIs nativas de Node.js en el proceso del navegador.
+  - El script `preload/index.ts` se restringe exclusivamente al uso de `contextBridge` e `ipcRenderer`, eliminando dependencias de Node en el renderer y cumpliendo con las mejores prácticas de seguridad de Electron.
+
+---
+
+## 13. Política de Copias de Seguridad Basada en Tiempo y Retención
+
+- **Contexto**: Evitar backups masivos en cada pulsación o guardado menor, asegurando que existan copias históricas seguras ante imprevistos.
+- **Decisión**:
+  - Respaldo automático al iniciar la aplicación.
+  - Respaldo automático al cerrar la aplicación (`before-quit`).
+  - Respaldo periódico como máximo una vez cada 15 minutos durante el uso, condicionado exclusivamente a si hubo modificaciones en la base de datos (`dirty flag`).
+  - Copia diaria consolidada retenida durante 14 días en subcarpeta `daily/`.
+  - Mantenimiento rotativo de las últimas 10 copias recientes en `backups/`.
+  - Intervalos y días de retención parametrizables en la configuración.
+
+---
+
+## 14. Disambiguación de Pantallas Idénticas mediante Enumeración de Hermanas
+
+- **Contexto**: Cuando una iglesia conecta dos pantallas del mismo modelo exacto y misma resolución (por ejemplo, dos televisores Samsung de 55"), si el usuario cambia el orden de las ventanas en la configuración de Windows o cambia los puertos HDMI de la GPU, las coordenadas de posición (`pos_x_y`) cambian.
+- **Decisión**:
+  - Incorporar el índice de enumeración de hermanas (`idx_{siblingIndex}`) en el identificador determinista:
+    `disp_${cleanName}_${width}x${height}_idx_${siblingIndex}_pos_${x}_${y}`
+  - Implementar un proceso de reconciliación multifase:
+    1. Coincidencia exacta con ID guardado.
+    2. Coincidencia por modelo, resolución e índice de hermana, tolerando cambios de posición o puerto en Windows.
+    3. Coincidencia singular: si solo queda un monitor de ese modelo disponible, se enlaza automáticamente.
+  - Limitación documentada: si el sistema operativo altera simultáneamente las coordenadas y el orden de enumeración de dos pantallas idénticas mientras ambas están desconectadas, el sistema conservará la asignación asignando una a cada rol según el orden resultante de Electron.
+
+---
+
+## 15. Modelo de Contenido Fase 3: Canciones, Grupos, Arreglos y Servicios
+
+- **Contexto**: Las canciones en las iglesias se estructuran en secciones no lineales (verso, coro, puente) y se cantan en secuencias variables según el servicio (arreglos).
+- **Decisión**:
+  - Crear tablas SQLite normalizadas con integridad referencial:
+    - `songs`: Metadatos (título, autor, copyright, CCLI, idioma, etiquetas).
+    - `song_groups`: Secciones atómicas (verso, coro, puente, pre-coro, final, intro, interludio) con su letra.
+    - `song_arrangements`: Secuencia ordenada de IDs de grupos (`groupIds` serializado en JSON). Cada canción incluye un arreglo predeterminado y permite arreglos alternativos.
+    - `generic_presentations`: Diapositivas libres para anuncios y avisos.
+    - `services`: Lista de reproducción del culto con canciones, arreglos elegidos, presentaciones, separadores y diapositivas en blanco.
+    - `themes`: Configuración tipográfica, márgenes y fondos con soporte de sobreescritura por rol.
+  - Detección automática de grupos en el editor mediante análisis sintáctico de encabezados (`[Verso 1]`, `[Coro]`, etc.) con soporte completo de acentos en español y división automática por líneas por diapositiva.
+  - Pila de historial en memoria para soporte completo de Deshacer (`Undo`) y Rehacer (`Redo`) en el editor de canciones.
+
+---
+
+## 16. Búsqueda Insensible a Acentos y Diacríticos con Tolerancia a Errores
+
+- **Contexto**: En un servicio en vivo, el operador puede escribir "cuan grande" sin acentos, "jesus" en vez de "Jesús", o cometer un error tipográfico rápido como "grnade".
+- **Decisión**:
+  - Algoritmo de normalización NFD eliminando marcas diacríticas (`[\u0300-\u036f]`) y convirtiendo a minúsculas.
+  - Búsqueda en dos fases: coincidencia rápida por subcadenas normalizadas (cubre > 95% de búsquedas a tiempo sub-milisegundo).
+  - Tolerancia a errores mediante distancia de Levenshtein aplicada estrictamente a palabras alfabéticas de más de 4 letras (distancia <= 1 o <= 2), excluyendo números para evitar falsos positivos en números de himnos o CCLI.
+
+---
+
+## 17. Escalado Universal 1920x1080 y Ajuste Automático de Tipografía (Auto-Fit)
+
+- **Contexto**: Las pantallas de salida pueden tener resoluciones 1080p, 4K, 720p o proyectores 16:10. La letra de las canciones no debe salirse de los márgenes seguros bajo ninguna circunstancia.
+- **Decisión**:
+  - Las pantallas de salida renderizan un lienzo de referencia fijo de 1920x1080 píxeles, escalado por CSS transform `scale(Math.min(W/1920, H/1080))` centrado en el viewport con letterboxing negro.
+  - El contenedor de contenido mide en tiempo real `scrollHeight` contra `clientHeight`. Si la letra o el título exceden los márgenes seguros, un factor dinámico de escala reduce proporcionalmente la tipografía hasta que el contenido encaja a la perfección en la pantalla.

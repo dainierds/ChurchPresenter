@@ -124,3 +124,59 @@ Cada rol de salida renderiza cuatro capas apiladas con orden z-index definido:
 | `control:set-global` | Invoke/Handle | Renderer -> Main | Activa/desactiva Black, Clear, Logo, Freeze |
 | `slides:send` | Invoke/Handle | Renderer -> Main | Envía una diapositiva a uno o varios roles |
 | `stress:log-drop` | Send | Renderer -> Main | Notifica caída de FPS en modo de prueba de estrés al logger |
+
+---
+
+## 6. Panel del Operador en 3 Zonas
+
+El panel principal del operador se organiza en tres zonas de trabajo ergonómicas:
+
+```
+┌──────────────────┬───────────────────┬──────────────────────────────────────┐
+│  1. BIBLIOTECA   │ 2. LISTA SERVICIO │ 3. DIAPOSITIVAS Y MONITORES DUALES   │
+│                  │                   │                                      │
+│ [Canciones]      │ Servicio Domingo  │ [EN VIVO]         [VISTA PREVIA]     │
+│ [Presentaciones] │ ───────────────── │ Salida Principal  Monitor Previo     │
+│                  │ 1. 🎵 Alabanza 1  │ ──────────────────────────────────── │
+│ 🔍 Buscar...     │    Arreglo: Def   │ Cuadrícula de diapositivas           │
+│                  │ 2. 🎵 Alabanza 2  │ ┌─────────┐ ┌─────────┐ ┌──────────┐ │
+│ • Cuán Grande    │ 3. 📄 Bienvenida  │ │Verso 1  │ │Coro     │ │Verso 2   │ │
+│ • En la Cruz     │ 4. ➖ En Blanco   │ │(Doble   │ │(Click:  │ │          │ │
+│ • Sublime Gracia │                   │ │ Clic)   │ │ Previo) │ │          │ │
+│                  │ [▲ Subir] [▼] [X] │ └─────────┘ └─────────┘ └──────────┘ │
+│ [+ Nueva Canción]│ [+ Blanco][+ Sep] │ [Actualizar en vivo si fue editada]  │
+└──────────────────┴───────────────────┴──────────────────────────────────────┘
+```
+
+- **Zona 1 (Biblioteca)**: Búsqueda rápida insensible a acentos y tolerante a faltas ortográficas. Acceso a creación/edición de canciones, importación y exportación de biblioteca en formato JSON.
+- **Zona 2 (Lista del Servicio)**: Elementos ordenados del culto (canciones con selector de arreglo, anuncios, diapositivas en blanco y separadores). Permite guardar como plantilla, crear desde plantilla o duplicar cultos.
+- **Zona 3 (Diapositivas y Monitores)**:
+  - **Doble Monitor Superior**: Muestra en tiempo real lo que está `EN VIVO` en las pantallas de la congregación y la `VISTA PREVIA` de la diapositiva seleccionada antes de proyectarla.
+  - **Cuadrícula de Diapositivas**: Un clic selecciona para vista previa; doble clic o tecla `Enter` envía a las pantallas en vivo.
+  - **Actualizar en vivo**: Si el operador edita una canción que está siendo proyectada, lo proyectado se mantiene intacto sin parpadeos hasta que el operador presiona el botón "Actualizar en vivo".
+  - **Navegación por teclado**: Flechas (Arriba/Abajo/Izquierda/Derecha) navegan diapositivas; `PageDown` o tecla `N` avanza al siguiente elemento de la lista del culto.
+
+---
+
+## 7. Monitor de Escenario (Confidence Monitor)
+
+El rol de salida `stage` implementa una vista adaptada para músicos, cantantes y predicador:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ [RETORNO / ESCENARIO]            Cuán Grande es Él                 10:45:00 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🔔 ALERTA DEL OPERADOR: "Baja el volumen del micrófono 2"                   │
+├─────────────────────────────────────────┬───────────────────────────────────┤
+│ EN PANTALLA (62% ancho)                 │ SIGUIENTE (38% ancho)             │
+│                                         │                                   │
+│ ¡Cuán grande es Él!                     │ Cuando recuerdo del amor divino   │
+│ ¡Cuán grande es Él!                     │ que desde el cielo al Salvador    │
+│ Canta mi ser, mi Salvador, a Ti...      │ envió...                          │
+│                                         │                                   │
+└─────────────────────────────────────────┴───────────────────────────────────┘
+```
+
+1. **Reloj de Alta Precisión**: Hora local actualizada cada segundo.
+2. **Banner de Mensajes**: Mensajes instantáneos enviados por el operador (ej. avisos de tiempo, guardería o volumen).
+3. **Panel Dividido Actual vs Siguiente**: Contraste alto con letra extragrande para la diapositiva en curso y previsualización de la siguiente estrofa para anticipar el canto.
