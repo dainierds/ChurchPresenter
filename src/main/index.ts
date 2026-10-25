@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, session } from 'electron'
 
 app.name = 'church-presenter'
 
@@ -25,6 +25,7 @@ import { shortcutsManager } from './shortcuts-manager'
 import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
+import { youtubeService } from './youtube/youtube-service'
 
 // Single instance lock (bypassed in test environment)
 const gotTheLock = isTest ? true : app.requestSingleInstanceLock()
@@ -50,7 +51,8 @@ app.on('web-contents-created', (_event, contents) => {
       process.env['ELECTRON_RENDERER_URL'] &&
       navigationUrl.startsWith(process.env['ELECTRON_RENDERER_URL'])
     const isFileUrl = navigationUrl.startsWith('file://')
-    if (!isDevUrl && !isFileUrl) {
+    const isAllowedRemote = youtubeService.isAllowedUrl(navigationUrl)
+    if (!isDevUrl && !isFileUrl && !isAllowedRemote) {
       event.preventDefault()
       logger.warn(`Blocked navigation attempt to unauthorized URL: ${navigationUrl}`)
     }
@@ -65,6 +67,20 @@ async function initializeApp() {
     // Check GPU Feature status
     const gpuStatus = app.getGPUFeatureStatus()
     logger.info(`Hardware acceleration GPU status: ${JSON.stringify(gpuStatus)}`)
+
+    // Allow YouTube embed preview frames in operator UI
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = { ...details.responseHeaders }
+      if (details.url.includes('youtube.com') || details.url.includes('youtube-nocookie.com')) {
+        delete responseHeaders['x-frame-options']
+        delete responseHeaders['X-Frame-Options']
+        delete responseHeaders['frame-options']
+        if (responseHeaders['content-security-policy']) {
+          delete responseHeaders['content-security-policy']
+        }
+      }
+      callback({ responseHeaders })
+    })
 
     await databaseService.initialize()
     logger.info('Database initialized.')

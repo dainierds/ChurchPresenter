@@ -16,6 +16,7 @@ import {
   createInitialPresenterState,
   toggleControlInState
 } from '../shared/state-utils'
+import { parseYouTubeUrl } from '../shared/youtube-utils'
 import { logger } from './logger'
 
 export class StateManager extends EventEmitter {
@@ -118,6 +119,10 @@ export class StateManager extends EventEmitter {
       const fitMode = (slide as any).fitMode || 'contain'
       const speakerNotes = (slide as any).speakerNotes
       const warnings = (slide as any).warnings
+      const youtubeId =
+        (slide as any).youtubeId ||
+        (mediaType === 'youtube' && mediaUrl ? parseYouTubeUrl(mediaUrl).videoId || undefined : undefined)
+      const youtubeDuration = (slide as any).youtubeDuration
 
       // Special handling for stage (confidence monitor): pass current + next
       if (role === 'stage') {
@@ -133,6 +138,8 @@ export class StateManager extends EventEmitter {
             nextSlideBody: nextSlide?.body,
             mediaUrl,
             mediaType,
+            youtubeId,
+            youtubeDuration,
             pdfPage,
             pdfPageCount,
             fitMode,
@@ -152,6 +159,8 @@ export class StateManager extends EventEmitter {
             subtitle: slide.subtitle,
             mediaUrl,
             mediaType,
+            youtubeId,
+            youtubeDuration,
             pdfPage,
             pdfPageCount,
             fitMode,
@@ -175,6 +184,13 @@ export class StateManager extends EventEmitter {
               ? 'image'
               : undefined)
 
+    const currentSlideMediaUrl = (slide as any).mediaUrl
+    const currentSlideYoutubeId =
+      (slide as any).youtubeId ||
+      (currentSlideMediaType === 'youtube' && currentSlideMediaUrl
+        ? parseYouTubeUrl(currentSlideMediaUrl).videoId || undefined
+        : undefined)
+
     this.state = {
       ...this.state,
       currentSlide: {
@@ -184,8 +200,10 @@ export class StateManager extends EventEmitter {
         subtitle: slide.subtitle,
         nextSlideTitle: nextSlide?.title || nextSlide?.subtitle,
         nextSlideBody: nextSlide?.body,
-        mediaUrl: (slide as any).mediaUrl,
+        mediaUrl: currentSlideMediaUrl,
         mediaType: currentSlideMediaType,
+        youtubeId: currentSlideYoutubeId,
+        youtubeDuration: (slide as any).youtubeDuration,
         pdfPage: (slide as any).pdfPage,
         pdfPageCount: (slide as any).pdfPageCount,
         fitMode: (slide as any).fitMode,

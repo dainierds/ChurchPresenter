@@ -21,6 +21,21 @@ import {
   SlideItem,
   TimerType
 } from '../../../shared/types'
+import { parseYouTubeUrl } from '../../../shared/youtube-utils'
+
+function toMediaUrl(raw?: string): string {
+  if (!raw) return ''
+  if (
+    raw.startsWith('file://') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('blob:') ||
+    raw.startsWith('http://') ||
+    raw.startsWith('https://')
+  ) {
+    return raw
+  }
+  return `file:///${raw.replace(/\\/g, '/')}`
+}
 
 interface RightSidePanelProps {
   state: PresenterState | null
@@ -132,9 +147,27 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const isFreeze = Boolean(state?.controls?.freeze)
   const showLogo = Boolean(state?.controls?.logo || roleLayers?.overlay?.showLogo)
 
+  const activeMediaUrl = roleContent?.mediaUrl || currentSlide?.mediaUrl
+  const activeMediaType = roleContent?.mediaType || currentSlide?.mediaType
+  const isYouTube =
+    !isCleared &&
+    (activeMediaType === 'youtube' ||
+      Boolean((roleContent as any)?.youtubeId) ||
+      Boolean((currentSlide as any)?.youtubeId))
+
+  const activeYoutubeId =
+    (roleContent as any)?.youtubeId ||
+    (currentSlide as any)?.youtubeId ||
+    (isYouTube && activeMediaUrl ? parseYouTubeUrl(activeMediaUrl).videoId : null)
+
+  const isVideo =
+    !isCleared &&
+    !isYouTube &&
+    (activeMediaType === 'video' || (Boolean(activeMediaUrl) && /\.(mp4|webm|mkv|mov)$/i.test(activeMediaUrl || '')))
+
   const hasBackground = Boolean(roleBackground?.value)
   const hasSlide = Boolean(roleContent?.body || roleContent?.title)
-  const hasMedia = Boolean(roleContent?.mediaUrl || state?.mediaSyncTick?.filePath)
+  const hasMedia = Boolean(activeMediaUrl || state?.mediaSyncTick?.filePath || isYouTube)
   const hasMessage = Boolean(roleMessage?.visible && roleMessage?.text)
 
   const mediaTime = state?.mediaSyncTick?.currentTime || 0
@@ -397,10 +430,111 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   />
                 )}
 
-                {/* Media Slide Thumbnail */}
-                {!isCleared && (roleContent?.mediaUrl || currentSlide?.mediaUrl) && (
+                {/* 1. YouTube Live Video Player Layer */}
+                {isYouTube && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: '#000000',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {activeYoutubeId ? (
+                      <iframe
+                        key={activeYoutubeId}
+                        src={`https://www.youtube-nocookie.com/embed/${activeYoutubeId}?autoplay=1&mute=1&controls=0&playsinline=1`}
+                        title="YouTube Live Preview"
+                        allow="autoplay; encrypted-media"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ef4444',
+                          fontSize: 10,
+                          fontWeight: 700
+                        }}
+                      >
+                        ▶ YouTube En Vivo
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        left: 6,
+                        backgroundColor: 'rgba(220, 38, 38, 0.95)',
+                        color: '#ffffff',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: '2px 6px',
+                        borderRadius: 3,
+                        letterSpacing: 0.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        zIndex: 10,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.5)'
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          backgroundColor: '#ffffff',
+                          display: 'inline-block'
+                        }}
+                      />
+                      YOUTUBE EN VIVO
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Regular Video Player Layer */}
+                {isVideo && activeMediaUrl && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: '#000000',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <video
+                      src={toMediaUrl(activeMediaUrl)}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* 3. Static Media / Slide Thumbnail Layer */}
+                {!isCleared && !isYouTube && !isVideo && activeMediaUrl && (
                   <img
-                    src={roleContent?.mediaUrl || currentSlide?.mediaUrl}
+                    src={toMediaUrl(activeMediaUrl)}
                     alt=""
                     style={{
                       position: 'absolute',
@@ -415,8 +549,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   />
                 )}
 
-                {/* Slide Text Content Layer */}
-                {!isCleared && (roleContent?.body || currentSlide?.body) && (
+                {/* 4. Slide Text Content Layer (Omitted for YouTube so metadata text does not obscure the video) */}
+                {!isCleared && !isYouTube && (roleContent?.body || currentSlide?.body) && (
                   <div
                     style={{
                       position: 'relative',

@@ -7,6 +7,7 @@ import {
   PresentationTimer
 } from '../../shared/types'
 import { computeLayerVisibility } from '../../shared/state-utils'
+import { parseYouTubeUrl } from '../../shared/youtube-utils'
 import { PdfPageView } from '../components/PdfPageView'
 import './output.css'
 
@@ -504,8 +505,32 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                   />
                 </div>
               ) : content.mediaType === 'youtube' ? (
-                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}>
-                  {/* YouTube WebContentsView attaches directly to output window */}
+                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', position: 'relative' }}>
+                  {(() => {
+                    const ytId =
+                      content.youtubeId ||
+                      (content.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
+                    if (!ytId) return null
+                    const shouldPlayAudio = role === (displayState?.mediaSyncTick?.audioOutputRole || 'main')
+                    return (
+                      <iframe
+                        key={ytId}
+                        src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=${
+                          shouldPlayAudio ? '0' : '1'
+                        }&controls=0&playsinline=1`}
+                        title="YouTube Output"
+                        allow="autoplay; encrypted-media"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                    )
+                  })()}
                 </div>
               ) : content.mediaType === 'pdf' && content.mediaUrl ? (
                 <PdfPageView

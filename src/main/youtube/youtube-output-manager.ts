@@ -41,13 +41,14 @@ export class YouTubeOutputManager {
     this.duration = config.duration || 0
 
     const targetRoles = config.targetRoles || ['main']
-    const audioRole = config.audioRole || 'main'
+    const audioRole = (config.audioRole === 'audience' ? 'main' : config.audioRole) || 'main'
 
-    for (const role of targetRoles) {
+    for (const rawRole of targetRoles) {
+      const role = rawRole === 'audience' ? 'main' : rawRole
       const win = outputWindows.get(role)
       if (!win || win.isDestroyed()) continue
 
-      const [winW, winH] = win.getSize()
+      const bounds = win.getContentBounds()
 
       const view = new WebContentsView({
         webPreferences: {
@@ -59,17 +60,33 @@ export class YouTubeOutputManager {
         }
       })
 
-      // Hardware level audio muting per role
+      // Hardware level audio muting per role (keep muted while prepared/hidden)
       const shouldPlayAudio = role === audioRole
-      view.webContents.setAudioMuted(!shouldPlayAudio)
+      view.webContents.setAudioMuted(true)
 
       // Inject ad-skipper on dom-ready
       view.webContents.on('dom-ready', () => {
         view.webContents.executeJavaScript(YouTubeService.getAdSkipperScript()).catch(() => {})
+        if (this.isLive && this.isPlaying) {
+          view.webContents.executeJavaScript(`
+            (function() {
+              const video = document.querySelector('video');
+              if (video) {
+                video.play().catch(() => {});
+              }
+            })();
+          `).catch(() => {})
+        }
+      })
+
+      view.webContents.on('did-finish-load', () => {
+        if (this.isLive && this.isPlaying) {
+          this.play()
+        }
       })
 
       const embedUrl = buildYouTubeEmbedUrl(config.youtubeId, {
-        autoplay: false,
+        autoplay: true,
         controls: false,
         startSeconds: config.inPoint || 0,
         endSeconds: config.outPoint,
@@ -77,10 +94,19 @@ export class YouTubeOutputManager {
       })
 
       win.contentView.addChildView(view)
-      view.setBounds({ x: 0, y: 0, width: winW, height: winH })
+      view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
       // Keep hidden during prepare so current slide/background remains undisturbed
       view.setVisible(false)
       view.webContents.loadURL(embedUrl)
+
+      // Handle window resize dynamically
+      const onResize = () => {
+        if (!win.isDestroyed() && !view.webContents.isDestroyed()) {
+          const b = win.getContentBounds()
+          view.setBounds({ x: 0, y: 0, width: b.width, height: b.height })
+        }
+      }
+      win.on('resize', onResize)
 
       this.outputViews.set(role, view)
       this.parentWindows.set(role, win)
@@ -97,17 +123,32 @@ export class YouTubeOutputManager {
     this.isLive = true
     this.isPlaying = true
 
+    const audioRole = (this.activeConfig.audioRole === 'audience' ? 'main' : this.activeConfig.audioRole) || 'main'
+
     // Show views and command playback
-    for (const view of this.outputViews.values()) {
+    for (const [role, view] of this.outputViews.entries()) {
       view.setVisible(true)
-      view.webContents.executeJavaScript(`
-        (function() {
-          const video = document.querySelector('video');
-          if (video) {
-            video.play().catch(() => {});
+      const shouldPlayAudio = role === audioRole
+      view.webContents.setAudioMuted(!shouldPlayAudio)
+
+      const tryPlay = (attempts = 0) => {
+        if (attempts > 15 || !this.isPlaying) return
+        view.webContents.executeJavaScript(`
+          (function() {
+            const video = document.querySelector('video');
+            if (video) {
+              video.play().catch(() => {});
+              return true;
+            }
+            return false;
+          })();
+        `).then((played) => {
+          if (!played && this.isPlaying) {
+            setTimeout(() => tryPlay(attempts + 1), 300)
           }
-        })();
-      `).catch(() => {})
+        }).catch(() => {})
+      }
+      tryPlay()
     }
 
     this.startSyncLoop()
