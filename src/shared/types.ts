@@ -889,6 +889,7 @@ export interface ChurchPresenterApi {
   navigateYouTubeBrowser: (action: 'back' | 'forward' | 'home' | 'reload' | 'go', url?: string) => Promise<boolean>
   getYouTubeBrowserUrl: () => Promise<string>
   setYouTubeBrowserBounds: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>
+  setYouTubeBrowserVisible: (visible: boolean) => Promise<boolean>
   clearYouTubeSession: () => Promise<boolean>
   controlYouTube: (
     action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
@@ -903,6 +904,7 @@ export interface ChurchPresenterApi {
   logMediaError: (role: string, url: string, message: string) => void
   captureOutputWindow: (role: string) => Promise<Buffer | null>
   openPreviewOutputWindow: (role: string) => Promise<boolean>
+  closeOutputWindow: (role: string) => Promise<boolean>
   getAppVersion: () => Promise<string>
   getEnvInfo: () => Promise<{ isDev: boolean; version: string; userDataPath: string }>
   copyProdLibraryToDev: () => Promise<{ success: boolean; message: string }>

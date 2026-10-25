@@ -515,6 +515,10 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_SET_BROWSER_BOUNDS, bounds)
   },
 
+  setYouTubeBrowserVisible: (visible: boolean): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_SET_BROWSER_VISIBLE, visible)
+  },
+
   clearYouTubeSession: (): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CLEAR_SESSION)
   },
@@ -563,6 +567,10 @@ const api: ChurchPresenterApi = {
 
   openPreviewOutputWindow: (role: string): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.OUTPUT_OPEN_PREVIEW, role)
+  },
+
+  closeOutputWindow: (role: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.OUTPUT_CLOSE, role)
   },
 
   getAppVersion: (): Promise<string> => {

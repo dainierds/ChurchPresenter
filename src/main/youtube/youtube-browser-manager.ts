@@ -10,6 +10,8 @@ export class YouTubeBrowserManager {
   private currentUrl = 'https://www.youtube.com'
   private syncInterval: NodeJS.Timeout | null = null
   private syncCallback: ((tick: YouTubeSyncTick) => void) | null = null
+  private currentBounds = { x: 0, y: 0, width: 0, height: 0 }
+  private isVisible = true
 
   public setSyncCallback(cb: (tick: YouTubeSyncTick) => void): void {
     this.syncCallback = cb
@@ -74,29 +76,40 @@ export class YouTubeBrowserManager {
       this.view.webContents.loadURL(this.currentUrl)
     }
 
+    this.currentBounds = bounds
+    this.isVisible = true
     this.setBounds(bounds)
     this.view.setVisible(true)
     this.startSyncLoop()
   }
 
   public setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
-    if (this.view) {
+    this.currentBounds = bounds
+    if (this.view && this.isVisible) {
       this.view.setBounds(bounds)
     }
   }
 
-  public hide(): void {
-    if (this.view) {
-      this.view.setVisible(false)
-      this.stopSyncLoop()
+  public setVisible(visible: boolean): void {
+    this.isVisible = visible
+    if (!this.view) return
+    this.view.setVisible(visible)
+    if (visible) {
+      if (this.currentBounds.width > 0 && this.currentBounds.height > 0) {
+        this.view.setBounds(this.currentBounds)
+      }
+    } else {
+      // Move offscreen so native view never intercepts mouse clicks or covers React modals
+      this.view.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
     }
   }
 
+  public hide(): void {
+    this.setVisible(false)
+  }
+
   public show(): void {
-    if (this.view) {
-      this.view.setVisible(true)
-      this.startSyncLoop()
-    }
+    this.setVisible(true)
   }
 
   public close(): void {

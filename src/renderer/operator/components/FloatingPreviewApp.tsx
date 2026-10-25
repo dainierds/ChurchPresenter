@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Tv, Monitor, Pin, PinOff } from 'lucide-react'
+import { Tv, Monitor, Pin, PinOff, X } from 'lucide-react'
 import { OutputApp } from '../../output/OutputApp'
 import '../operator.css'
 
@@ -69,8 +69,8 @@ export const FloatingPreviewApp: React.FC = () => {
           </button>
         </div>
 
-        {/* Pin Always on Top Toggle */}
-        <div className="pro-floating-actions">
+        {/* Pin Always on Top Toggle & Close Button */}
+        <div className="pro-floating-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             type="button"
             className={`pro-floating-btn-pin ${isAlwaysOnTop ? 'pinned' : ''}`}
@@ -79,6 +79,16 @@ export const FloatingPreviewApp: React.FC = () => {
           >
             {isAlwaysOnTop ? <Pin size={13} fill="currentColor" /> : <PinOff size={13} />}
             <span>{isAlwaysOnTop ? 'Fijado' : 'Fijar'}</span>
+          </button>
+          <button
+            type="button"
+            className="pro-floating-btn-pin"
+            onClick={() => window.churchPresenterApi?.closeFloatingPreview?.()}
+            style={{ color: '#F87171' }}
+            title="Cerrar vista previa flotante (Esc)"
+          >
+            <X size={13} />
+            <span>Cerrar</span>
           </button>
         </div>
       </div>

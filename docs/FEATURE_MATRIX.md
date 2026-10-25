@@ -24,6 +24,7 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 | **Botón Toolbar Pantallas** | `ProToolbar > [Monitor] Pantallas` | Abre `isDisplaysModalOpen` | Operativo | Verificado: acceso directo junto a indicadores de Audiencia y Escenario. |
 | **Clic en Indicador Audience** | `ProToolbar > Audience` (si no asignado) | Abre `isDisplaysModalOpen` | Operativo | Si está asignado, abre ventana previa; si no está asignado, abre configuración. |
 | **Clic en Indicador Stage** | `ProToolbar > Stage` (si no asignado) | Abre `isDisplaysModalOpen` | Operativo | Si está asignado, abre ventana previa; si no está asignado, abre configuración. |
+| **Botón Flotante de Cierre (Hover)** | Esquina superior de pantalla Audiencia y Escenario | Botón flotante translúcido que aparece solo al pasar el mouse | Operativo | Cierra la ventana de proyección/retorno de forma intencional sin recreación automática. |
 | **Identificar Pantallas Físicas** | `Menú Pantallas > Identificar Pantallas Físicas` | Muestra overlay numerado en cada monitor | Operativo | Llama a `window.churchPresenterApi.identifyDisplays()`. |
 
 ---
@@ -48,6 +49,7 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 |---|---|---|
 | **Eliminación de bucle spinner/pausa** | Corregido | Se eliminó el `seekTo` spam continuo cada 600ms durante la reproducción. Ahora solo se sincroniza play/pause en cambios de estado, y `seekTo` solo ocurre en scrub manual o desfase > 2.5s. |
 | **Salida de proyección limpia** | Corregido | Parámetros de iframe embed: `controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`. |
+| **Visibilidad de Modales sobre YouTube** | Corregido | El `WebContentsView` nativo de YouTube se oculta y desplaza fuera de pantalla al abrir cualquier modal (Configuración de pantallas, Ajustes, etc.) para que los diálogos React no queden tapados. La reproducción y sincronización en salidas continúa activa. |
 | **Muteo de audio selectivo** | Corregido | El iframe de salida se mutea cuando la fuente es el navegador interactivo o cuando el rol no coincide con `audioOutputRole`. |
 
 ---

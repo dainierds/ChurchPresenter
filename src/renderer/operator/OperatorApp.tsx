@@ -451,6 +451,33 @@ export const OperatorApp: React.FC = () => {
   const [isBibleManagerModalOpen, setIsBibleManagerModalOpen] = useState<boolean>(false)
   const [showFirstLaunchModal, setShowFirstLaunchModal] = useState<boolean>(false)
 
+  // Check if any modal is currently visible on screen
+  const isAnyModalOpen = Boolean(
+    isDisplaysModalOpen ||
+    isSettingsOpen ||
+    isSongEditorOpen ||
+    isPresentationEditorOpen ||
+    isThemesModalOpen ||
+    isBackgroundsModalOpen ||
+    isTemplateModalOpen ||
+    isBibleImportModalOpen ||
+    isBibleManagerModalOpen ||
+    isYouTubeVerifyOpen ||
+    isShortcutsHelpOpen ||
+    isFolderImportModalOpen ||
+    isMediaImportModalOpen ||
+    isFfmpegModalOpen ||
+    isPptImportModalOpen ||
+    showFirstLaunchModal
+  )
+
+  // Prevent native WebContentsView (YouTube) from covering modal overlays
+  useEffect(() => {
+    if (activeToolbarMode === 'youtube') {
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(!isAnyModalOpen)
+    }
+  }, [isAnyModalOpen, activeToolbarMode])
+
   // Bible Import Form State
   const [importFormat, setImportFormat] = useState<'zefania' | 'osis' | 'usfm' | 'json'>('json')
   const [importName, setImportName] = useState<string>('')

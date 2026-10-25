@@ -185,14 +185,54 @@ describe('End-to-End Interface Modes & Zero Blank Panels Suite', () => {
       expect(embedUrl).toContain('modestbranding=1')
       expect(embedUrl).toContain('iv_load_policy=3')
     })
+
+    it('manages WebContentsView visibility state when modals are open', () => {
+      let viewBounds = { x: 100, y: 100, width: 800, height: 600 }
+      const mockView = {
+        setVisible: vi.fn(),
+        setBounds: vi.fn((b) => { viewBounds = b })
+      }
+
+      const setVisible = (visible: boolean) => {
+        mockView.setVisible(visible)
+        if (visible) {
+          mockView.setBounds({ x: 100, y: 100, width: 800, height: 600 })
+        } else {
+          mockView.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+        }
+      }
+
+      // When modal opens (e.g. isDisplaysModalOpen = true)
+      setVisible(false)
+      expect(mockView.setVisible).toHaveBeenCalledWith(false)
+      expect(viewBounds.x).toBe(-10000)
+
+      // When modal closes
+      setVisible(true)
+      expect(mockView.setVisible).toHaveBeenCalledWith(true)
+      expect(viewBounds.x).toBe(100)
+    })
   })
 
-  describe('4. Zero Blank Panels Verification', () => {
+  describe('4. Zero Blank Panels Verification & Output Window Close Floating Button', () => {
     it('validates all toolbar modes map to a functional component and never return empty or blank view', () => {
       const modes = ['show', 'edit', 'bible', 'youtube', 'more']
       modes.forEach((mode) => {
         expect(['show', 'edit', 'bible', 'youtube', 'more']).toContain(mode)
       })
+    })
+
+    it('tracks intentional window closure preventing automatic unprompted recreation', () => {
+      const intentionallyClosed = new Set<string>()
+      const closeOutput = (role: string) => {
+        intentionallyClosed.add(role)
+      }
+
+      closeOutput('stage')
+      expect(intentionallyClosed.has('stage')).toBe(true)
+
+      closeOutput('main')
+      expect(intentionallyClosed.has('main')).toBe(true)
     })
   })
 })

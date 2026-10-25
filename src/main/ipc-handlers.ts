@@ -491,6 +491,11 @@ export function registerIpcHandlers(): void {
     return !!win
   })
 
+  ipcMain.handle(IPC_CHANNELS.OUTPUT_CLOSE, async (_event, role: string) => {
+    windowManager.closeOutputWindow(role)
+    return true
+  })
+
   ipcMain.handle(IPC_CHANNELS.APP_GET_VERSION, () => {
     return app.getVersion()
   })
@@ -716,6 +721,14 @@ export function registerIpcHandlers(): void {
     IPC_CHANNELS.YOUTUBE_SET_BROWSER_BOUNDS,
     (_event, bounds: { x: number; y: number; width: number; height: number }) => {
       youTubeBrowserManager.setBounds(bounds)
+      return true
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.YOUTUBE_SET_BROWSER_VISIBLE,
+    (_event, visible: boolean) => {
+      youTubeBrowserManager.setVisible(visible)
       return true
     }
   )

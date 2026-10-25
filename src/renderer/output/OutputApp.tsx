@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { X } from 'lucide-react'
 import {
   PresenterState,
   DEFAULT_THEME,
@@ -162,6 +163,35 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   const animationFrameRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number>(performance.now())
   const frameTimesRef = useRef<number[]>([])
+
+  // Floating Hover Close Button State
+  const [showCloseButton, setShowCloseButton] = useState<boolean>(false)
+  const hideCloseTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleMouseMove = () => {
+    setShowCloseButton(true)
+    if (hideCloseTimerRef.current) {
+      clearTimeout(hideCloseTimerRef.current)
+    }
+    hideCloseTimerRef.current = setTimeout(() => {
+      setShowCloseButton(false)
+    }, 2500)
+  }
+
+  const handleMouseLeave = () => {
+    if (hideCloseTimerRef.current) {
+      clearTimeout(hideCloseTimerRef.current)
+    }
+    setShowCloseButton(false)
+  }
+
+  const handleCloseWindow = async () => {
+    if (window.churchPresenterApi?.closeOutputWindow) {
+      await window.churchPresenterApi.closeOutputWindow(role)
+    } else {
+      window.close()
+    }
+  }
   const lastFpsDropLogRef = useRef<number>(0)
   const framesRenderedRef = useRef<number>(0)
 
@@ -360,13 +390,99 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
 
   // Blackout: pitch black
   if (visibility.isBlackout) {
-    return <div className="output-viewport layer-blackout" />
+    return (
+      <div
+        className="output-viewport layer-blackout"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div
+          style={{
+            position: 'fixed',
+            top: 14,
+            right: 14,
+            zIndex: 99999,
+            opacity: showCloseButton ? 1 : 0,
+            pointerEvents: showCloseButton ? 'auto' : 'none',
+            transition: 'opacity 0.25s ease, transform 0.2s ease',
+            transform: showCloseButton ? 'translateY(0)' : 'translateY(-6px)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleCloseWindow}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: 'rgba(18, 18, 18, 0.88)',
+              backdropFilter: 'blur(10px)',
+              color: '#F3F4F6',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '6px 14px',
+              borderRadius: 20,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+              userSelect: 'none'
+            }}
+            title={`Cerrar pantalla de salida (${role === 'stage' ? 'Retorno / Escenario' : 'Audiencia'})`}
+          >
+            <X size={14} color="#EF4444" />
+            <span>Cerrar</span>
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const isStage = role === 'stage'
 
   return (
-    <div className="output-viewport">
+    <div
+      className="output-viewport"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Floating Hover Close Button in Top-Right Corner */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 14,
+          right: 14,
+          zIndex: 99999,
+          opacity: showCloseButton ? 1 : 0,
+          pointerEvents: showCloseButton ? 'auto' : 'none',
+          transition: 'opacity 0.25s ease, transform 0.2s ease',
+          transform: showCloseButton ? 'translateY(0)' : 'translateY(-6px)'
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleCloseWindow}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            backgroundColor: 'rgba(18, 18, 18, 0.88)',
+            backdropFilter: 'blur(10px)',
+            color: '#F3F4F6',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '6px 14px',
+            borderRadius: 20,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+            userSelect: 'none'
+          }}
+          title={`Cerrar pantalla de salida (${role === 'stage' ? 'Retorno / Escenario' : 'Audiencia'})`}
+        >
+          <X size={14} color="#EF4444" />
+          <span>Cerrar</span>
+        </button>
+      </div>
       {/* 1920x1080 Scaled Canvas */}
       <div
         className={`output-canvas ${isStage ? 'stage-mode' : ''}`}

@@ -40,12 +40,14 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
     const accepted = localStorage.getItem('cp_youtube_disclaimer_accepted')
     if (!accepted) {
       setDisclaimerOpen(true)
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
     }
   }, [])
 
   const handleAcceptDisclaimer = () => {
     localStorage.setItem('cp_youtube_disclaimer_accepted', 'true')
     setDisclaimerOpen(false)
+    window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
   }
 
   // Manage WebContentsView positioning and lifecycle

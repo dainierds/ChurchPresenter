@@ -230,6 +230,16 @@ export class WindowManager {
     return win
   }
 
+  public closeOutputWindow(role: string): void {
+    const win = this.outputWindows.get(role)
+    if (win && !win.isDestroyed()) {
+      this.intentionallyClosedOutputs.add(role)
+      win.close()
+      this.outputWindows.delete(role)
+      logger.info(`Output window for role '${role}' intentionally closed via UI close button.`)
+    }
+  }
+
   private scheduleRecreation(role: string): void {
     if (this.recreationTimeouts.has(role)) {
       clearTimeout(this.recreationTimeouts.get(role)!)
