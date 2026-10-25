@@ -10,7 +10,8 @@ import {
   Tv,
   BookOpen,
   Edit3,
-  Sliders
+  Sliders,
+  Monitor
 } from 'lucide-react'
 import { PresenterState, DisplayInfo, RoleAssignment } from '../../../shared/types'
 
@@ -41,6 +42,7 @@ interface ProToolbarProps {
   isMediaDrawerOpen?: boolean
   onToggleMediaDrawer?: () => void
   onOpenOutputPreviewOrSettings?: (role: string) => void
+  onOpenDisplaysModal?: () => void
 }
 
 export const ProToolbar: React.FC<ProToolbarProps> = ({
@@ -57,7 +59,8 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   panelLabels,
   isMediaDrawerOpen,
   onToggleMediaDrawer,
-  onOpenOutputPreviewOrSettings
+  onOpenOutputPreviewOrSettings,
+  onOpenDisplaysModal
 }) => {
   const isMainAssigned = Boolean(assignments.main)
   const isMainConnected =
@@ -172,7 +175,13 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         <button
           type="button"
           className={`pro-status-pill-btn ${audienceStatusClass}`}
-          onClick={() => onOpenOutputPreviewOrSettings?.('main')}
+          onClick={() => {
+            if (!isMainAssigned && onOpenDisplaysModal) {
+              onOpenDisplaysModal()
+            } else {
+              onOpenOutputPreviewOrSettings?.('main')
+            }
+          }}
           title={
             !isMainAssigned
               ? 'Audiencia: No asignado (clic para configurar pantallas)'
@@ -195,7 +204,13 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         <button
           type="button"
           className={`pro-status-pill-btn ${stageStatusClass}`}
-          onClick={() => onOpenOutputPreviewOrSettings?.('stage')}
+          onClick={() => {
+            if (!isStageAssigned && onOpenDisplaysModal) {
+              onOpenDisplaysModal()
+            } else {
+              onOpenOutputPreviewOrSettings?.('stage')
+            }
+          }}
           title={
             !isStageAssigned
               ? 'Escenario: No asignado (clic para configurar pantallas)'
@@ -214,6 +229,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             }`}
           />
           <span>{panelLabels?.stage || 'Stage'}</span>
+        </button>
+        <button
+          type="button"
+          className="pro-status-pill-btn pro-screen-config-btn"
+          onClick={onOpenDisplaysModal}
+          title="Configurar asignación de pantallas físicas y roles de salida (Audiencia / Escenario)"
+          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <Monitor size={12} />
+          <span>Pantallas</span>
         </button>
       </div>
 

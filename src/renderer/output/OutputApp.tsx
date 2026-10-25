@@ -71,19 +71,42 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
       if (lastPlayStateRef.current !== tick.isPlaying) {
         lastPlayStateRef.current = tick.isPlaying
         if (tick.isPlaying) {
+          if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 1.0) {
+            lastSyncTimeRef.current = tick.currentTime
+            iframe.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+              '*'
+            )
+          }
           iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
         } else {
           iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
+          lastSyncTimeRef.current = tick.currentTime
+          iframe.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+            '*'
+          )
         }
-      }
-
-      // Mirror Seek if difference is > 0.6s
-      if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.6) {
-        lastSyncTimeRef.current = tick.currentTime
-        iframe.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-          '*'
-        )
+      } else if (!tick.isPlaying) {
+        // Paused state scrubbing
+        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.5) {
+          lastSyncTimeRef.current = tick.currentTime
+          iframe.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+            '*'
+          )
+        }
+      } else {
+        // Playing state: ONLY seek on major jump / manual scrub (> 2.5s) to avoid buffer stutter
+        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 2.5) {
+          lastSyncTimeRef.current = tick.currentTime
+          iframe.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+            '*'
+          )
+        } else {
+          lastSyncTimeRef.current = tick.currentTime
+        }
       }
     })
     return () => unsub?.()
@@ -565,7 +588,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                         key={ytId}
                         src={`https://www.youtube-nocookie.com/embed/${ytId}?enablejsapi=1&autoplay=1&mute=${
                           isMuted ? '1' : '0'
-                        }&controls=0&playsinline=1`}
+                        }&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`}
                         title="YouTube Output"
                         allow="autoplay; encrypted-media"
                         style={{

@@ -46,6 +46,8 @@ import { FileDropOverlay } from './components/FileDropOverlay'
 import { FileWatcherToast } from './components/FileWatcherToast'
 import { YouTubeBrowserPanel } from './components/YouTubeBrowserPanel'
 import { YouTubeVerifyModal } from './components/YouTubeVerifyModal'
+import { BibleBrowserPanel } from './components/BibleBrowserPanel'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
   parseLyricsToGroups,
@@ -69,6 +71,7 @@ import {
   Plus,
   Trash2,
   Edit3,
+  Sliders,
   Copy,
   ArrowUp,
   ArrowDown,
@@ -775,6 +778,30 @@ export const OperatorApp: React.FC = () => {
     },
     [isDualBibleActive, secondaryBibleAbbrev, primaryBibleAbbrev, dualBibleLayout]
   )
+
+  const handleToggleBibleFavorite = async (reference: string) => {
+    if (window.churchPresenterApi?.toggleBibleFavorite) {
+      try {
+        const updated = await window.churchPresenterApi.toggleBibleFavorite(reference)
+        setBibleFavorites(updated || [])
+      } catch (err) {
+        console.error('Error toggling Bible favorite:', err)
+      }
+    }
+  }
+
+  const handleAddBibleToService = async (item: ServiceItem) => {
+    if (currentService) {
+      const updated: ServicePlan = {
+        ...currentService,
+        items: [...currentService.items, item],
+        updatedAt: new Date().toISOString()
+      }
+      setCurrentService(updated)
+      await window.churchPresenterApi.saveService(updated)
+      setSelectedServiceItemIndex(updated.items.length - 1)
+    }
+  }
 
   // Generated slides for the currently selected item in Zone 3
   const activeSlides: SlideItem[] = useMemo(() => {
@@ -2190,6 +2217,7 @@ export const OperatorApp: React.FC = () => {
         onToggleLeftPanel={() => setIsLeftCollapsed((c) => !c)}
         onToggleRightPanel={() => setIsRightCollapsed((c) => !c)}
         onOpenFloatingPreview={() => window.churchPresenterApi.openFloatingPreview('main')}
+        onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
       />
 
       {/* 2. ProPresenter Toolbar */}
@@ -2199,10 +2227,14 @@ export const OperatorApp: React.FC = () => {
         activeMode={activeToolbarMode}
         onModeChange={(m) => {
           setActiveToolbarMode(m)
-          if (m === 'edit' && currentSong) {
-            handleOpenSongEditor(currentSong)
-          } else if (m === 'bible') {
-            setIsBibleImportModalOpen(false)
+          if (m === 'edit') {
+            if (currentSong) {
+              handleOpenSongEditor(currentSong)
+            } else if (currentPresentation) {
+              handleOpenPresentationEditor(currentPresentation)
+            } else {
+              handleOpenSongEditor()
+            }
           } else if (m === 'more') {
             setIsSettingsOpen(true)
           }
@@ -2216,6 +2248,7 @@ export const OperatorApp: React.FC = () => {
         panelLabels={panelLabels}
         isMediaDrawerOpen={isMediaDrawerOpen}
         onToggleMediaDrawer={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+        onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
         onOpenOutputPreviewOrSettings={(role) => {
           window.churchPresenterApi.openPreviewOutputWindow(role)
         }}
@@ -2227,7 +2260,8 @@ export const OperatorApp: React.FC = () => {
         {!isLeftCollapsed ? (
           <>
             <aside className="pro-left-column" style={{ width: `${leftWidth}px` }}>
-              <LibraryPanel
+              <ErrorBoundary panelName="Biblioteca y Playlist">
+                <LibraryPanel
                 libraries={userLibraries}
                 activeLibraryId={activeUserLibraryId}
                 onSelectLibrary={setActiveUserLibraryId}
@@ -2370,7 +2404,8 @@ export const OperatorApp: React.FC = () => {
                 onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
                 panelLabels={panelLabels}
               />
-            </aside>
+            </ErrorBoundary>
+          </aside>
 
             {/* Vertical Resizer V1: Left Column vs Center Column */}
             <div
@@ -2391,201 +2426,430 @@ export const OperatorApp: React.FC = () => {
           </div>
         )}
 
-        {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube Browser Panel */}
+        {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube/Bible Panels */}
         <section className="pro-center-column">
-          {activeToolbarMode === 'youtube' ? (
-            <YouTubeBrowserPanel
-              onAddToPlaylist={(item) => {
-                if (currentService) {
-                  const updated = { ...currentService, items: [...currentService.items, item] }
-                  setCurrentService(updated)
-                  window.churchPresenterApi.saveService(updated)
-                }
-              }}
-              onProjectNow={async (item) => {
-                if (item.youtubeConfig) {
-                  await window.churchPresenterApi.controlYouTube('prepare', item.youtubeConfig)
-                  await window.churchPresenterApi.controlYouTube('go-live')
-                  const slide: SlideItem = {
-                    id: `yt_slide_${item.youtubeConfig.youtubeId}`,
-                    sourceId: item.youtubeConfig.youtubeId,
-                    sourceType: 'presentation',
-                    slideIndex: 0,
-                    totalSlidesInGroup: 1,
-                    title: item.youtubeConfig.title,
-                    body: `▶ YouTube: ${item.youtubeConfig.title}\nCanal: ${item.youtubeConfig.channelTitle || 'YouTube'}`,
-                    mediaType: 'youtube',
-                    mediaUrl: item.youtubeConfig.url,
-                    youtubeId: item.youtubeConfig.youtubeId,
-                    youtubeDuration: item.youtubeConfig.duration
+          <ErrorBoundary panelName="Área Central">
+            {activeToolbarMode === 'youtube' ? (
+              <YouTubeBrowserPanel
+                onAddToPlaylist={(item) => {
+                  if (currentService) {
+                    const updated = { ...currentService, items: [...currentService.items, item] }
+                    setCurrentService(updated)
+                    window.churchPresenterApi.saveService(updated)
                   }
-                  await window.churchPresenterApi.sendSlide(slide, item.youtubeConfig.targetRoles)
-                }
-              }}
-            />
-          ) : (
-            <>
-              {currentServiceItem?.type === 'youtube' && currentServiceItem.youtubeConfig && (
+                }}
+                onProjectNow={async (item) => {
+                  if (item.youtubeConfig) {
+                    await window.churchPresenterApi.controlYouTube('prepare', item.youtubeConfig)
+                    await window.churchPresenterApi.controlYouTube('go-live')
+                    const slide: SlideItem = {
+                      id: `yt_slide_${item.youtubeConfig.youtubeId}`,
+                      sourceId: item.youtubeConfig.youtubeId,
+                      sourceType: 'presentation',
+                      slideIndex: 0,
+                      totalSlidesInGroup: 1,
+                      title: item.youtubeConfig.title,
+                      body: `▶ YouTube: ${item.youtubeConfig.title}\nCanal: ${item.youtubeConfig.channelTitle || 'YouTube'}`,
+                      mediaType: 'youtube',
+                      mediaUrl: item.youtubeConfig.url,
+                      youtubeId: item.youtubeConfig.youtubeId,
+                      youtubeDuration: item.youtubeConfig.duration
+                    }
+                    await window.churchPresenterApi.sendSlide(slide, item.youtubeConfig.targetRoles)
+                  }
+                }}
+              />
+            ) : activeToolbarMode === 'bible' ? (
+              <BibleBrowserPanel
+                translations={bibleTranslations}
+                primaryAbbrev={primaryBibleAbbrev}
+                secondaryAbbrev={secondaryBibleAbbrev}
+                isDualActive={isDualBibleActive}
+                dualLayout={dualBibleLayout}
+                favorites={bibleFavorites}
+                recents={bibleRecentHistory}
+                directSlides={bibleDirectSlides}
+                currentReference={currentLoadedBibleRef}
+                onLoadPassage={loadBiblePassage}
+                onSelectPrimary={setPrimaryBibleAbbrev}
+                onSelectSecondary={setSecondaryBibleAbbrev}
+                onToggleDual={setIsDualBibleActive}
+                onChangeDualLayout={setDualBibleLayout}
+                onOpenBibleManager={() => setIsBibleManagerModalOpen(true)}
+                onOpenBibleImport={() => setIsBibleImportModalOpen(true)}
+                onGoLive={(slide, next) => handleGoLive(slide, next)}
+                onAddToService={handleAddBibleToService}
+                onToggleFavorite={handleToggleBibleFavorite}
+              />
+            ) : activeToolbarMode === 'edit' && !isSongEditorOpen && !isPresentationEditorOpen ? (
+              <div
+                className="pro-edit-mode-hub"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  padding: 32,
+                  textAlign: 'center',
+                  color: '#D1D5DB',
+                  backgroundColor: '#121212'
+                }}
+              >
                 <div
-                  className="pro-yt-active-control-card"
                   style={{
-                    backgroundColor: 'var(--bg-surface-raised, #181818)',
-                    border: '1px solid var(--border-color, #2A2A2A)',
-                    borderRadius: 8,
-                    padding: 16,
-                    margin: '12px 16px 0',
+                    width: 56,
+                    height: 56,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 16
+                    justifyContent: 'center',
+                    marginBottom: 16,
+                    color: '#3B82F6'
                   }}
                 >
-                  <img
-                    src={
-                      currentServiceItem.youtubeConfig.thumbnailUrl ||
-                      `https://i.ytimg.com/vi/${currentServiceItem.youtubeConfig.youtubeId}/hqdefault.jpg`
-                    }
-                    alt=""
-                    style={{
-                      width: 140,
-                      height: 80,
-                      objectFit: 'cover',
-                      borderRadius: 6,
-                      backgroundColor: '#000'
+                  <Edit3 size={28} />
+                </div>
+                <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: '#FFFFFF' }}>
+                  Modo Editor de Diapositivas
+                </h2>
+                <p style={{ fontSize: 13, color: '#9CA3AF', maxWidth: 460, margin: '0 0 24px', lineHeight: 1.5 }}>
+                  {currentSong
+                    ? `Está seleccionado el himno "${currentSong.title}". Puede modificar su letra, estructura y arreglos musicales, o crear una nueva canción.`
+                    : currentPresentation
+                    ? `Está seleccionada la presentación "${currentPresentation.title}". Puede modificar sus avisos y diapositivas.`
+                    : 'No hay ninguna canción o presentación seleccionada en este momento. Puede crear una nueva canción o volver a la vista de presentación.'}
+                </p>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button
+                    type="button"
+                    className="primary-action-btn"
+                    onClick={() => {
+                      if (currentSong) {
+                        handleOpenSongEditor(currentSong)
+                      } else if (currentPresentation) {
+                        handleOpenPresentationEditor(currentPresentation)
+                      } else {
+                        handleOpenSongEditor()
+                      }
                     }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span
-                        style={{
-                          backgroundColor: 'var(--accent-danger, #ef4444)',
-                          color: '#fff',
-                          fontSize: 10,
-                          fontWeight: 800,
-                          padding: '2px 6px',
-                          borderRadius: 4
-                        }}
-                      >
-                        YOUTUBE
-                      </span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
-                        {currentServiceItem.youtubeConfig.title}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted, #94a3b8)', marginBottom: 8 }}>
-                      {currentServiceItem.youtubeConfig.channelTitle || 'YouTube'} • In:{' '}
-                      {currentServiceItem.youtubeConfig.inPoint || 0}s
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        className="pro-btn-secondary"
-                        onClick={async () => {
-                          if (currentServiceItem.youtubeConfig) {
-                            await window.churchPresenterApi.controlYouTube(
-                              'prepare',
-                              currentServiceItem.youtubeConfig
-                            )
-                          }
-                        }}
-                        style={{ fontSize: 12, padding: '5px 12px' }}
-                      >
-                        Preparar en Salidas
-                      </button>
-                      <button
-                        className="pro-btn-primary"
-                        onClick={async () => {
-                          if (currentServiceItem.youtubeConfig) {
-                            await window.churchPresenterApi.controlYouTube(
-                              'prepare',
-                              currentServiceItem.youtubeConfig
-                            )
-                            await window.churchPresenterApi.controlYouTube('go-live')
-                            const slide: SlideItem = {
-                              id: `yt_slide_${currentServiceItem.youtubeConfig.youtubeId}`,
-                              sourceId: currentServiceItem.youtubeConfig.youtubeId,
-                              sourceType: 'presentation',
-                              slideIndex: 0,
-                              totalSlidesInGroup: 1,
-                              title: currentServiceItem.youtubeConfig.title,
-                              body: `▶ YouTube: ${currentServiceItem.youtubeConfig.title}\nCanal: ${
-                                currentServiceItem.youtubeConfig.channelTitle || 'YouTube'
-                              }`,
-                              mediaType: 'youtube',
-                              mediaUrl: currentServiceItem.youtubeConfig.url,
-                              youtubeId: currentServiceItem.youtubeConfig.youtubeId,
-                              youtubeDuration: currentServiceItem.youtubeConfig.duration
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 18px',
+                      fontSize: 13,
+                      backgroundColor: '#2563EB',
+                      color: '#FFF',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Edit3 size={14} />
+                    <span>
+                      {currentSong
+                        ? `Editar "${currentSong.title}"`
+                        : currentPresentation
+                        ? `Editar "${currentPresentation.title}"`
+                        : 'Crear Nueva Canción'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-action-btn"
+                    onClick={() => setActiveToolbarMode('show')}
+                    style={{
+                      padding: '8px 18px',
+                      fontSize: 13,
+                      backgroundColor: '#262626',
+                      color: '#D1D5DB',
+                      border: '1px solid #3A3A3A',
+                      borderRadius: 6,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Volver a Mostrar
+                  </button>
+                </div>
+              </div>
+            ) : activeToolbarMode === 'more' ? (
+              <div
+                className="pro-more-mode-hub"
+                style={{
+                  padding: 28,
+                  color: '#D1D5DB',
+                  height: '100%',
+                  overflowY: 'auto',
+                  backgroundColor: '#121212'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                  <Sliders size={20} color="#3B82F6" />
+                  <h2 style={{ fontSize: 18, margin: 0, color: '#FFFFFF', fontWeight: 600 }}>
+                    Herramientas y Configuración
+                  </h2>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                    gap: 14
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #2E2E2E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Preferencias Generales</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Idiomas de paneles, audio, respaldo y atajos</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDisplaysModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #2E2E2E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Pantallas y Salidas</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Asignar monitores físicos para Audiencia y Escenario</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsThemesModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #2E2E2E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Temas y Estilos</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Fuentes, colores, sombras y márgenes de proyección</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBibleManagerModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #2E2E2E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Biblias y Traducciones</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Importar Zefania XML, OSIS, USFM o JSON</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsShortcutsHelpOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #2E2E2E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Atajos de Teclado (F1)</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Guía de teclas rápidas de operador</div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {currentServiceItem?.type === 'youtube' && currentServiceItem.youtubeConfig && (
+                  <div
+                    className="pro-yt-active-control-card"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-raised, #181818)',
+                      border: '1px solid var(--border-color, #2A2A2A)',
+                      borderRadius: 8,
+                      padding: 16,
+                      margin: '12px 16px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16
+                    }}
+                  >
+                    <img
+                      src={
+                        currentServiceItem.youtubeConfig.thumbnailUrl ||
+                        `https://i.ytimg.com/vi/${currentServiceItem.youtubeConfig.youtubeId}/hqdefault.jpg`
+                      }
+                      alt=""
+                      style={{
+                        width: 140,
+                        height: 80,
+                        objectFit: 'cover',
+                        borderRadius: 6,
+                        backgroundColor: '#000'
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span
+                          style={{
+                            backgroundColor: 'var(--accent-danger, #ef4444)',
+                            color: '#fff',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            padding: '2px 6px',
+                            borderRadius: 4
+                          }}
+                        >
+                          YOUTUBE
+                        </span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
+                          {currentServiceItem.youtubeConfig.title}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted, #94a3b8)', marginBottom: 8 }}>
+                        {currentServiceItem.youtubeConfig.channelTitle || 'YouTube'} • In:{' '}
+                        {currentServiceItem.youtubeConfig.inPoint || 0}s
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="pro-btn-secondary"
+                          onClick={async () => {
+                            if (currentServiceItem.youtubeConfig) {
+                              await window.churchPresenterApi.controlYouTube(
+                                'prepare',
+                                currentServiceItem.youtubeConfig
+                              )
                             }
-                            await window.churchPresenterApi.sendSlide(
-                              slide,
-                              currentServiceItem.youtubeConfig.targetRoles
-                            )
-                          }
-                        }}
-                        style={{ fontSize: 12, padding: '5px 14px', backgroundColor: 'var(--accent-danger, #ef4444)' }}
-                      >
-                        ▶ Proyectar En Vivo
-                      </button>
+                          }}
+                          style={{ fontSize: 12, padding: '5px 12px' }}
+                        >
+                          Preparar en Salidas
+                        </button>
+                        <button
+                          className="pro-btn-primary"
+                          onClick={async () => {
+                            if (currentServiceItem.youtubeConfig) {
+                              await window.churchPresenterApi.controlYouTube(
+                                'prepare',
+                                currentServiceItem.youtubeConfig
+                              )
+                              await window.churchPresenterApi.controlYouTube('go-live')
+                              const slide: SlideItem = {
+                                id: `yt_slide_${currentServiceItem.youtubeConfig.youtubeId}`,
+                                sourceId: currentServiceItem.youtubeConfig.youtubeId,
+                                sourceType: 'presentation',
+                                slideIndex: 0,
+                                totalSlidesInGroup: 1,
+                                title: currentServiceItem.youtubeConfig.title,
+                                body: `▶ YouTube: ${currentServiceItem.youtubeConfig.title}\nCanal: ${
+                                  currentServiceItem.youtubeConfig.channelTitle || 'YouTube'
+                                }`,
+                                mediaType: 'youtube',
+                                mediaUrl: currentServiceItem.youtubeConfig.url,
+                                youtubeId: currentServiceItem.youtubeConfig.youtubeId,
+                                youtubeDuration: currentServiceItem.youtubeConfig.duration
+                              }
+                              await window.churchPresenterApi.sendSlide(
+                                slide,
+                                currentServiceItem.youtubeConfig.targetRoles
+                              )
+                            }
+                          }}
+                          style={{ fontSize: 12, padding: '5px 14px', backgroundColor: 'var(--accent-danger, #ef4444)' }}
+                        >
+                          ▶ Proyectar En Vivo
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <SlideGridPanel
-                title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
-                subtitle={currentSong?.author}
-                slides={activeSlides}
-                selectedSlideIndex={previewSlideIndex}
-                onSelectSlideIndex={setPreviewSlideIndex}
-                liveSlideId={liveSlideId}
-                onGoLive={handleGoLive}
-                zoomLevel={slideZoom}
-                onZoomChange={setSlideZoom}
-                viewMode={slideViewMode}
-                onViewModeChange={setSlideViewMode}
-                onAddSlide={handleAddSlideToCurrent}
-                onOpenEditor={() => {
-                  if (currentSong) handleOpenSongEditor(currentSong)
-                }}
-                theme={activeTheme}
-                arrangements={currentSong?.arrangements}
-                selectedArrangementId={selectedArrangementId}
-                onSelectArrangement={setSelectedArrangementId}
-              />
-
-              {/* Resizer H2 between Slides and Media Drawer */}
-              {isMediaDrawerOpen && (
-                <div
-                  className="pro-resizer-horizontal"
-                  onMouseDown={handleMouseDownH2}
-                  onDoubleClick={() => setMediaDrawerHeight(220)}
-                  title="Arrastrar para redimensionar cajón de medios (Doble clic para restablecer)"
+                <SlideGridPanel
+                  title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
+                  subtitle={currentSong?.author}
+                  slides={activeSlides}
+                  selectedSlideIndex={previewSlideIndex}
+                  onSelectSlideIndex={setPreviewSlideIndex}
+                  liveSlideId={liveSlideId}
+                  onGoLive={handleGoLive}
+                  zoomLevel={slideZoom}
+                  onZoomChange={setSlideZoom}
+                  viewMode={slideViewMode}
+                  onViewModeChange={setSlideViewMode}
+                  onAddSlide={handleAddSlideToCurrent}
+                  onOpenEditor={() => {
+                    if (currentSong) {
+                      handleOpenSongEditor(currentSong)
+                    } else if (currentPresentation) {
+                      handleOpenPresentationEditor(currentPresentation)
+                    } else {
+                      handleOpenSongEditor()
+                    }
+                  }}
+                  theme={activeTheme}
+                  arrangements={currentSong?.arrangements}
+                  selectedArrangementId={selectedArrangementId}
+                  onSelectArrangement={setSelectedArrangementId}
                 />
-              )}
 
-              {/* Collapsible Media Drawer */}
-              <MediaDrawer
-                isOpen={isMediaDrawerOpen}
-                onToggle={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
-                mediaItems={mediaItems}
-                onImportFile={handleNativeImportMedia}
-                onImportFolder={handleNativeImportFolder}
-                panelLabels={panelLabels}
-                height={mediaDrawerHeight}
-                onPlayMedia={(item) => {
-                  window.churchPresenterApi.playVideo({
-                    mediaId: item.id,
-                    mediaPath: item.filePath,
-                    loop: true,
-                    volume: 1.0,
-                    endAction: 'freeze',
-                    audioOutputRole: 'main'
-                  })
-                }}
-                onSetAsBackground={(_item) => {
-                  // handle set background
-                }}
-              />
-            </>
-          )}
+                {/* Resizer H2 between Slides and Media Drawer */}
+                {isMediaDrawerOpen && (
+                  <div
+                    className="pro-resizer-horizontal"
+                    onMouseDown={handleMouseDownH2}
+                    onDoubleClick={() => setMediaDrawerHeight(220)}
+                    title="Arrastrar para redimensionar cajón de medios (Doble clic para restablecer)"
+                  />
+                )}
+
+                {/* Collapsible Media Drawer */}
+                <MediaDrawer
+                  isOpen={isMediaDrawerOpen}
+                  onToggle={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+                  mediaItems={mediaItems}
+                  onImportFile={handleNativeImportMedia}
+                  onImportFolder={handleNativeImportFolder}
+                  panelLabels={panelLabels}
+                  height={mediaDrawerHeight}
+                  onPlayMedia={(item) => {
+                    window.churchPresenterApi.playVideo({
+                      mediaId: item.id,
+                      mediaPath: item.filePath,
+                      loop: true,
+                      volume: 1.0,
+                      endAction: 'freeze',
+                      audioOutputRole: 'main'
+                    })
+                  }}
+                  onSetAsBackground={(_item) => {
+                    // handle set background
+                  }}
+                />
+              </>
+            )}
+          </ErrorBoundary>
         </section>
 
         {/* Right Column: Preview, Audio VU, Layers, Transport & Timers */}
@@ -2600,32 +2864,34 @@ export const OperatorApp: React.FC = () => {
             />
 
             <aside className="pro-right-panel" style={{ width: `${rightWidth}px` }}>
-              <RightSidePanel
-                state={state}
-                currentSlide={activeSlides[previewSlideIndex] || null}
-                timers={presentationTimers}
-                panelLabels={panelLabels}
-                previewHeight={previewHeight}
-                onResizePreview={handleMouseDownH3}
-                onResetPreview={() => setPreviewHeight(260)}
-                onControlTimer={async (id, action) => {
-                  await window.churchPresenterApi.controlTimer(id, action)
-                }}
-                onSaveTimer={async (timer) => {
-                  await window.churchPresenterApi.saveTimer(timer)
-                  const updated = await window.churchPresenterApi.getTimers()
-                  setPresentationTimers(updated || [])
-                }}
-                onDeleteTimer={async (id) => {
-                  await window.churchPresenterApi.deleteTimer(id)
-                  const updated = await window.churchPresenterApi.getTimers()
-                  setPresentationTimers(updated || [])
-                }}
-                onClearLayer={handleClearLayer}
-                onControlVideo={(action, time) => {
-                  window.churchPresenterApi.controlVideo(action, time)
-                }}
-              />
+              <ErrorBoundary panelName="Monitores y Salidas">
+                <RightSidePanel
+                  state={state}
+                  currentSlide={activeSlides[previewSlideIndex] || null}
+                  timers={presentationTimers}
+                  panelLabels={panelLabels}
+                  previewHeight={previewHeight}
+                  onResizePreview={handleMouseDownH3}
+                  onResetPreview={() => setPreviewHeight(260)}
+                  onControlTimer={async (id, action) => {
+                    await window.churchPresenterApi.controlTimer(id, action)
+                  }}
+                  onSaveTimer={async (timer) => {
+                    await window.churchPresenterApi.saveTimer(timer)
+                    const updated = await window.churchPresenterApi.getTimers()
+                    setPresentationTimers(updated || [])
+                  }}
+                  onDeleteTimer={async (id) => {
+                    await window.churchPresenterApi.deleteTimer(id)
+                    const updated = await window.churchPresenterApi.getTimers()
+                    setPresentationTimers(updated || [])
+                  }}
+                  onClearLayer={handleClearLayer}
+                  onControlVideo={(action, time) => {
+                    window.churchPresenterApi.controlVideo(action, time)
+                  }}
+                />
+              </ErrorBoundary>
             </aside>
           </>
         ) : (

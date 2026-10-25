@@ -19,6 +19,7 @@ interface TopMenuBarProps {
   onToggleLeftPanel?: () => void
   onToggleRightPanel?: () => void
   onOpenFloatingPreview?: () => void
+  onOpenDisplaysModal?: () => void
 }
 
 export const TopMenuBar: React.FC<TopMenuBarProps> = ({
@@ -39,7 +40,8 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onResetLayout,
   onToggleLeftPanel,
   onToggleRightPanel,
-  onOpenFloatingPreview
+  onOpenFloatingPreview,
+  onOpenDisplaysModal
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -268,7 +270,11 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 className="pro-dropdown-item"
                 onClick={() => {
                   closeMenu()
-                  onOpenSettings()
+                  if (onOpenDisplaysModal) {
+                    onOpenDisplaysModal()
+                  } else {
+                    onOpenSettings()
+                  }
                 }}
               >
                 <span>Configurar Asignación de Roles...</span>
