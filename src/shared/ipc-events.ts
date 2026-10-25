@@ -46,6 +46,7 @@ export const IPC_CHANNELS = {
   SERVICES_GET: 'services:get',
   SERVICES_SAVE: 'services:save',
   SERVICES_DELETE: 'services:delete',
+  SERVICES_DUPLICATE: 'services:duplicate',
   SERVICES_GET_TEMPLATES: 'services:get-templates',
 
   // Phase 3: Export & Import
@@ -126,6 +127,8 @@ export const IPC_CHANNELS = {
   // Libraries (ProPresenter Style Collections)
   LIBRARIES_GET: 'libraries:get',
   LIBRARIES_SAVE: 'libraries:save',
+  LIBRARIES_RENAME: 'libraries:rename',
+  LIBRARIES_REORDER: 'libraries:reorder',
   LIBRARIES_DELETE: 'libraries:delete',
   LIBRARIES_MOVE_ITEM: 'libraries:move-item',
 

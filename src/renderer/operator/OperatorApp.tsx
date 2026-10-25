@@ -7,6 +7,8 @@ import {
   SlideItem,
   AppShortcutsConfig,
   DEFAULT_SHORTCUTS,
+  ShortcutProfile,
+  PanelNaming,
   AppNotification,
   Song,
   GenericPresentation,
@@ -28,7 +30,7 @@ import {
   PptPresentationManifest,
   FfmpegStatus,
   UserLibrary,
-  LibraryItemReference,
+  ServiceItemType,
   PresentationTimer,
   FileChangedEvent,
   YouTubeItem
@@ -115,6 +117,17 @@ export const OperatorApp: React.FC = () => {
   const [shortcuts, setShortcuts] = useState<AppShortcutsConfig>(DEFAULT_SHORTCUTS)
   const [appVersion, setAppVersion] = useState<string>('1.0.0')
 
+  // Panel naming configuration (Requirement 1: ProPresenter names by default, Spanish option in Settings)
+  const [panelNaming, setPanelNaming] = useState<PanelNaming>(() => {
+    return (localStorage.getItem('cp_panel_naming') as PanelNaming) || 'propresenter'
+  })
+
+  const panelLabels = useMemo(() => {
+    return panelNaming === 'spanish'
+      ? { library: 'Biblioteca', playlist: 'Playlist', media: 'Medios', audience: 'Audiencia', stage: 'Escenario' }
+      : { library: 'Library', playlist: 'Playlist', media: 'Media', audience: 'Audience', stage: 'Stage' }
+  }, [panelNaming])
+
   // Phase 3 & 4 Data Collections
   const [songs, setSongs] = useState<Song[]>([])
   const [presentations, setPresentations] = useState<GenericPresentation[]>([])
@@ -164,6 +177,7 @@ export const OperatorApp: React.FC = () => {
   const [isMediaImportModalOpen, setIsMediaImportModalOpen] = useState<boolean>(false)
   const [importMediaFilePath, setImportMediaFilePath] = useState<string>('')
   const [importMediaTags, setImportMediaTags] = useState<string>('')
+  const [isImportingPpt, setIsImportingPpt] = useState<boolean>(false)
 
   // Role Bible Configs (Doble traducción por rol de salida)
   const [roleBibleConfigs, setRoleBibleConfigs] = useState<RoleBibleConfigsMap>({ ...DEFAULT_ROLE_BIBLE_CONFIGS })
@@ -985,57 +999,153 @@ export const OperatorApp: React.FC = () => {
     }
   }, [currentService, selectedServiceItemIndex])
 
-  // Global Keyboard Shortcuts (Strict: Window Focus Only, No Modifiers)
+  const handleClearLayer = useCallback(
+    (layer: 'audio' | 'background' | 'slide' | 'message' | 'media' | 'all') => {
+      if (layer === 'all') {
+        window.churchPresenterApi.toggleGlobalControl('clear')
+      } else if (layer === 'background') {
+        window.churchPresenterApi.sendSlide({
+          id: 'slide_clear_bg',
+          title: '',
+          body: '',
+          subtitle: '',
+          background: { type: 'color', value: '#000000' }
+        })
+      } else if (layer === 'slide') {
+        window.churchPresenterApi.toggleGlobalControl('clear')
+      } else if (layer === 'audio') {
+        window.churchPresenterApi.controlIndependentAudio('stop')
+      } else if (layer === 'media') {
+        window.churchPresenterApi.controlVideo('stop')
+      } else if (layer === 'message') {
+        window.churchPresenterApi.setOutputMessage('stage', '', false)
+        window.churchPresenterApi.setOutputMessage('main', '', false)
+        window.churchPresenterApi.setOutputMessage('lobby', '', false)
+        setIsStageMessageActive(false)
+      }
+    },
+    []
+  )
+
+  // Global Keyboard Shortcuts (Strict: Window Focus Only)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
 
-      if (e.ctrlKey || e.altKey || e.metaKey) {
-        return
-      }
-
       const key = e.key.toUpperCase()
 
-      // Function keys shortcuts
-      if ((e.ctrlKey || e.metaKey) && key === 'Y') {
-        e.preventDefault()
-        setActiveToolbarMode('youtube')
+      // Modifiers
+      if (e.ctrlKey || e.metaKey) {
+        if (key === 'Y') {
+          e.preventDefault()
+          setActiveToolbarMode('youtube')
+          return
+        }
+        if (key === 'M') {
+          e.preventDefault()
+          setIsMediaDrawerOpen((prev) => !prev)
+          return
+        }
+        if (key === 'F') {
+          e.preventDefault()
+          const searchInput = document.querySelector('.pro-search-input') as HTMLInputElement | null
+          searchInput?.focus()
+          return
+        }
+      }
+
+      if (e.altKey) {
         return
       }
 
-      if (key === shortcuts.black.toUpperCase()) {
+      // Action mappings from shortcuts configuration:
+      if (key === (shortcuts.black || 'F1').toUpperCase()) {
         e.preventDefault()
         window.churchPresenterApi.toggleGlobalControl('black')
         return
-      } else if (key === shortcuts.clear.toUpperCase()) {
+      } else if (
+        key === (shortcuts.clearAll || shortcuts.clear || 'F2').toUpperCase()
+      ) {
         e.preventDefault()
-        window.churchPresenterApi.toggleGlobalControl('clear')
+        handleClearLayer('all')
         return
-      } else if (key === shortcuts.logo.toUpperCase()) {
+      } else if (key === (shortcuts.logo || 'F3').toUpperCase()) {
         e.preventDefault()
         window.churchPresenterApi.toggleGlobalControl('logo')
         return
-      } else if (key === shortcuts.freeze.toUpperCase()) {
+      } else if (key === (shortcuts.freeze || 'F4').toUpperCase()) {
         e.preventDefault()
         window.churchPresenterApi.toggleGlobalControl('freeze')
         return
+      } else if (key === (shortcuts.clearAudio || 'F5').toUpperCase()) {
+        e.preventDefault()
+        handleClearLayer('audio')
+        return
+      } else if (key === (shortcuts.clearBackground || 'F6').toUpperCase()) {
+        e.preventDefault()
+        handleClearLayer('background')
+        return
+      } else if (key === (shortcuts.clearSlide || 'F7').toUpperCase()) {
+        e.preventDefault()
+        handleClearLayer('slide')
+        return
+      } else if (key === (shortcuts.clearMessage || 'F8').toUpperCase()) {
+        e.preventDefault()
+        handleClearLayer('message')
+        return
+      } else if (key === (shortcuts.clearMedia || 'F9').toUpperCase()) {
+        e.preventDefault()
+        handleClearLayer('media')
+        return
       }
 
-      // Live Slides Navigation
-      if (key === 'ARROWDOWN' || key === 'ARROWRIGHT' || key === ' ') {
+      // Live Slides Navigation (Next/Prev slide)
+      const nextSlideKey = (shortcuts.nextSlide || 'ArrowRight').toUpperCase()
+      const prevSlideKey = (shortcuts.prevSlide || 'ArrowLeft').toUpperCase()
+
+      if (
+        key === nextSlideKey ||
+        key === ' ' ||
+        key === 'ARROWRIGHT' ||
+        (nextSlideKey === 'ARROWRIGHT' && e.key === 'ArrowRight')
+      ) {
         e.preventDefault()
         handleNextSlide()
-      } else if (key === 'ARROWUP' || key === 'ARROWLEFT') {
+        return
+      } else if (
+        key === prevSlideKey ||
+        key === 'ARROWLEFT' ||
+        (prevSlideKey === 'ARROWLEFT' && e.key === 'ArrowLeft')
+      ) {
         e.preventDefault()
         handlePrevSlide()
-      } else if (key === 'PAGEDOWN' || key === 'N') {
+        return
+      }
+
+      // Playlist Item Navigation
+      const nextItemKey = (shortcuts.nextPlaylistItem || 'ArrowDown').toUpperCase()
+      const prevItemKey = (shortcuts.prevPlaylistItem || 'ArrowUp').toUpperCase()
+
+      if (
+        key === nextItemKey ||
+        key === 'PAGEDOWN' ||
+        key === 'N' ||
+        (nextItemKey === 'ARROWDOWN' && e.key === 'ArrowDown')
+      ) {
         e.preventDefault()
         handleNextPlaylistItem()
-      } else if (key === 'PAGEUP' || key === 'P') {
+        return
+      } else if (
+        key === prevItemKey ||
+        key === 'PAGEUP' ||
+        key === 'P' ||
+        (prevItemKey === 'ARROWUP' && e.key === 'ArrowUp')
+      ) {
         e.preventDefault()
         handlePrevPlaylistItem()
+        return
       } else if (key === 'C') {
         e.preventDefault()
         handleNextChapter()
@@ -1055,7 +1165,8 @@ export const OperatorApp: React.FC = () => {
       handlePrevPlaylistItem,
       handleNextChapter,
       handlePrevChapter,
-      sendPreviewToLive
+      sendPreviewToLive,
+      handleClearLayer
     ]
   )
 
@@ -1610,21 +1721,20 @@ export const OperatorApp: React.FC = () => {
   const handleNativeImportPpt = async () => {
     const result = await window.churchPresenterApi.openFileDialog({
       title: 'Seleccionar Presentación PowerPoint',
-      filters: [{ name: 'PowerPoint (*.pptx, *.ppt)', extensions: ['pptx', 'ppt', 'pptm', 'ppsx'] }],
-      properties: ['openFile']
+      filters: [{ name: 'PowerPoint (*.pptx, *.ppt)', extensions: ['pptx', 'ppt', 'pptm', 'ppsx'] }]
     })
-    if (!result.canceled && result.filePaths.length > 0) {
-      const selectedPath = result.filePaths[0]
+    if (result && result.length > 0) {
+      const selectedPath = result[0]
       setIsImportingPpt(true)
       try {
-        const manifest = await window.churchPresenterApi.importPpt(selectedPath)
+        const manifest = await window.churchPresenterApi.importPowerPoint(selectedPath)
         await loadAllData()
         if (currentService) {
           const newItem: ServiceItem = {
             id: `item_p_${Date.now()}`,
             type: 'presentation',
-            name: manifest.fileName,
-            presentationId: manifest.presentationId
+            name: manifest.originalName || manifest.id,
+            presentationId: manifest.id
           }
           const updated = { ...currentService, items: [...currentService.items, newItem] }
           await window.churchPresenterApi.saveService(updated)
@@ -1648,10 +1758,10 @@ export const OperatorApp: React.FC = () => {
         { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
         { name: 'PDF', extensions: ['pdf'] }
       ],
-      properties: ['openFile', 'multiSelections']
+      multiSelections: true
     })
-    if (!result.canceled && result.filePaths.length > 0) {
-      for (const p of result.filePaths) {
+    if (result && result.length > 0) {
+      for (const p of result) {
         await window.churchPresenterApi.importMediaFile(p)
       }
       await loadAllData()
@@ -1659,21 +1769,24 @@ export const OperatorApp: React.FC = () => {
   }
 
   const handleNativeImportFolder = async () => {
-    const result = await window.churchPresenterApi.openFolderDialog({
+    const folderPath = await window.churchPresenterApi.openFolderDialog({
       title: 'Seleccionar Carpeta de Medios'
     })
-    if (!result.canceled && result.filePaths.length > 0) {
-      await window.churchPresenterApi.importMediaFolder(result.filePaths[0])
+    if (folderPath) {
+      await window.churchPresenterApi.importImageFolder(folderPath)
       await loadAllData()
     }
   }
 
   const handleCreateUserLibrary = async (name: string) => {
+    const now = new Date().toISOString()
     const newLib: UserLibrary = {
       id: `lib_custom_${Date.now()}`,
       name,
       isSpecial: false,
-      sortOrder: userLibraries.length
+      sortOrder: userLibraries.length,
+      createdAt: now,
+      updatedAt: now
     }
     await window.churchPresenterApi.saveLibrary(newLib)
     const updated = await window.churchPresenterApi.getLibraries()
@@ -1686,6 +1799,54 @@ export const OperatorApp: React.FC = () => {
     const updated = await window.churchPresenterApi.getLibraries()
     setUserLibraries(updated || [])
     setActiveUserLibraryId('lib_songs')
+  }
+
+  const handleRenameUserLibrary = async (id: string, newName: string) => {
+    await window.churchPresenterApi.renameLibrary(id, newName)
+    const updated = await window.churchPresenterApi.getLibraries()
+    setUserLibraries(updated || [])
+  }
+
+  const handleReorderUserLibraries = async (orderedIds: string[]) => {
+    await window.churchPresenterApi.reorderLibraries(orderedIds)
+    const updated = await window.churchPresenterApi.getLibraries()
+    setUserLibraries(updated || [])
+  }
+
+  const handleMoveLibraryItem = async (itemRefId: string, targetLibraryId: string) => {
+    await window.churchPresenterApi.moveLibraryItem(itemRefId, targetLibraryId)
+    const updated = await window.churchPresenterApi.getLibraries()
+    setUserLibraries(updated || [])
+  }
+
+  const handleRenameService = async (serviceId: string, newName: string) => {
+    const serv = services.find((s) => s.id === serviceId)
+    if (!serv) return
+    const updated = { ...serv, name: newName, updatedAt: new Date().toISOString() }
+    await window.churchPresenterApi.saveService(updated)
+    const all = await window.churchPresenterApi.getServices()
+    setServices(all)
+    if (currentService?.id === serviceId) {
+      setCurrentService(updated)
+    }
+  }
+
+  const handleDuplicateService = async (serviceId: string) => {
+    const dup = await window.churchPresenterApi.duplicateService(serviceId)
+    const all = await window.churchPresenterApi.getServices()
+    setServices(all)
+    setCurrentService(dup)
+    setSelectedServiceItemIndex(0)
+  }
+
+  const handleDeleteService = async (serviceId: string) => {
+    await window.churchPresenterApi.deleteService(serviceId)
+    const all = await window.churchPresenterApi.getServices()
+    setServices(all)
+    if (all.length > 0) {
+      setCurrentService(all[0])
+      setSelectedServiceItemIndex(0)
+    }
   }
 
   const handleReorderPlaylistItem = (fromIdx: number, toIdx: number) => {
@@ -1731,8 +1892,12 @@ export const OperatorApp: React.FC = () => {
     }
     const newGroup: SongGroup = {
       id: `group_${Date.now()}`,
+      songId: currentSong.id,
       label: `Verso ${currentSong.groups.length + 1}`,
-      content: 'Nueva letra...'
+      groupType: 'verse',
+      groupNumber: currentSong.groups.length + 1,
+      content: 'Nueva letra...',
+      sortOrder: currentSong.groups.length
     }
     const updatedSong: Song = {
       ...currentSong,
@@ -1779,14 +1944,14 @@ export const OperatorApp: React.FC = () => {
       if (ext === 'pptx' || ext === 'ppt') {
         try {
           setIsImportingPpt(true)
-          const manifest = await window.churchPresenterApi.importPpt(nativePath)
+          const manifest = await window.churchPresenterApi.importPowerPoint(nativePath)
           await loadAllData()
           if (currentService) {
             const newItem: ServiceItem = {
               id: `item_p_${Date.now()}_${i}`,
               type: 'presentation',
-              name: manifest.fileName || file.name,
-              presentationId: manifest.presentationId
+              name: manifest.originalName || file.name,
+              presentationId: manifest.id
             }
             const updated = { ...currentService, items: [...currentService.items, newItem] }
             await window.churchPresenterApi.saveService(updated)
@@ -1835,7 +2000,7 @@ export const OperatorApp: React.FC = () => {
         onImportMedia={handleNativeImportMedia}
         onImportFolder={handleNativeImportFolder}
         onExportService={handleExportLibrary}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onLoadDemoData={async () => {
           await window.churchPresenterApi.loadDemoData()
           await loadAllData()
@@ -1866,15 +2031,21 @@ export const OperatorApp: React.FC = () => {
           } else if (m === 'bible') {
             setIsBibleImportModalOpen(false)
           } else if (m === 'more') {
-            setIsSettingsModalOpen(true)
+            setIsSettingsOpen(true)
           }
         }}
         onAddTextSlide={handleAddBlankItem}
-        onOpenThemeModal={() => setIsThemeModalOpen(true)}
+        onOpenThemeModal={() => setIsThemesModalOpen(true)}
         state={state}
         displays={displays}
         assignments={assignments}
         shortcuts={shortcuts}
+        panelLabels={panelLabels}
+        isMediaDrawerOpen={isMediaDrawerOpen}
+        onToggleMediaDrawer={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+        onOpenOutputPreviewOrSettings={(role) => {
+          window.churchPresenterApi.openPreviewOutputWindow(role)
+        }}
       />
 
       {/* 3. Main Workspace: 3 Columns Layout */}
@@ -1886,16 +2057,20 @@ export const OperatorApp: React.FC = () => {
             activeLibraryId={activeUserLibraryId}
             onSelectLibrary={setActiveUserLibraryId}
             onCreateLibrary={handleCreateUserLibrary}
+            onRenameLibrary={handleRenameUserLibrary}
+            onReorderLibraries={handleReorderUserLibraries}
             onDeleteLibrary={handleDeleteUserLibrary}
+            onMoveItem={handleMoveLibraryItem}
             songs={filteredSongs}
             presentations={filteredPresentations}
             mediaItems={mediaItems}
             youtubeItems={youtubeItems}
+            panelLabels={panelLabels}
             onItemSelect={(type, id) => {
               if (type === 'song') {
                 const s = songs.find((x) => x.id === id)
                 if (s && currentService) {
-                  const item = {
+                  const item: ServiceItem = {
                     id: `item_s_${Date.now()}`,
                     type: 'song',
                     name: s.title,
@@ -1937,9 +2112,9 @@ export const OperatorApp: React.FC = () => {
             }}
             onAddItemToPlaylist={(type, id, name) => {
               if (currentService) {
-                const newItem = {
+                const newItem: ServiceItem = {
                   id: `item_${Date.now()}`,
-                  type,
+                  type: type as ServiceItemType,
                   name,
                   songId: type === 'song' ? id : undefined,
                   presentationId: type === 'presentation' ? id : undefined,
@@ -1963,6 +2138,9 @@ export const OperatorApp: React.FC = () => {
               }
             }}
             onNewService={handleCreateNewService}
+            onRenameService={handleRenameService}
+            onDuplicateService={handleDuplicateService}
+            onDeleteService={handleDeleteService}
             selectedItemIndex={selectedServiceItemIndex}
             onSelectItemIndex={setSelectedServiceItemIndex}
             liveItemIndex={
@@ -1978,20 +2156,35 @@ export const OperatorApp: React.FC = () => {
             onReorderItem={handleReorderPlaylistItem}
             onDeleteItem={handleDeletePlaylistItem}
             onDuplicateItem={handleDuplicatePlaylistItem}
-            onAddHeader={(headerName) => {
+            onAddHeader={(headerName, color) => {
               if (currentService) {
-                const newHeader = {
+                const newHeader: ServiceItem = {
                   id: `header_${Date.now()}`,
                   type: 'header',
-                  name: headerName
+                  name: headerName,
+                  notes: color || '#3b82f6'
                 }
                 const updated = { ...currentService, items: [...currentService.items, newHeader] }
                 setCurrentService(updated)
                 window.churchPresenterApi.saveService(updated)
               }
             }}
+            onRenameHeader={(idx, newTitle, newColor) => {
+              if (currentService && currentService.items[idx]) {
+                const newItems = [...currentService.items]
+                newItems[idx] = {
+                  ...newItems[idx],
+                  name: newTitle,
+                  notes: newColor || newItems[idx].notes || '#3b82f6'
+                }
+                const updated = { ...currentService, items: newItems }
+                setCurrentService(updated)
+                window.churchPresenterApi.saveService(updated)
+              }
+            }}
             onAddBlankItem={handleAddBlankItem}
             onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
+            panelLabels={panelLabels}
           />
         </aside>
 
@@ -2012,6 +2205,10 @@ export const OperatorApp: React.FC = () => {
                   await window.churchPresenterApi.controlYouTube('go-live')
                   const slide: SlideItem = {
                     id: `yt_slide_${item.youtubeConfig.youtubeId}`,
+                    sourceId: item.youtubeConfig.youtubeId,
+                    sourceType: 'presentation',
+                    slideIndex: 0,
+                    totalSlidesInGroup: 1,
                     title: item.youtubeConfig.title,
                     body: `▶ YouTube: ${item.youtubeConfig.title}\nCanal: ${item.youtubeConfig.channelTitle || 'YouTube'}`,
                     mediaType: 'youtube',
@@ -2101,6 +2298,10 @@ export const OperatorApp: React.FC = () => {
                             await window.churchPresenterApi.controlYouTube('go-live')
                             const slide: SlideItem = {
                               id: `yt_slide_${currentServiceItem.youtubeConfig.youtubeId}`,
+                              sourceId: currentServiceItem.youtubeConfig.youtubeId,
+                              sourceType: 'presentation',
+                              slideIndex: 0,
+                              totalSlidesInGroup: 1,
                               title: currentServiceItem.youtubeConfig.title,
                               body: `▶ YouTube: ${currentServiceItem.youtubeConfig.title}\nCanal: ${
                                 currentServiceItem.youtubeConfig.channelTitle || 'YouTube'
@@ -2154,6 +2355,7 @@ export const OperatorApp: React.FC = () => {
                 mediaItems={mediaItems}
                 onImportFile={handleNativeImportMedia}
                 onImportFolder={handleNativeImportFolder}
+                panelLabels={panelLabels}
                 onPlayMedia={(item) => {
                   window.churchPresenterApi.playVideo({
                     mediaId: item.id,
@@ -2164,7 +2366,7 @@ export const OperatorApp: React.FC = () => {
                     audioOutputRole: 'main'
                   })
                 }}
-                onSetAsBackground={(item) => {
+                onSetAsBackground={(_item) => {
                   // handle set background
                 }}
               />
@@ -2178,6 +2380,7 @@ export const OperatorApp: React.FC = () => {
             state={state}
             currentSlide={activeSlides[previewSlideIndex] || null}
             timers={presentationTimers}
+            panelLabels={panelLabels}
             onControlTimer={async (id, action) => {
               await window.churchPresenterApi.controlTimer(id, action)
             }}
@@ -2191,21 +2394,7 @@ export const OperatorApp: React.FC = () => {
               const updated = await window.churchPresenterApi.getTimers()
               setPresentationTimers(updated || [])
             }}
-            onClearLayer={(layer) => {
-              if (layer === 'all') {
-                window.churchPresenterApi.toggleGlobalControl('clear')
-              } else if (layer === 'background') {
-                window.churchPresenterApi.clearBackground()
-              } else if (layer === 'slide') {
-                window.churchPresenterApi.clearSlide()
-              } else if (layer === 'audio') {
-                window.churchPresenterApi.controlIndependentAudio('stop')
-              } else if (layer === 'media') {
-                window.churchPresenterApi.controlVideo('stop')
-              } else if (layer === 'message') {
-                handleClearStageMessage()
-              }
-            }}
+            onClearLayer={handleClearLayer}
             onControlVideo={(action, time) => {
               window.churchPresenterApi.controlVideo(action, time)
             }}
@@ -2222,7 +2411,7 @@ export const OperatorApp: React.FC = () => {
         onRefresh={async (evt) => {
           try {
             if (evt.type === 'powerpoint') {
-              await window.churchPresenterApi.importPpt(evt.filePath)
+              await window.churchPresenterApi.importPowerPoint(evt.filePath)
             } else {
               await window.churchPresenterApi.importMediaFile(evt.filePath)
             }
@@ -2237,8 +2426,8 @@ export const OperatorApp: React.FC = () => {
                 timestamp: Date.now()
               }
             ])
-          } catch (err) {
-            alert(`Error al actualizar archivo: ${err.message}`)
+          } catch (err: any) {
+            alert(`Error al actualizar archivo: ${err?.message || err}`)
           }
           setFileWatcherEvent(null)
         }}
@@ -2963,30 +3152,149 @@ export const OperatorApp: React.FC = () => {
                 </div>
               </div>
 
+              {/* Requirement 1: Nombres de Paneles (Estilo ProPresenter vs Español) */}
               <div className="settings-section">
-                <h3>Atajos de Teclado Rápidos (Solo Foco de Ventana)</h3>
+                <h3>Nombres de Paneles y Botones</h3>
                 <p className="section-note">
-                  Por seguridad, las combinaciones con Ctrl (ej. Ctrl+C) no se interceptan.
+                  Elija la terminología utilizada en la interfaz del operador. Por defecto se usan los nombres estándar de ProPresenter 7 ("Library", "Playlist", "Media", "Audience", "Stage") para facilitar el flujo de trabajo del equipo audiovisual. Los textos de ayuda, diálogos y mensajes del sistema permanecen en español.
                 </p>
+                <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="panelNaming"
+                      value="propresenter"
+                      checked={panelNaming === 'propresenter'}
+                      onChange={() => {
+                        setPanelNaming('propresenter')
+                        localStorage.setItem('cp_panel_naming', 'propresenter')
+                      }}
+                    />
+                    <span><strong>ProPresenter por Defecto:</strong> Library, Playlist, Media, Audience, Stage</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="panelNaming"
+                      value="spanish"
+                      checked={panelNaming === 'spanish'}
+                      onChange={() => {
+                        setPanelNaming('spanish')
+                        localStorage.setItem('cp_panel_naming', 'spanish')
+                      }}
+                    />
+                    <span><strong>Español:</strong> Biblioteca, Playlist, Medios, Audiencia, Escenario</span>
+                  </label>
+                </div>
+              </div>
 
-                <div className="shortcuts-grid">
+              {/* Requirement 10: Atajos de Teclado y Perfiles Configurables */}
+              <div className="settings-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div>
+                    <h3>Atajos de Teclado y Perfiles</h3>
+                    <p className="section-note" style={{ margin: 0 }}>
+                      Configure las teclas para las acciones primarias de la iglesia o seleccione el perfil por defecto de ProPresenter.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <label style={{ fontSize: 12, color: '#94a3b8' }}>Perfil:</label>
+                    <select
+                      value={tempShortcuts.profile || 'propresenter'}
+                      onChange={(e) => {
+                        const prof = e.target.value as ShortcutProfile
+                        if (prof === 'propresenter') {
+                          setTempShortcuts({ ...DEFAULT_SHORTCUTS, profile: 'propresenter' })
+                        } else {
+                          setTempShortcuts({ ...tempShortcuts, profile: 'custom' })
+                        }
+                      }}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        color: '#f8fafc',
+                        border: '1px solid #475569',
+                        borderRadius: 4,
+                        padding: '3px 8px',
+                        fontSize: 12
+                      }}
+                    >
+                      <option value="propresenter">ProPresenter por Defecto</option>
+                      <option value="custom">Personalizado</option>
+                    </select>
+                    <button
+                      className="secondary-action-btn"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => setTempShortcuts(DEFAULT_SHORTCUTS)}
+                      title="Restablecer todos los atajos al perfil original de ProPresenter"
+                    >
+                      Restablecer
+                    </button>
+                  </div>
+                </div>
+
+                <div className="shortcuts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
                   <div className="shortcut-field">
-                    <label>Pantalla a Negro:</label>
+                    <label>Siguiente Diapositiva:</label>
                     <input
                       type="text"
-                      value={tempShortcuts.black}
+                      value={tempShortcuts.nextSlide || 'ArrowRight'}
                       onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, black: e.target.value.toUpperCase() })
+                        setTempShortcuts({ ...tempShortcuts, nextSlide: e.target.value, profile: 'custom' })
                       }
                     />
                   </div>
                   <div className="shortcut-field">
-                    <label>Limpiar Texto:</label>
+                    <label>Anterior Diapositiva:</label>
                     <input
                       type="text"
-                      value={tempShortcuts.clear}
+                      value={tempShortcuts.prevSlide || 'ArrowLeft'}
                       onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clear: e.target.value.toUpperCase() })
+                        setTempShortcuts({ ...tempShortcuts, prevSlide: e.target.value, profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Siguiente Ítem Playlist:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.nextPlaylistItem || 'ArrowDown'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, nextPlaylistItem: e.target.value, profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Anterior Ítem Playlist:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.prevPlaylistItem || 'ArrowUp'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, prevPlaylistItem: e.target.value, profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Pantalla a Negro (Black):</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.black || 'F1'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, black: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Todo (Clear All):</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearAll || tempShortcuts.clear || 'F2'}
+                      onChange={(e) =>
+                        setTempShortcuts({
+                          ...tempShortcuts,
+                          clearAll: e.target.value.toUpperCase(),
+                          clear: e.target.value.toUpperCase(),
+                          profile: 'custom'
+                        })
                       }
                     />
                   </div>
@@ -2994,19 +3302,89 @@ export const OperatorApp: React.FC = () => {
                     <label>Mostrar Logo:</label>
                     <input
                       type="text"
-                      value={tempShortcuts.logo}
+                      value={tempShortcuts.logo || 'F3'}
                       onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, logo: e.target.value.toUpperCase() })
+                        setTempShortcuts({ ...tempShortcuts, logo: e.target.value.toUpperCase(), profile: 'custom' })
                       }
                     />
                   </div>
                   <div className="shortcut-field">
-                    <label>Congelar Salidas:</label>
+                    <label>Congelar Salidas (Freeze):</label>
                     <input
                       type="text"
-                      value={tempShortcuts.freeze}
+                      value={tempShortcuts.freeze || 'F4'}
                       onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, freeze: e.target.value.toUpperCase() })
+                        setTempShortcuts({ ...tempShortcuts, freeze: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Capa Audio:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearAudio || 'F5'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, clearAudio: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Fondo (Fondo):</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearBackground || 'F6'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, clearBackground: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Diapo (Slide):</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearSlide || 'F7'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, clearSlide: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Mensaje:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearMessage || 'F8'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, clearMessage: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Limpiar Medios (Media):</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.clearMedia || 'F9'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, clearMedia: e.target.value.toUpperCase(), profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Alternar Cajón Medios:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.toggleMedia || 'Ctrl+M'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, toggleMedia: e.target.value, profile: 'custom' })
+                      }
+                    />
+                  </div>
+                  <div className="shortcut-field">
+                    <label>Foco a Búsqueda:</label>
+                    <input
+                      type="text"
+                      value={tempShortcuts.focusSearch || 'Ctrl+F'}
+                      onChange={(e) =>
+                        setTempShortcuts({ ...tempShortcuts, focusSearch: e.target.value, profile: 'custom' })
                       }
                     />
                   </div>

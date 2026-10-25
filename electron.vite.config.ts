@@ -16,6 +16,16 @@ function copySqlWasmPlugin() {
         }
         fs.copyFileSync(srcWasm, resolve(destDir, 'sql-wasm.wasm'))
       }
+
+      // Copy export-powerpoint.ps1
+      const srcPs1 = resolve(__dirname, 'src/main/powerpoint/scripts/export-powerpoint.ps1')
+      const destScriptsDir = resolve(__dirname, 'out/main/scripts')
+      if (fs.existsSync(srcPs1)) {
+        if (!fs.existsSync(destScriptsDir)) {
+          fs.mkdirSync(destScriptsDir, { recursive: true })
+        }
+        fs.copyFileSync(srcPs1, resolve(destScriptsDir, 'export-powerpoint.ps1'))
+      }
     }
   }
 }

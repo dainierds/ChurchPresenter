@@ -12,7 +12,6 @@ import {
   RoleBibleConfig,
   VideoItemConfig,
   UserLibrary,
-  LibraryItemReference,
   PresentationTimer,
   YouTubeItem,
   YouTubeItemConfig,
@@ -204,6 +203,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.SERVICES_DELETE, (_event, id: string) => {
     return libraryService.deleteService(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SERVICES_DUPLICATE, (_event, id: string) => {
+    return libraryService.duplicateService(id)
   })
 
   ipcMain.handle(IPC_CHANNELS.SERVICES_GET_TEMPLATES, () => {
@@ -555,6 +558,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.LIBRARIES_SAVE, (_event, library: UserLibrary) => {
     return databaseService.saveLibrary(library)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_RENAME, (_event, id: string, newName: string) => {
+    return databaseService.renameLibrary(id, newName)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_REORDER, (_event, orderedIds: string[]) => {
+    return databaseService.reorderLibraries(orderedIds)
   })
 
   ipcMain.handle(IPC_CHANNELS.LIBRARIES_DELETE, (_event, id: string) => {

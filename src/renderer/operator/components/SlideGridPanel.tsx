@@ -6,10 +6,7 @@ import {
   Edit3,
   ZoomIn,
   ZoomOut,
-  Radio,
-  Sliders,
-  Sparkles,
-  Music
+  Radio
 } from 'lucide-react'
 import { SlideItem, ThemeConfig } from '../../../shared/types'
 

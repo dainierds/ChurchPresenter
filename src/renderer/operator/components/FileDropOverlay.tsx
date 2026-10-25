@@ -1,5 +1,5 @@
 import React from 'react'
-import { UploadCloud, FileText, Film, Image as ImageIcon } from 'lucide-react'
+import { UploadCloud } from 'lucide-react'
 
 interface FileDropOverlayProps {
   isDragging: boolean

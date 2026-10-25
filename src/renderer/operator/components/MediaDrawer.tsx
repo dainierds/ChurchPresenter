@@ -6,7 +6,6 @@ import {
   Music,
   FileText,
   Upload,
-  Plus,
   Search,
   ZoomIn,
   ZoomOut,
@@ -25,6 +24,13 @@ interface MediaDrawerProps {
   onImportFolder: () => void
   onPlayMedia: (item: MediaItem) => void
   onSetAsBackground: (item: MediaItem) => void
+  panelLabels?: {
+    library: string
+    playlist: string
+    media: string
+    audience: string
+    stage: string
+  }
 }
 
 export const MediaDrawer: React.FC<MediaDrawerProps> = ({
@@ -34,19 +40,22 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
   onImportFile,
   onImportFolder,
   onPlayMedia,
-  onSetAsBackground
+  onSetAsBackground,
+  panelLabels
 }) => {
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
-  const [filterType, setFilterType] = useState<MediaType | 'all'>('all')
+  const [filterType, setFilterType] = useState<MediaType | 'all' | 'pdf'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [mediaZoom, setMediaZoom] = useState(40)
+
+  const mediaLabel = panelLabels?.media ? panelLabels.media.toUpperCase() : 'MEDIOS'
 
   if (!isOpen) {
     return (
       <div className="pro-media-drawer-collapsed">
         <button className="pro-media-toggle-btn" onClick={onToggle}>
           <ChevronUp size={14} />
-          <span>MEDIOS</span>
+          <span>{mediaLabel}</span>
         </button>
       </div>
     )

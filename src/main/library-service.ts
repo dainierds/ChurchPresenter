@@ -392,6 +392,22 @@ export class LibraryService {
     return true
   }
 
+  public duplicateService(id: string): ServicePlan {
+    const services = this.getServices()
+    const target = services.find((s) => s.id === id)
+    if (!target) {
+      throw new Error(`Servicio ${id} no encontrado para duplicar.`)
+    }
+    const duplicated: ServicePlan = {
+      ...target,
+      id: `service_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: `${target.name} (Copia)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    return this.saveService(duplicated)
+  }
+
   // --- EXPORT & IMPORT ---
 
   public exportLibrary(includeMedia: boolean = false): string {

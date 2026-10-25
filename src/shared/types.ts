@@ -129,11 +129,26 @@ export interface GlobalControls {
 /**
  * Configurable keyboard shortcuts and global toggle.
  */
+export type ShortcutProfile = 'propresenter' | 'custom'
+
 export interface AppShortcutsConfig {
   black: string // default 'F1'
   clear: string // default 'F2'
   logo: string // default 'F3'
   freeze: string // default 'F4'
+  nextSlide: string // default 'ArrowRight'
+  prevSlide: string // default 'ArrowLeft'
+  nextPlaylistItem: string // default 'ArrowDown'
+  prevPlaylistItem: string // default 'ArrowUp'
+  clearAudio: string // default 'F5'
+  clearBackground: string // default 'F6'
+  clearSlide: string // default 'F7'
+  clearMessage: string // default 'F8'
+  clearMedia: string // default 'F9'
+  clearAll: string // default 'F2'
+  toggleMedia: string // default 'Ctrl+M'
+  focusSearch: string // default 'Ctrl+F'
+  profile: ShortcutProfile // default 'propresenter'
   enableGlobalFShortcuts: boolean // default false
 }
 
@@ -142,8 +157,23 @@ export const DEFAULT_SHORTCUTS: AppShortcutsConfig = {
   clear: 'F2',
   logo: 'F3',
   freeze: 'F4',
+  nextSlide: 'ArrowRight',
+  prevSlide: 'ArrowLeft',
+  nextPlaylistItem: 'ArrowDown',
+  prevPlaylistItem: 'ArrowUp',
+  clearAudio: 'F5',
+  clearBackground: 'F6',
+  clearSlide: 'F7',
+  clearMessage: 'F8',
+  clearMedia: 'F9',
+  clearAll: 'F2',
+  toggleMedia: 'Ctrl+M',
+  focusSearch: 'Ctrl+F',
+  profile: 'propresenter',
   enableGlobalFShortcuts: false
 }
+
+export type PanelNaming = 'propresenter' | 'spanish'
 
 /**
  * Song group section types.
@@ -283,6 +313,7 @@ export type ServiceItemType =
   | 'scripture'
   | 'video'
   | 'audio'
+  | 'media'
   | 'pdf'
   | 'image_presentation'
   | 'powerpoint'
@@ -468,7 +499,16 @@ export interface ServicePlan {
 /**
  * ProPresenter 7 Style Library Collections
  */
-export type LibraryItemType = 'song' | 'presentation' | 'pdf' | 'powerpoint' | 'video' | 'image' | 'audio' | 'scripture'
+export type LibraryItemType =
+  | 'song'
+  | 'presentation'
+  | 'pdf'
+  | 'powerpoint'
+  | 'video'
+  | 'image'
+  | 'audio'
+  | 'scripture'
+  | 'youtube'
 
 export interface LibraryItemReference {
   id: string
@@ -503,8 +543,10 @@ export interface PresentationTimer {
   targetTime?: string // "HH:MM:SS" or "HH:MM"
   durationSeconds: number
   currentSeconds: number
+  remainingSeconds?: number
   isRunning: boolean
   isOverrun?: boolean
+  isOvertime?: boolean
   showOnStage: boolean
   showOnAudience: boolean
   createdAt: string
@@ -540,10 +582,15 @@ export interface SlideItem {
   subtitle?: string
   background?: LayerBackground
   mediaUrl?: string
+  mediaType?: string
+  youtubeId?: string
+  youtubeDuration?: number
   pdfPage?: number
   pdfPageCount?: number
   fitMode?: 'contain' | 'cover' | 'center'
   speakerNotes?: string
+  nextSlideTitle?: string
+  nextSlideBody?: string
   warnings?: string[]
   scripturePayload?: {
     reference: string
@@ -715,6 +762,7 @@ export interface ChurchPresenterApi {
   getServices: () => Promise<ServicePlan[]>
   saveService: (service: ServicePlan) => Promise<ServicePlan>
   deleteService: (id: string) => Promise<boolean>
+  duplicateService: (serviceId: string) => Promise<ServicePlan>
   getTemplates: () => Promise<ServicePlan[]>
 
   // Phase 3: Export & Import
@@ -794,6 +842,8 @@ export interface ChurchPresenterApi {
   getLibraries: () => Promise<UserLibrary[]>
   getLibraryItems: (libraryId: string) => Promise<LibraryItemReference[]>
   saveLibrary: (library: UserLibrary) => Promise<UserLibrary>
+  renameLibrary: (libraryId: string, newName: string) => Promise<boolean>
+  reorderLibraries: (orderedIds: string[]) => Promise<boolean>
   deleteLibrary: (libraryId: string) => Promise<boolean>
   moveLibraryItem: (itemRefId: string, targetLibraryId: string) => Promise<boolean>
 

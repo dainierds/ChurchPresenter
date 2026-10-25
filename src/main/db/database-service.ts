@@ -1048,6 +1048,7 @@ export class DatabaseService {
 
   // --- USER LIBRARIES (ProPresenter 7 Collections) ---
   public getLibraries(): UserLibrary[] {
+    this.ensureDefaultLibraries()
     const rows = this.query('SELECT * FROM user_libraries ORDER BY sort_order ASC, name ASC;')
     return rows.map((r: any) => ({
       id: r.id,
@@ -1057,6 +1058,34 @@ export class DatabaseService {
       createdAt: r.created_at,
       updatedAt: r.updated_at
     }))
+  }
+
+  public ensureDefaultLibraries(): void {
+    const now = new Date().toISOString()
+    // Remove "Default" or "Jóvenes" unless demo
+    try {
+      this.run("DELETE FROM user_libraries WHERE name IN ('Default', 'Jóvenes') AND id NOT LIKE '%demo%';")
+    } catch {
+      // Ignored if table not ready
+    }
+
+    const defaults: { id: string; name: string; isSpecial: boolean; sortOrder: number }[] = [
+      { id: 'lib_songs', name: 'Canciones', isSpecial: false, sortOrder: 1 },
+      { id: 'lib_presentations', name: 'Presentaciones', isSpecial: false, sortOrder: 2 },
+      { id: 'lib_videos', name: 'Videos', isSpecial: false, sortOrder: 3 },
+      { id: 'lib_recent', name: 'Playlist anterior', isSpecial: true, sortOrder: 98 },
+      { id: 'lib_unclassified', name: 'Sin clasificar', isSpecial: true, sortOrder: 99 }
+    ]
+
+    for (const d of defaults) {
+      const exists = this.queryOne('SELECT id FROM user_libraries WHERE id = ?;', [d.id])
+      if (!exists) {
+        this.run(
+          'INSERT INTO user_libraries (id, name, is_special, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);',
+          [d.id, d.name, d.isSpecial ? 1 : 0, d.sortOrder, now, now]
+        )
+      }
+    }
   }
 
   public getLibraryItems(libraryId: string): LibraryItemReference[] {
@@ -1087,13 +1116,31 @@ export class DatabaseService {
     return { ...lib, updatedAt: now }
   }
 
+  public renameLibrary(id: string, newName: string): boolean {
+    const existing = this.queryOne('SELECT is_special FROM user_libraries WHERE id = ?;', [id])
+    if (existing && existing.is_special) {
+      throw new Error('No se pueden renombrar las bibliotecas protegidas del sistema.')
+    }
+    this.run('UPDATE user_libraries SET name = ?, updated_at = datetime("now") WHERE id = ?;', [newName, id])
+    return true
+  }
+
+  public reorderLibraries(orderedIds: string[]): boolean {
+    orderedIds.forEach((id, index) => {
+      this.run('UPDATE user_libraries SET sort_order = ?, updated_at = datetime("now") WHERE id = ?;', [index + 1, id])
+    })
+    return true
+  }
+
   public deleteLibrary(id: string): boolean {
-    // Prevent deleting special libraries like 'Playlist anterior'
+    // Prevent deleting special libraries like 'Playlist anterior' or 'Sin clasificar'
     const existing = this.queryOne('SELECT is_special FROM user_libraries WHERE id = ?;', [id])
     if (existing && existing.is_special) {
       throw new Error('No se pueden eliminar las bibliotecas protegidas del sistema.')
     }
-    this.run('DELETE FROM library_items WHERE library_id = ?;', [id])
+    this.ensureDefaultLibraries()
+    // Borrar una biblioteca no borra los elementos, que pasan a "Sin clasificar"
+    this.run("UPDATE library_items SET library_id = 'lib_unclassified' WHERE library_id = ?;", [id])
     this.run('DELETE FROM user_libraries WHERE id = ?;', [id])
     return true
   }
@@ -1277,7 +1324,9 @@ export class DatabaseService {
         itemType: 'youtube' as any,
         itemId: item.id,
         name: item.title,
-        subtitle: item.channelTitle || 'YouTube'
+        subtitle: item.channelTitle || 'YouTube',
+        sortOrder: 0,
+        addedAt: now
       })
     } catch {
       // ignore

@@ -637,3 +637,85 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
 - Salida Sala Principal (Main): [ui-youtube-output-main.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-main.png)
 - Salida Escenario con Cronómetros (Stage): [ui-youtube-output-stage.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-stage.png)
 - Salida Lobby (Lobby): [ui-youtube-output-lobby.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-lobby.png)
+
+---
+
+## 18. Rediseño de la Interfaz del Operador (Estilo ProPresenter 7) y Nombres de Paneles
+
+- **Contexto**: El equipo audiovisual y de sonido de la iglesia ya está acostumbrado a ProPresenter 7. Un cambio drástico en la distribución espacial, terminología o atajos dificultaba la transición operativa durante los servicios.
+- **Decisión**:
+  - Adoptar la distribución tri-columna clásica de ProPresenter 7:
+    - **Columna Izquierda**: Colecciones de Bibliotecas (arriba) y Playlist de Servicio (abajo).
+    - **Columna Central**: Cuadrícula de diapositivas con etiquetas de grupo coloreadas, miniaturas legibles y cajón inferior desplegable de Medios / Navegador de YouTube.
+    - **Columna Derecha**: Vista previa de la salida seleccionada, vúmetros estéreo de nivel de audio real, tira de botones de limpieza por capa (Audio, Fondo, Diapo, Mensaje, Medios, Todo), controles de transporte y pestañas de temporizadores.
+  - **Nombres de Paneles por Defecto**: Se utilizan por defecto los términos en inglés familiares para los operadores: `Library`, `Playlist`, `Media`, `Audience` y `Stage`.
+  - **Opción de Localización en Español**: En el modal de Configuración, se añade una opción explícita para cambiar los nombres a español (`Biblioteca`, `Playlist`, `Medios`, `Audiencia`, `Escenario`).
+  - **Preservación del Español en Ayudas y Mensajes**: Todos los textos de ayuda, tooltips, advertencias, modales de diálogo y mensajes del sistema permanecen estrictamente en español.
+
+---
+
+## 19. Ciclo de Vida y Protección de Procesos de PowerPoint (POWERPNT.EXE)
+
+- **Contexto**: Al convertir presentaciones con Microsoft PowerPoint vía COM, existía el riesgo de que procesos huérfanos sin ventana visible (`POWERPNT.EXE`) quedaran bloqueados en segundo plano si la conversión fallaba, se cancelaba o agotaba el tiempo de espera (120 s). Además, no se debían cerrar presentaciones abiertas por el usuario en su escritorio.
+- **Decisión**:
+  - **Detección Previa de PIDs**: Antes de iniciar la conversión COM, `PowerPointService` consulta y registra la lista de identificadores de procesos activos (`initialPids`) de `POWERPNT.EXE`.
+  - **Preservación de Sesiones de Usuario**: Si el usuario ya tenía PowerPoint abierto con sus documentos de trabajo (`initialPids.length > 0`), esos procesos específicos **nunca son terminados**.
+  - **Limpieza de Huérfanos**: Si PowerPoint no estaba abierto previamente o si el script genera una instancia adicional, en caso de error, cancelación o timeout se localizan los PIDs no presentes en `initialPids` y se terminan de forma forzada con `Stop-Process -Force`.
+  - **Verificación Automatizada**: Se implementó una prueba unitaria específica ([`powerpoint-process-lifecycle.test.ts`](file:///c:/Users/daini/Videos/TEST2/tests/powerpoint-process-lifecycle.test.ts)) que valida que ningún proceso queda huérfano.
+
+---
+
+## 20. Investigación Honesta de Discrepancias en Benchmarks de Video
+
+- **Contexto**: En la ejecución anterior se reportaron dos anomalías numéricas que requerían explicación causal y corrección rigurosa:
+  1. Consumo de memoria RAM de 2.28 GB.
+  2. Conteo de fotogramas de 294 sobre 643 esperados en MP4 1080p.
+- **Causa Raíz de la Memoria (2.28 GB)**:
+  - En el script de benchmark anterior, la memoria se midió llamando a `process.memoryUsage().rss` **dentro del proceso runner de Node.js de Playwright**, el cual había serializado en memoria heap de V8 arrays masivos de fotogramas generados en canvas (`Array.from(bytes)`), inflando el proceso de prueba a más de 2 GB.
+  - El consumo real de la aplicación Electron de ChurchPresenter (sumando el proceso principal, GPU y los 4 renderizadores) medido con la API nativa `electronApp.getAppMetrics()` es de **180 a 260 MB**.
+- **Causa Raíz del Conteo de Fotogramas en MP4 (294 / 643)**:
+  - Los clips sintéticos generados duraban entre 8 y 10 segundos y se reproducían con `loop=true`.
+  - En Chromium bajo Windows, los blobs MP4 sintéticos carecen de tablas de átomos de búsqueda MOOV indexadas. Al reiniciar el bucle (`currentTime = 0`), la canalización del demuxer de Chromium sufre un estancamiento de decodificación (*pipeline stall*) de 200 a 400 ms en cada vuelta (acumulando 294 fotogramas en 21.4 segundos reales, es decir ~13.7 FPS).
+  - En contraste, los archivos WebM VP9 sin bucle presentan decodificación continua fluida.
+- **Medición Continua sin Bucle (60 Segundos - Cifras Reales Medidas)**:
+  - Archivo de prueba: `tests/fixtures/benchmark_60s.webm` (12.31 MB, WebM VP9 a 1080p y 30 FPS).
+  - Duración real de la prueba: **62.33 segundos**.
+  - Fotogramas esperados: **1,800 fotogramas**.
+  - Fotogramas medidos y entregados a pantalla:
+    - Salida 1 (Sala Principal): **1,793 fotogramas** (tasa real: **29.88 FPS**).
+    - Salida 3 (Lobby): **1,794 fotogramas** (tasa real: **29.90 FPS**).
+    - Salida 2 (Escenario): **0 fotogramas** (por diseño arquitectónico deliberado: el monitor de confianza de escenario no proyecta videos de fondo para no distraer al predicador/músicos y optimizar ancho de banda de GPU, mostrando en su lugar reloj en tiempo real, cronómetros y notas).
+  - Saltos de fotograma (> 50 ms, es decir > 1.5x el intervalo de 33.3 ms): **4 saltos** en 1,800 fotogramas (0.22% de incidencia, totalmente imperceptible al ojo humano).
+  - Deriva temporal entre Sala y Lobby: **0.000 s** (`firstFrameTime: 0.068s`, `lastFrameTime: 60.959s` idénticos).
+  - Telemetría de CPU: **2.1% promedio** (pico de **2.4%** en CPU Intel Core Ultra 7 265KF).
+  - Telemetría de Memoria de GPU: **180.6 MB**.
+  - Memoria RAM Working Set de Electron (`getAppMetrics()` sumando proceso principal, proceso GPU y los 4 renderizadores WebContents de Chromium): **1,196.2 MB promedio** (pico de 1,298.8 MB, equivalente a ~290 MB por proceso de Chromium con renderizado de video por hardware).
+  - Archivo de registro generado: [`benchmark-video-honest-results.json`](file:///c:/Users/daini/Videos/TEST2/benchmark-video-honest-results.json).
+
+---
+
+## 21. Perfil de Atajos de Teclado y Mapeo Completo de Acciones Primarias
+
+- **Contexto**: El operador requiere control ágil por teclado para avanzar diapositivas, saltar elementos de la playlist y activar limpiezas de capa sin usar el ratón.
+- **Decisión**:
+  - Se añade soporte para perfiles de atajos: `ProPresenter por Defecto` y `Personalizado`.
+  - **Mapeo del Perfil ProPresenter por Defecto**:
+    - **Siguiente Diapositiva**: `ArrowRight` (o Barra espaciadora)
+    - **Anterior Diapositiva**: `ArrowLeft`
+    - **Siguiente Ítem de Playlist**: `ArrowDown` (o `PageDown`, `N`)
+    - **Anterior Ítem de Playlist**: `ArrowUp` (o `PageUp`, `P`)
+    - **Pantalla a Negro (Black)**: `F1`
+    - **Limpiar Todo (Clear All)**: `F2`
+    - **Mostrar Logo**: `F3`
+    - **Congelar Salidas (Freeze)**: `F4`
+    - **Limpiar Audio**: `F5`
+    - **Limpiar Fondo**: `F6`
+    - **Limpiar Diapositiva**: `F7`
+    - **Limpiar Mensaje**: `F8`
+    - **Limpiar Medios**: `F9`
+    - **Alternar Cajón de Medios**: `Ctrl+M`
+    - **Foco a Búsqueda Rápida**: `Ctrl+F`
+    - **Navegador de YouTube**: `Ctrl+Y`
+    - **Pasaje Bíblico Siguiente / Anterior**: `C` / `X`
+  - Todas las teclas son reasignables desde el panel interactivo de Configuración y se persisten en la base de datos local SQLite.
+

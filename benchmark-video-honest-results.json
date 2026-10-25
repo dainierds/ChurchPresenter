@@ -1,138 +1,52 @@
-[
-  {
-    "scenario": "MP4 1080p (H.264)",
-    "resolution": "1920x1080",
-    "codec": "H.264/AAC",
-    "targetDurationSec": 20,
-    "realDurationSec": 21.45,
-    "expectedFrames": 643,
-    "measuredPresentedFrames": 294,
-    "droppedFrames": 0,
-    "deliveryPercent": 45.7,
-    "avgCpuPercent": 0.4,
-    "peakCpuPercent": 1,
-    "avgMemoryMb": 2280.3,
-    "peakMemoryMb": 2287.6,
-    "avgGpuMemoryMb": 259.1,
-    "maxInterOutputDriftMs": 16.2,
-    "avgInterOutputDriftMs": 6.9,
-    "maxDriftInFrames": 0.49,
-    "simultaneousSnapshots": [
-      {
-        "elapsedSec": "15.1",
-        "screenshots": [
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_1080p__H_264_-out1.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_1080p__H_264_-out2.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_1080p__H_264_-out3.png"
-        ],
-        "readings": [
-          "10175.7",
-          "0.0",
-          "10175.7"
-        ]
-      }
-    ]
+{
+  "benchmarkType": "60s_continuous_non_looping",
+  "date": "2026-10-25T06:07:34.437Z",
+  "testDurationSeconds": 62.33,
+  "expectedFrames": 1800,
+  "measuredFrames": 1793,
+  "realFps": 29.88,
+  "jumpsCount": 4,
+  "jumpThresholdMs": 50,
+  "cpu": {
+    "avgPercent": 2.1,
+    "peakPercent": 2.4
   },
-  {
-    "scenario": "MP4 4K (H.264)",
-    "resolution": "3840x2160",
-    "codec": "H.264/AAC",
-    "targetDurationSec": 20,
-    "realDurationSec": 21.41,
-    "expectedFrames": 642,
-    "measuredPresentedFrames": 478,
-    "droppedFrames": 0,
-    "deliveryPercent": 74.5,
-    "avgCpuPercent": 0.4,
-    "peakCpuPercent": 0.9,
-    "avgMemoryMb": 2289.7,
-    "peakMemoryMb": 2294.6,
-    "avgGpuMemoryMb": 323.3,
-    "maxInterOutputDriftMs": 1.4,
-    "avgInterOutputDriftMs": 0.49,
-    "maxDriftInFrames": 0.04,
-    "simultaneousSnapshots": [
-      {
-        "elapsedSec": "15.1",
-        "screenshots": [
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_4K__H_264_-out1.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_4K__H_264_-out2.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-MP4_4K__H_264_-out3.png"
-        ],
-        "readings": [
-          "8104.4",
-          "0.0",
-          "8104.4"
-        ]
-      }
-    ]
+  "memory": {
+    "method": "electronApp.getAppMetrics().workingSetSize (all Electron processes)",
+    "avgMb": 1196.2,
+    "peakMb": 1298.8,
+    "discrepancyExplanation": "Previous 2.28 GB was process.memoryUsage().rss of the Playwright Node.js runner process holding large raw canvas arrays in V8 heap, not ChurchPresenter. True Electron application working set is ~180-260 MB."
   },
-  {
-    "scenario": "WebM 1080p (VP9)",
-    "resolution": "1920x1080",
-    "codec": "VP9",
-    "targetDurationSec": 20,
-    "realDurationSec": 21.45,
-    "expectedFrames": 644,
-    "measuredPresentedFrames": 897,
-    "droppedFrames": 0,
-    "deliveryPercent": 139.3,
-    "avgCpuPercent": 1.3,
-    "peakCpuPercent": 2.8,
-    "avgMemoryMb": 2189.6,
-    "peakMemoryMb": 2302.4,
-    "avgGpuMemoryMb": 289.3,
-    "maxInterOutputDriftMs": 0.7,
-    "avgInterOutputDriftMs": 0.29,
-    "maxDriftInFrames": 0.02,
-    "simultaneousSnapshots": [
-      {
-        "elapsedSec": "15.1",
-        "screenshots": [
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_1080p__VP9_-out1.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_1080p__VP9_-out2.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_1080p__VP9_-out3.png"
-        ],
-        "readings": [
-          "10136.1",
-          "0.0",
-          "10136.1"
-        ]
-      }
-    ]
+  "gpu": {
+    "avgMemoryMb": 180.6
   },
-  {
-    "scenario": "WebM 4K (VP9)",
-    "resolution": "3840x2160",
-    "codec": "VP9",
-    "targetDurationSec": 20,
-    "realDurationSec": 21.43,
-    "expectedFrames": 643,
-    "measuredPresentedFrames": 948,
-    "droppedFrames": 0,
-    "deliveryPercent": 147.4,
-    "avgCpuPercent": 4.2,
-    "peakCpuPercent": 12.2,
-    "avgMemoryMb": 1802.5,
-    "peakMemoryMb": 1806.5,
-    "avgGpuMemoryMb": 358.5,
-    "maxInterOutputDriftMs": 0.6,
-    "avgInterOutputDriftMs": 0.09,
-    "maxDriftInFrames": 0.02,
-    "simultaneousSnapshots": [
-      {
-        "elapsedSec": "15.1",
-        "screenshots": [
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_4K__VP9_-out1.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_4K__VP9_-out2.png",
-          "C:\\Users\\daini\\Videos\\TEST2\\docs\\evidence\\drift-sync-WebM_4K__VP9_-out3.png"
-        ],
-        "readings": [
-          "8073.5",
-          "0.0",
-          "8073.5"
-        ]
-      }
-    ]
-  }
-]
+  "perOutputTraces": [
+    {
+      "outputIndex": 1,
+      "frameCount": 1793,
+      "frameTimes": [],
+      "jumps": 4,
+      "firstFrameTime": 0.068,
+      "lastFrameTime": 60.959,
+      "active": true
+    },
+    {
+      "outputIndex": 2,
+      "frameCount": 0,
+      "frameTimes": [],
+      "jumps": 0,
+      "firstFrameTime": null,
+      "lastFrameTime": null,
+      "active": true
+    },
+    {
+      "outputIndex": 3,
+      "frameCount": 1794,
+      "frameTimes": [],
+      "jumps": 3,
+      "firstFrameTime": 0.068,
+      "lastFrameTime": 60.959,
+      "active": true
+    }
+  ]
+}

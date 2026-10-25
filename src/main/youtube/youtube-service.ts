@@ -77,7 +77,7 @@ export class YouTubeService {
 
     // 2. Deny device permission requests
     if (typeof (ses as any).setDevicePermissionHandler === 'function') {
-      ;(ses as any).setDevicePermissionHandler(() => false)
+      (ses as any).setDevicePermissionHandler(() => false)
     }
 
     // 3. Implement ad-blocking via WebRequest API

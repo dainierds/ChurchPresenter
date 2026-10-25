@@ -32,6 +32,7 @@ describe('Keyboard Shortcuts Hardening & Safety', () => {
 
   it('filters out any unauthorized key even if global F-shortcuts are enabled', () => {
     const maliciousConfig: AppShortcutsConfig = {
+      ...DEFAULT_SHORTCUTS,
       black: 'Ctrl+C', // User maliciously tried to bind Ctrl+C globally
       clear: 'F2',
       logo: 'Alt+Tab',

@@ -164,6 +164,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
       const unsubTimers = window.churchPresenterApi.onTimersTick((t) => setTimers(t || []))
       return () => unsubTimers()
     }
+    return undefined
   }, [])
 
   // Auto-fit text calculation: shrink text if it overflows safe margins
@@ -628,17 +629,17 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
             {isStage && (
               <div className="stage-active-timers-strip">
                 {timers
-                  .filter((t) => t.showOnStage && (t.isRunning || t.isOvertime))
+                  .filter((t) => t.showOnStage && (t.isRunning || t.isOvertime || t.isOverrun))
                   .map((t) => (
                     <div
                       key={t.id}
                       className={`stage-timer-badge ${
-                        t.isOvertime ? 'overtime' : t.remainingSeconds <= 60 ? 'urgent' : ''
+                        (t.isOvertime || t.isOverrun) ? 'overtime' : (t.remainingSeconds ?? t.currentSeconds) <= 60 ? 'urgent' : ''
                       }`}
                     >
                       <span className="stage-timer-title">{t.name}</span>
                       <span className="stage-timer-digits">
-                        {formatTimerDisplay(t.remainingSeconds, t.isOvertime)}
+                        {formatTimerDisplay(t.remainingSeconds ?? t.currentSeconds, t.isOvertime || t.isOverrun)}
                       </span>
                     </div>
                   ))}
@@ -653,7 +654,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     <div key={t.id} className="audience-timer-pill">
                       <span className="audience-timer-title">{t.name}:</span>
                       <span className="audience-timer-digits">
-                        {formatTimerDisplay(t.remainingSeconds, t.isOvertime)}
+                        {formatTimerDisplay(t.remainingSeconds ?? t.currentSeconds, t.isOvertime || t.isOverrun)}
                       </span>
                     </div>
                   ))}

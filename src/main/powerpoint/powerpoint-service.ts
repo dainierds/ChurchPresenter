@@ -14,7 +14,7 @@
  * - "Editar en PowerPoint" integration with modification detection
  */
 
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, exec, ChildProcess } from 'child_process'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
@@ -68,6 +68,7 @@ export interface PptConversionProgress {
 export class PowerPointService {
   private cacheDir: string
   private activeJobs: Map<string, ChildProcess> = new Map()
+  private jobInitialPids: Map<string, number[]> = new Map()
 
   constructor(customCacheDir?: string) {
     if (customCacheDir) {
@@ -347,10 +348,42 @@ export class PowerPointService {
     return manifest
   }
 
+  public getPowerPointPids(): Promise<number[]> {
+    return new Promise((resolve) => {
+      exec(
+        'powershell.exe -NoProfile -NonInteractive -Command "Get-Process POWERPNT -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"',
+        (err, stdout) => {
+          if (err || !stdout) return resolve([])
+          const pids = stdout
+            .trim()
+            .split(/\r?\n/)
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((n) => !isNaN(n))
+          resolve(pids)
+        }
+      )
+    })
+  }
+
+  public cleanupOrphanedPowerPoint(initialPids: number[]): Promise<void> {
+    return new Promise((resolve) => {
+      this.getPowerPointPids().then((currentPids) => {
+        // Any PID in currentPids that was NOT in initialPids must be cleanly terminated
+        const orphaned = currentPids.filter((pid) => !initialPids.includes(pid))
+        if (orphaned.length === 0) return resolve()
+        logger.info(`Terminating ${orphaned.length} orphaned PowerPoint process(es): ${orphaned.join(', ')}`)
+        exec(
+          `powershell.exe -NoProfile -NonInteractive -Command "Stop-Process -Id ${orphaned.join(',')} -Force -ErrorAction SilentlyContinue"`,
+          () => resolve()
+        )
+      })
+    })
+  }
+
   /**
    * Executes packaged PowerShell script with strict security and 120s timeout.
    */
-  private convertWithPowerPointCom(
+  private async convertWithPowerPointCom(
     jobId: string,
     filePath: string,
     outputDir: string,
@@ -358,6 +391,9 @@ export class PowerPointService {
     targetHeight: number,
     _onProgress?: (p: PptConversionProgress) => void
   ): Promise<{ index: number; path: string }[]> {
+    const initialPids = await this.getPowerPointPids()
+    this.jobInitialPids.set(jobId, initialPids)
+
     return new Promise((resolve, reject) => {
       // Packaged script path
       let scriptPath = path.resolve(__dirname, 'scripts/export-powerpoint.ps1')
@@ -392,12 +428,14 @@ export class PowerPointService {
 
       // 120 seconds timeout protection
       const timeoutMs = 120000
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
         logger.error(`PowerPoint COM conversion timed out after ${timeoutMs / 1000}s. Killing worker process...`)
         if (!proc.killed) {
           proc.kill('SIGKILL')
         }
         this.activeJobs.delete(jobId)
+        await this.cleanupOrphanedPowerPoint(initialPids)
+        this.jobInitialPids.delete(jobId)
         reject(new Error(`Tiempo de espera agotado (${timeoutMs / 1000}s) durante la conversión de PowerPoint.`))
       }, timeoutMs)
 
@@ -407,9 +445,13 @@ export class PowerPointService {
       proc.stdout.on('data', (d) => (stdout += d.toString()))
       proc.stderr.on('data', (d) => (stderr += d.toString()))
 
-      proc.on('close', (code) => {
+      proc.on('close', async (code) => {
         clearTimeout(timer)
         this.activeJobs.delete(jobId)
+        if (code !== 0) {
+          await this.cleanupOrphanedPowerPoint(initialPids)
+        }
+        this.jobInitialPids.delete(jobId)
 
         if (code !== 0) {
           logger.error(`PowerPoint export script exited with code ${code}. Stderr: ${stderr}`)
@@ -438,9 +480,11 @@ export class PowerPointService {
         }
       })
 
-      proc.on('error', (err) => {
+      proc.on('error', async (err) => {
         clearTimeout(timer)
         this.activeJobs.delete(jobId)
+        await this.cleanupOrphanedPowerPoint(initialPids)
+        this.jobInitialPids.delete(jobId)
         logger.error(`Worker spawn error:`, err)
         reject(err)
       })
@@ -523,12 +567,16 @@ export class PowerPointService {
    */
   public cancelJob(jobId: string): boolean {
     const proc = this.activeJobs.get(jobId)
+    const initialPids = this.jobInitialPids.get(jobId) || []
     if (proc && !proc.killed) {
       logger.info(`Cancelling PowerPoint conversion job ${jobId}`)
       proc.kill('SIGKILL')
       this.activeJobs.delete(jobId)
+      this.cleanupOrphanedPowerPoint(initialPids)
+      this.jobInitialPids.delete(jobId)
       return true
     }
+    this.jobInitialPids.delete(jobId)
     return false
   }
 }

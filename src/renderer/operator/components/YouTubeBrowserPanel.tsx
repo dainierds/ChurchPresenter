@@ -14,7 +14,7 @@ import {
   XCircle,
   Info
 } from 'lucide-react'
-import { ServiceItem, YouTubeItem, YouTubeAvailabilityStatus } from '../../../shared/types'
+import { ServiceItem, YouTubeItem } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 
 interface YouTubeBrowserPanelProps {
@@ -82,7 +82,9 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
           setCurrentUrl(url)
           setInputUrl(url)
         }
-      } catch {}
+      } catch {
+        // Ignore poll error if view not active
+      }
     }, 1000)
 
     return () => {

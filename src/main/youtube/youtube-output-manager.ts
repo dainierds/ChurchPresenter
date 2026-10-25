@@ -98,7 +98,7 @@ export class YouTubeOutputManager {
     this.isPlaying = true
 
     // Show views and command playback
-    for (const [role, view] of this.outputViews.entries()) {
+    for (const view of this.outputViews.values()) {
       view.setVisible(true)
       view.webContents.executeJavaScript(`
         (function() {
@@ -285,11 +285,13 @@ export class YouTubeOutputManager {
                     `const v = document.querySelector('video'); if (v) v.currentTime = ${stats.currentTime};`
                   ).catch(() => {})
                 }
-              } catch {}
+              } catch {
+                // Ignore sync errors for inactive slave
+              }
             }
           }
         }
-      } catch (err) {
+      } catch {
         // executeJavaScript may fail if page navigating or unloading
       }
     }, 250)
@@ -324,7 +326,9 @@ export class YouTubeOutputManager {
         if (parent && !parent.isDestroyed()) {
           parent.contentView.removeChildView(view)
         }
-      } catch {}
+      } catch {
+        // Ignore removal error if window already closed
+      }
     }
     this.outputViews.clear()
     this.parentWindows.clear()

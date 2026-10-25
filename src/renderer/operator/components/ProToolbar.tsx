@@ -3,7 +3,6 @@ import {
   Search,
   Type,
   Palette,
-  Monitor,
   Eye,
   Slash,
   ShieldCheck,
@@ -30,7 +29,18 @@ interface ProToolbarProps {
     clear: string
     logo: string
     freeze: string
+    [key: string]: any
   }
+  panelLabels?: {
+    library: string
+    playlist: string
+    media: string
+    audience: string
+    stage: string
+  }
+  isMediaDrawerOpen?: boolean
+  onToggleMediaDrawer?: () => void
+  onOpenOutputPreviewOrSettings?: (role: string) => void
 }
 
 export const ProToolbar: React.FC<ProToolbarProps> = ({
@@ -41,11 +51,34 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   onAddTextSlide,
   onOpenThemeModal,
   state,
+  displays,
   assignments,
-  shortcuts
+  shortcuts,
+  panelLabels,
+  isMediaDrawerOpen,
+  onToggleMediaDrawer,
+  onOpenOutputPreviewOrSettings
 }) => {
-  const isMainOnline = Boolean(assignments.main)
-  const isStageOnline = Boolean(assignments.stage)
+  const isMainAssigned = Boolean(assignments.main)
+  const isMainConnected =
+    isMainAssigned &&
+    displays.some((d) => d.stableId === assignments.main || String(d.id) === assignments.main)
+  const audienceStatusClass = !isMainAssigned
+    ? 'unassigned'
+    : isMainConnected
+    ? 'connected'
+    : 'disconnected'
+
+  const isStageAssigned = Boolean(assignments.stage)
+  const isStageConnected =
+    isStageAssigned &&
+    displays.some((d) => d.stableId === assignments.stage || String(d.id) === assignments.stage)
+  const stageStatusClass = !isStageAssigned
+    ? 'unassigned'
+    : isStageConnected
+    ? 'connected'
+    : 'disconnected'
+
   const isMediaActive = Boolean(state?.currentSlide?.mediaUrl || state?.mediaSyncTick?.isPlaying)
 
   return (
@@ -125,20 +158,44 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         </button>
       </div>
 
-      {/* Screen Status Pills */}
+      {/* Screen Status Pills & Media Drawer Button */}
       <div className="pro-screen-status-pills">
-        <div className={`pro-status-pill ${isMediaActive ? 'online' : 'idle'}`} title="Estado del motor de medios">
-          <span className="pro-status-dot" />
-          <span>Medios</span>
-        </div>
-        <div className={`pro-status-pill ${isMainOnline ? 'online' : 'offline'}`} title="Pantalla principal de audiencia">
-          <span className="pro-status-dot" />
-          <span>Audiencia</span>
-        </div>
-        <div className={`pro-status-pill ${isStageOnline ? 'online' : 'offline'}`} title="Monitor de retorno en escenario">
-          <span className="pro-status-dot" />
-          <span>Escenario</span>
-        </div>
+        <button
+          className={`pro-status-pill-btn ${isMediaDrawerOpen ? 'drawer-open' : ''} ${isMediaActive ? 'online' : 'idle'}`}
+          onClick={onToggleMediaDrawer}
+          title="Abrir o cerrar el cajón inferior de medios"
+        >
+          <span className={`pro-status-dot ${isMediaActive ? 'dot-active' : 'dot-idle'}`} />
+          <span>{panelLabels?.media || 'Media'}</span>
+        </button>
+        <button
+          className={`pro-status-pill-btn ${audienceStatusClass}`}
+          onClick={() => onOpenOutputPreviewOrSettings?.('main')}
+          title={
+            !isMainAssigned
+              ? 'Audiencia: No asignado (clic para configurar pantallas)'
+              : isMainConnected
+              ? 'Audiencia: Asignado y conectado (clic para vista previa)'
+              : 'Audiencia: Asignado pero desconectado (clic para configurar)'
+          }
+        >
+          <span className={`pro-status-dot dot-${audienceStatusClass}`} />
+          <span>{panelLabels?.audience || 'Audience'}</span>
+        </button>
+        <button
+          className={`pro-status-pill-btn ${stageStatusClass}`}
+          onClick={() => onOpenOutputPreviewOrSettings?.('stage')}
+          title={
+            !isStageAssigned
+              ? 'Escenario: No asignado (clic para configurar pantallas)'
+              : isStageConnected
+              ? 'Escenario: Asignado y conectado (clic para vista previa)'
+              : 'Escenario: Asignado pero desconectado (clic para configurar)'
+          }
+        >
+          <span className={`pro-status-dot dot-${stageStatusClass}`} />
+          <span>{panelLabels?.stage || 'Stage'}</span>
+        </button>
       </div>
 
       {/* Right: Global Emergency Actions (F1 - F4) */}

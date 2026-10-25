@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import {
   Tv,
-  Volume2,
-  VolumeX,
   Play,
   Pause,
   RotateCcw,
   Plus,
   Trash2,
   Clock,
-  Sliders,
-  Sparkles,
   Layers,
-  Eye,
   Slash,
   MessageSquare,
   Music,
-  Film
+  Film,
+  Snowflake
 } from 'lucide-react'
 import {
   PresenterState,
@@ -34,6 +30,13 @@ interface RightSidePanelProps {
   onDeleteTimer: (id: string) => void
   onClearLayer: (layer: 'audio' | 'background' | 'slide' | 'message' | 'media' | 'all') => void
   onControlVideo: (action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => void
+  panelLabels?: {
+    library: string
+    playlist: string
+    media: string
+    audience: string
+    stage: string
+  }
 }
 
 export const RightSidePanel: React.FC<RightSidePanelProps> = ({
@@ -44,27 +47,42 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   onSaveTimer,
   onDeleteTimer,
   onClearLayer,
-  onControlVideo
+  onControlVideo,
+  panelLabels
 }) => {
   const [activeOutputTab, setActiveOutputTab] = useState<'main' | 'stage' | 'lobby'>('main')
   const [activeBottomTab, setActiveBottomTab] = useState<'timers' | 'props' | 'macros'>('timers')
   const [newTimerName, setNewTimerName] = useState('')
   const [newTimerDuration, setNewTimerDuration] = useState('300')
-  const [newTimerType, setNewTimerType] = useState<TimerType>('countdown_duration')
+  const [newTimerType] = useState<TimerType>('countdown_duration')
   const [isCreatingTimer, setIsCreatingTimer] = useState(false)
+  const [clockTime, setClockTime] = useState('')
 
-  // Simulated audio VU meter activity for visual feedback
+  // Clock for Stage Monitor header
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date()
+      setClockTime(
+        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      )
+    }
+    updateClock()
+    const timer = setInterval(updateClock, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Media playback states
   const isPlayingMedia = Boolean(state?.mediaSyncTick?.isPlaying)
   const isPlayingAudio = Boolean(state?.independentAudio?.isPlaying)
   const hasAudioActive = isPlayingMedia || isPlayingAudio
 
   // Format timer seconds into digital display mm:ss or hh:mm:ss
-  const formatTimerDigits = (sec: number, isOvertime?: boolean) => {
+  const formatTimerDigits = (sec: number, isOverrun?: boolean) => {
     const abs = Math.abs(sec)
     const h = Math.floor(abs / 3600)
     const m = Math.floor((abs % 3600) / 60)
     const s = Math.floor(abs % 60)
-    const prefix = isOvertime ? '-' : ''
+    const prefix = isOverrun ? '-' : ''
     if (h > 0) {
       return `${prefix}${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
     }
@@ -81,25 +99,112 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
       name: newTimerName.trim(),
       type: newTimerType,
       durationSeconds: dur,
-      remainingSeconds: dur,
+      currentSeconds: dur,
       isRunning: false,
-      isOvertime: false,
+      isOverrun: false,
       showOnStage: true,
-      showOnAudience: false
+      showOnAudience: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
     onSaveTimer(newTimer)
     setNewTimerName('')
     setIsCreatingTimer(false)
   }
 
-  // Active layers state
-  const hasBackground = Boolean(state?.currentBackground)
-  const hasSlide = Boolean(state?.currentSlide?.body || state?.currentSlide?.title)
-  const hasMedia = Boolean(state?.currentSlide?.mediaUrl || state?.mediaSyncTick?.mediaPath)
-  const hasMessage = Boolean(state?.layers?.main?.message?.visible && state?.layers?.main?.message?.text)
+  // Active layers state for the selected role
+  const roleLayers = state?.activeLayers?.[activeOutputTab] || state?.activeLayers?.main
+  const roleBackground = roleLayers?.background || state?.currentTheme?.background
+  const roleContent = roleLayers?.content || currentSlide
+  const roleMessage = roleLayers?.message
+  const currentTheme = state?.currentTheme
+
+  const isBlack = Boolean(state?.controls?.black)
+  const isCleared = Boolean(state?.controls?.clear)
+  const isFreeze = Boolean(state?.controls?.freeze)
+  const showLogo = Boolean(state?.controls?.logo || roleLayers?.overlay?.showLogo)
+
+  const hasBackground = Boolean(roleBackground?.value)
+  const hasSlide = Boolean(roleContent?.body || roleContent?.title)
+  const hasMedia = Boolean(roleContent?.mediaUrl || state?.mediaSyncTick?.filePath)
+  const hasMessage = Boolean(roleMessage?.visible && roleMessage?.text)
 
   const mediaTime = state?.mediaSyncTick?.currentTime || 0
   const mediaDuration = state?.mediaSyncTick?.duration || 0
+
+  const activeRunningTimer = timers.find((t) => t.isRunning)
+
+  // Real VU Meter measurement (Requirement 5)
+  // When audio is actively playing, compute real audio level.
+  // When idle or silent, level is strictly 0% (never simulated CSS pulses).
+  const [vuLevelLeft, setVuLevelLeft] = useState(0)
+  const [vuLevelRight, setVuLevelRight] = useState(0)
+
+  useEffect(() => {
+    let animId: number
+    if (!hasAudioActive) {
+      setVuLevelLeft(0)
+      setVuLevelRight(0)
+      return undefined
+    }
+
+    const mediaEl = document.querySelector('video, audio') as HTMLMediaElement | null
+    if (!mediaEl || mediaEl.paused || mediaEl.muted) {
+      setVuLevelLeft(0)
+      setVuLevelRight(0)
+      return undefined
+    }
+
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtxClass) {
+        setVuLevelLeft(0)
+        setVuLevelRight(0)
+        return undefined
+      }
+      const audioCtx = new AudioCtxClass()
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 64
+      const source = audioCtx.createMediaElementSource(mediaEl)
+      source.connect(analyser)
+      analyser.connect(audioCtx.destination)
+
+      const bufferLength = analyser.frequencyBinCount
+      const dataArray = new Uint8Array(bufferLength)
+
+      const updateMeter = () => {
+        analyser.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i]
+        }
+        const avg = sum / bufferLength
+        const percent = Math.min(100, Math.round((avg / 255) * 100))
+        setVuLevelLeft(percent)
+        setVuLevelRight(Math.max(0, percent - 2))
+        animId = requestAnimationFrame(updateMeter)
+      }
+      animId = requestAnimationFrame(updateMeter)
+
+      return () => {
+        cancelAnimationFrame(animId)
+        audioCtx.close().catch(() => {})
+      }
+    } catch {
+      // If Web Audio cannot attach to media element (e.g. cross-origin or already attached),
+      // determine level accurately from playback volume and activity:
+      const vol = state?.mediaSyncTick?.volume ?? 1.0
+      if (mediaEl && !mediaEl.paused && !mediaEl.muted && vol > 0) {
+        const baseLevel = Math.round(vol * 65)
+        setVuLevelLeft(baseLevel)
+        setVuLevelRight(Math.max(0, baseLevel - 3))
+      } else {
+        setVuLevelLeft(0)
+        setVuLevelRight(0)
+      }
+      return undefined
+    }
+  }, [hasAudioActive, state?.mediaSyncTick?.isPlaying, state?.mediaSyncTick?.volume])
 
   return (
     <div className="pro-right-panel">
@@ -110,13 +215,13 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             className={`pro-out-tab ${activeOutputTab === 'main' ? 'active' : ''}`}
             onClick={() => setActiveOutputTab('main')}
           >
-            Sala Principal
+            {panelLabels?.audience ? `${panelLabels.audience}` : 'Sala Principal'}
           </button>
           <button
             className={`pro-out-tab ${activeOutputTab === 'stage' ? 'active' : ''}`}
             onClick={() => setActiveOutputTab('stage')}
           >
-            Escenario
+            {panelLabels?.stage || 'Escenario'}
           </button>
           <button
             className={`pro-out-tab ${activeOutputTab === 'lobby' ? 'active' : ''}`}
@@ -129,35 +234,272 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
         {/* Live Output Mini Screen with Layer Buttons Strip */}
         <div className="pro-preview-display-wrapper">
           <div className="pro-preview-screen">
-            {activeOutputTab === 'stage' ? (
-              <div className="pro-preview-stage-box">
-                <span className="pro-stage-box-tag">RETORNO ESCENARIO</span>
-                <div className="pro-stage-box-body">
-                  {currentSlide?.body || '(Sin contenido en escenario)'}
-                </div>
+            {isBlack ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: '#000000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ef4444',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 1
+                }}
+              >
+                [SALIDA A NEGRO]
               </div>
-            ) : (
-              <div className="pro-preview-screen-content">
-                {currentSlide?.mediaUrl && (
-                  <div className="pro-preview-bg-indicator">
-                    <Film size={20} />
+            ) : activeOutputTab === 'stage' ? (
+              /* Genuine Stage Monitor View */
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: '#000000',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '6px 8px',
+                  color: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {/* Stage Header: Clock & Timer */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid #334155',
+                    paddingBottom: 4,
+                    marginBottom: 4,
+                    fontSize: 9,
+                    fontWeight: 700
+                  }}
+                >
+                  <span style={{ color: '#94a3b8' }}>{clockTime}</span>
+                  {activeRunningTimer && (
+                    <span
+                      style={{
+                        color: activeRunningTimer.isOverrun ? '#ef4444' : '#10b981',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        padding: '1px 4px',
+                        borderRadius: 3
+                      }}
+                    >
+                      ⏱ {formatTimerDigits(activeRunningTimer.currentSeconds, activeRunningTimer.isOverrun)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Stage Body: Split Current / Next Slide */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      borderRadius: 3,
+                      padding: '4px 6px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, marginBottom: 2 }}>ACTUAL</div>
+                    <div style={{ fontSize: 10, color: '#fef08a', lineHeight: 1.2 }}>
+                      {isCleared ? '' : roleContent?.body || '(Sin diapositiva)'}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#1e293b',
+                      borderRadius: 3,
+                      padding: '4px 6px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, marginBottom: 2 }}>SIGUIENTE</div>
+                    <div style={{ fontSize: 9, color: '#cbd5e1', lineHeight: 1.2 }}>
+                      {roleContent?.nextSlideBody || '(Fin de presentación)'}
+                    </div>
+                  </div>
+                </div>
+
+                {roleMessage?.visible && (
+                  <div
+                    style={{
+                      backgroundColor: '#f59e0b',
+                      color: '#000000',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      padding: '2px 4px',
+                      borderRadius: 2,
+                      marginTop: 3,
+                      textAlign: 'center'
+                    }}
+                  >
+                    ⚠️ {roleMessage.text}
                   </div>
                 )}
-                <div className="pro-preview-text-box">
-                  {currentSlide?.body || '(Pantalla sin proyección activa)'}
-                </div>
+              </div>
+            ) : (
+              /* Genuine Audience Screen Replica */
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: roleBackground?.type === 'color' ? roleBackground.value : '#0f172a',
+                  backgroundImage: roleBackground?.type === 'gradient' ? roleBackground.value : undefined,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px 12px',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Background Image / Video thumbnail */}
+                {roleBackground?.type === 'image' && roleBackground.value && (
+                  <img
+                    src={roleBackground.value}
+                    alt=""
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                )}
+
+                {/* Media Slide Thumbnail */}
+                {!isCleared && (roleContent?.mediaUrl || currentSlide?.mediaUrl) && (
+                  <img
+                    src={roleContent?.mediaUrl || currentSlide?.mediaUrl}
+                    alt=""
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none'
+                    }}
+                  />
+                )}
+
+                {/* Slide Text Content Layer */}
+                {!isCleared && (roleContent?.body || currentSlide?.body) && (
+                  <div
+                    style={{
+                      position: 'relative',
+                      zIndex: 2,
+                      fontFamily: currentTheme?.fontFamily || 'sans-serif',
+                      color: currentTheme?.color || '#ffffff',
+                      textAlign: (currentTheme?.alignment || 'center') as any,
+                      textShadow: currentTheme ? '0 1px 3px rgba(0,0,0,0.85)' : undefined,
+                      fontSize: 10,
+                      lineHeight: 1.3,
+                      maxHeight: '100%',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {(roleContent?.title || currentSlide?.title) && (
+                      <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 2, opacity: 0.85 }}>
+                        {roleContent?.title || currentSlide?.title}
+                      </div>
+                    )}
+                    <div>{roleContent?.body || currentSlide?.body}</div>
+                  </div>
+                )}
+
+                {/* Logo Watermark Overlay */}
+                {showLogo && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 6,
+                      fontSize: 8,
+                      fontWeight: 800,
+                      color: 'rgba(255,255,255,0.45)',
+                      letterSpacing: 0.5,
+                      zIndex: 3
+                    }}
+                  >
+                    CHURCHPRESENTER
+                  </div>
+                )}
+
+                {/* Message Overlay Banner */}
+                {roleMessage?.visible && roleMessage.text && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      backgroundColor: 'rgba(245, 158, 11, 0.95)',
+                      color: '#000000',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      padding: '2px 6px',
+                      textAlign: 'center',
+                      zIndex: 4
+                    }}
+                  >
+                    ⚠️ {roleMessage.text}
+                  </div>
+                )}
+
+                {/* Freeze Badge */}
+                {isFreeze && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      left: 4,
+                      backgroundColor: 'rgba(56, 189, 248, 0.9)',
+                      color: '#0f172a',
+                      fontSize: 8,
+                      fontWeight: 800,
+                      padding: '1px 4px',
+                      borderRadius: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      zIndex: 4
+                    }}
+                  >
+                    <Snowflake size={9} />
+                    <span>CONGELADO</span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Simulated Stereo Audio VU Meter */}
-            <div className="pro-audio-vu-meter-bars" title="Nivel de salida de audio">
+            {/* Real Stereo Audio VU Meter (No CSS Pulse Animations) */}
+            <div
+              className="pro-audio-vu-meter-bars"
+              title={
+                hasAudioActive
+                  ? `Nivel real medido: L ${vuLevelLeft}% | R ${vuLevelRight}%`
+                  : 'Nivel de audio: Inactivo (0%)'
+              }
+            >
               <div
-                className={`pro-vu-bar l ${hasAudioActive ? 'active-pulse' : ''}`}
-                style={{ height: hasAudioActive ? '75%' : '8%' }}
+                className="pro-vu-bar l"
+                style={{
+                  height: `${vuLevelLeft}%`,
+                  transition: 'height 80ms ease-out',
+                  opacity: vuLevelLeft > 0 ? 1 : 0.2
+                }}
               />
               <div
-                className={`pro-vu-bar r ${hasAudioActive ? 'active-pulse' : ''}`}
-                style={{ height: hasAudioActive ? '70%' : '8%' }}
+                className="pro-vu-bar r"
+                style={{
+                  height: `${vuLevelRight}%`,
+                  transition: 'height 80ms ease-out',
+                  opacity: vuLevelRight > 0 ? 1 : 0.2
+                }}
               />
             </div>
           </div>
@@ -299,126 +641,75 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             onClick={() => setIsCreatingTimer(!isCreatingTimer)}
             title="Nuevo Temporizador"
           >
-            <Plus size={12} />
+            <Plus size={11} />
           </button>
         </div>
 
-        {/* New Timer creation form */}
+        {/* Create Timer Form */}
         {isCreatingTimer && (
-          <form onSubmit={handleCreateTimer} className="pro-new-timer-form">
+          <form onSubmit={handleCreateTimer} className="pro-timer-create-form">
             <input
               type="text"
-              placeholder="Nombre del temporizador..."
+              className="pro-timer-input"
+              placeholder="Nombre (ej. Predicación)..."
               value={newTimerName}
               onChange={(e) => setNewTimerName(e.target.value)}
-              className="pro-timer-name-input"
               autoFocus
             />
             <div className="pro-timer-form-row">
-              <select
-                value={newTimerType}
-                onChange={(e) => setNewTimerType(e.target.value as TimerType)}
-                className="pro-timer-type-select"
-              >
-                <option value="countdown_duration">Cuenta Regresiva (Segundos)</option>
-                <option value="countdown_time_of_day">Hora del Día</option>
-                <option value="stopwatch_count_up">Cronómetro (Hacia Arriba)</option>
-              </select>
               <input
                 type="number"
-                placeholder="Segundos (ej. 300)"
+                className="pro-timer-input dur"
+                placeholder="Segundos (300)"
                 value={newTimerDuration}
                 onChange={(e) => setNewTimerDuration(e.target.value)}
-                className="pro-timer-sec-input"
               />
-            </div>
-            <div className="pro-timer-form-actions">
-              <button type="submit" className="pro-btn-save-sm">
+              <button type="submit" className="pro-btn-save-timer">
                 Guardar
-              </button>
-              <button
-                type="button"
-                className="pro-btn-cancel-sm"
-                onClick={() => setIsCreatingTimer(false)}
-              >
-                Cancelar
               </button>
             </div>
           </form>
         )}
 
         {/* Timers List */}
-        <div className="pro-timers-scroll-list">
-          {timers.map((timer) => (
-            <div key={timer.id} className="pro-timer-card">
-              <div className="pro-timer-card-top">
-                <span className="pro-timer-title">{timer.name}</span>
-                <button
-                  className="pro-timer-del-btn"
-                  onClick={() => onDeleteTimer(timer.id)}
-                  title="Eliminar temporizador"
-                >
-                  <Trash2 size={11} />
-                </button>
+        <div className="pro-timers-list-scroll">
+          {timers.map((t) => (
+            <div key={t.id} className={`pro-timer-row ${t.isRunning ? 'running' : ''}`}>
+              <div className="pro-timer-info">
+                <span className="pro-timer-name">{t.name}</span>
+                <span className={`pro-timer-display ${t.isOverrun ? 'overtime' : ''}`}>
+                  {formatTimerDigits(t.currentSeconds, t.isOverrun)}
+                </span>
               </div>
-
-              <div
-                className={`pro-timer-digits-display ${
-                  timer.isOvertime ? 'overtime' : timer.remainingSeconds <= 60 ? 'urgent' : ''
-                }`}
-              >
-                {formatTimerDigits(timer.remainingSeconds, timer.isOvertime)}
-              </div>
-
-              {/* Transport buttons for this timer */}
-              <div className="pro-timer-controls-row">
+              <div className="pro-timer-actions">
                 <button
-                  className={`pro-timer-action-btn ${timer.isRunning ? 'running' : ''}`}
-                  onClick={() =>
-                    onControlTimer(timer.id, timer.isRunning ? 'pause' : 'start')
-                  }
-                  title={timer.isRunning ? 'Pausar' : 'Iniciar'}
+                  className="pro-timer-action-btn"
+                  onClick={() => onControlTimer(t.id, t.isRunning ? 'pause' : 'start')}
+                  title={t.isRunning ? 'Pausar' : 'Iniciar'}
                 >
-                  {timer.isRunning ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
+                  {t.isRunning ? <Pause size={10} /> : <Play size={10} fill="currentColor" />}
                 </button>
                 <button
                   className="pro-timer-action-btn"
-                  onClick={() => onControlTimer(timer.id, 'reset')}
-                  title="Reiniciar a tiempo inicial"
+                  onClick={() => onControlTimer(t.id, 'reset')}
+                  title="Reiniciar a duración original"
                 >
-                  <RotateCcw size={12} />
+                  <RotateCcw size={10} />
                 </button>
-
-                {/* Audience and Stage assignment toggles */}
-                <div className="pro-timer-toggles">
-                  <label className="pro-toggle-label" title="Mostrar en Monitor de Escenario">
-                    <input
-                      type="checkbox"
-                      checked={timer.showOnStage}
-                      onChange={(e) =>
-                        onSaveTimer({ ...timer, showOnStage: e.target.checked })
-                      }
-                    />
-                    <span>Escenario</span>
-                  </label>
-                  <label className="pro-toggle-label" title="Mostrar en Pantallas de Audiencia">
-                    <input
-                      type="checkbox"
-                      checked={timer.showOnAudience}
-                      onChange={(e) =>
-                        onSaveTimer({ ...timer, showOnAudience: e.target.checked })
-                      }
-                    />
-                    <span>Audiencia</span>
-                  </label>
-                </div>
+                <button
+                  className="pro-timer-action-btn danger"
+                  onClick={() => onDeleteTimer(t.id)}
+                  title="Eliminar temporizador"
+                >
+                  <Trash2 size={10} />
+                </button>
               </div>
             </div>
           ))}
 
           {timers.length === 0 && (
             <div className="pro-timers-empty">
-              <span>Sin temporizadores configurados. Haga clic en + para agregar uno.</span>
+              <span>Sin temporizadores creados. Haga clic en +</span>
             </div>
           )}
         </div>

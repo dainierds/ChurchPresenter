@@ -189,6 +189,10 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_DELETE, id)
   },
 
+  duplicateService: (serviceId: string): Promise<ServicePlan> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_DUPLICATE, serviceId)
+  },
+
   getTemplates: (): Promise<ServicePlan[]> => {
     return ipcRenderer.invoke(IPC_CHANNELS.SERVICES_GET_TEMPLATES)
   },
@@ -403,6 +407,14 @@ const api: ChurchPresenterApi = {
 
   saveLibrary: (library: UserLibrary): Promise<UserLibrary> => {
     return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_SAVE, library)
+  },
+
+  renameLibrary: (libraryId: string, newName: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_RENAME, libraryId, newName)
+  },
+
+  reorderLibraries: (orderedIds: string[]): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_REORDER, orderedIds)
   },
 
   deleteLibrary: (libraryId: string): Promise<boolean> => {
