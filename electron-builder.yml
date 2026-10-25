@@ -1,0 +1,19 @@
+appId: com.churchpresenter.app
+productName: ChurchPresenter
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - node_modules/sql.js/dist/sql-wasm.wasm
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ChurchPresenter

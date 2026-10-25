@@ -1,0 +1,44 @@
+{
+  "name": "church-presenter",
+  "version": "1.0.0",
+  "description": "Church presentation software for Windows",
+  "main": "./out/main/index.js",
+  "author": "ChurchPresenter Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "vitest run",
+    "verify": "tsc --noEmit -p tsconfig.json && eslint . --ext .ts,.tsx && vitest run",
+    "dist:win": "electron-vite build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "electron-log": "^5.2.4",
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.4",
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/sql.js": "^1.4.9",
+    "@typescript-eslint/eslint-plugin": "^8.18.2",
+    "@typescript-eslint/parser": "^8.18.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
