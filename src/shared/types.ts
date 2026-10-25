@@ -69,7 +69,7 @@ export interface LayerContent {
   nextSlideBody?: string // For Stage Monitor (Escenario)
   nextSlideTitle?: string
   mediaUrl?: string
-  mediaType?: 'video' | 'image' | 'pdf' | 'powerpoint'
+  mediaType?: 'video' | 'image' | 'pdf' | 'powerpoint' | 'youtube'
   pdfPage?: number
   pdfPageCount?: number
   fitMode?: 'contain' | 'cover' | 'center'
@@ -78,6 +78,12 @@ export interface LayerContent {
   videoPlaying?: boolean
   videoTime?: number
   videoDuration?: number
+  youtubeId?: string
+  youtubePlaying?: boolean
+  youtubeTime?: number
+  youtubeDuration?: number
+  youtubeAudioMuted?: boolean
+  youtubeAvailability?: 'ok' | 'unembeddable' | 'unavailable' | 'requires_auth' | 'offline' | 'checking'
   activeTimer?: {
     id: string
     name: string
@@ -280,6 +286,42 @@ export type ServiceItemType =
   | 'pdf'
   | 'image_presentation'
   | 'powerpoint'
+  | 'youtube'
+
+export type YouTubeAvailabilityStatus = 'ok' | 'unembeddable' | 'unavailable' | 'requires_auth' | 'offline' | 'checking'
+
+export interface YouTubeItemConfig {
+  youtubeId: string
+  url: string
+  title: string
+  channelTitle?: string
+  thumbnailUrl?: string
+  duration: number // seconds
+  inPoint?: number // seconds
+  outPoint?: number // seconds
+  targetRoles: OutputRole[]
+  audioRole: OutputRole
+  endAction: 'freeze' | 'background' | 'next'
+  availabilityStatus?: YouTubeAvailabilityStatus
+}
+
+export interface YouTubeItem {
+  id: string
+  youtubeId: string
+  url: string
+  title: string
+  channelTitle?: string
+  thumbnailUrl?: string
+  duration: number
+  inPoint?: number
+  outPoint?: number
+  targetRoles: OutputRole[]
+  audioRole: OutputRole
+  endAction: 'freeze' | 'background' | 'next'
+  availabilityStatus: YouTubeAvailabilityStatus
+  createdAt: string
+  updatedAt: string
+}
 
 export interface ServiceItem {
   id: string
@@ -295,6 +337,7 @@ export interface ServiceItem {
   pdfConfig?: PdfItemConfig
   imageConfig?: ImagePresentationConfig
   powerpointConfig?: { manifestPath?: string; originalPath: string; hash: string }
+  youtubeConfig?: YouTubeItemConfig
   notes?: string
 }
 
@@ -760,6 +803,38 @@ export interface ChurchPresenterApi {
   deleteTimer: (timerId: string) => Promise<boolean>
   controlTimer: (timerId: string, action: 'start' | 'pause' | 'reset') => Promise<PresentationTimer>
   onTimersTick: (callback: (timers: PresentationTimer[]) => void) => () => void
+
+  // Phase 5C: YouTube
+  getYouTubeItems: () => Promise<YouTubeItem[]>
+  saveYouTubeItem: (item: YouTubeItem) => Promise<YouTubeItem>
+  deleteYouTubeItem: (id: string) => Promise<boolean>
+  checkYouTubeAvailability: (videoIdOrUrl: string) => Promise<YouTubeAvailabilityStatus>
+  verifyYouTubePlaylist: (items: ServiceItem[]) => Promise<{
+    totalChecked: number
+    okCount: number
+    failedCount: number
+    results: { itemId: string; title: string; videoId: string; status: YouTubeAvailabilityStatus }[]
+  }>
+  getYouTubeMetadata: (videoIdOrUrl: string) => Promise<{
+    videoId: string
+    title: string
+    channelTitle: string
+    thumbnailUrl: string
+    duration: number
+    availabilityStatus: YouTubeAvailabilityStatus
+  }>
+  openYouTubeBrowser: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>
+  closeYouTubeBrowser: () => Promise<boolean>
+  navigateYouTubeBrowser: (action: 'back' | 'forward' | 'home' | 'reload' | 'go', url?: string) => Promise<boolean>
+  getYouTubeBrowserUrl: () => Promise<string>
+  setYouTubeBrowserBounds: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>
+  clearYouTubeSession: () => Promise<boolean>
+  controlYouTube: (
+    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+    payload?: any
+  ) => Promise<any>
+  downloadYouTubeVideo: (youtubeUrl: string) => Promise<{ success: boolean; item?: MediaItem; error?: string }>
+  onYouTubeAdStatus: (callback: (isAd: boolean) => void) => () => void
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void

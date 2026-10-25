@@ -13,7 +13,10 @@ import {
   VideoItemConfig,
   UserLibrary,
   LibraryItemReference,
-  PresentationTimer
+  PresentationTimer,
+  YouTubeItem,
+  YouTubeItemConfig,
+  ServiceItem
 } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
@@ -28,6 +31,9 @@ import { pdfService } from './pdf/pdf-service'
 import { powerpointService } from './powerpoint/powerpoint-service'
 import { ffmpegService } from './media/ffmpeg-service'
 import { fileWatcherService } from './media/file-watcher-service'
+import { youtubeService } from './youtube/youtube-service'
+import { youTubeBrowserManager } from './youtube/youtube-browser-manager'
+import { youtubeOutputManager } from './youtube/youtube-output-manager'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -66,6 +72,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.STATE_SET_CONTROL,
     (_event, control: keyof GlobalControls, value: boolean) => {
+      if (control === 'black' || control === 'clear' || control === 'freeze') {
+        youtubeOutputManager.applyGlobalControl(control, value)
+      }
       return stateManager.setGlobalControl(control, value)
     }
   )
@@ -73,13 +82,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.STATE_TOGGLE_CONTROL,
     (_event, control: keyof GlobalControls) => {
-      return stateManager.toggleGlobalControl(control)
+      const newState = stateManager.toggleGlobalControl(control)
+      if (control === 'black' || control === 'clear' || control === 'freeze') {
+        youtubeOutputManager.applyGlobalControl(control, newState.controls[control])
+      }
+      return newState
     }
   )
 
   ipcMain.handle(
     IPC_CHANNELS.STATE_SEND_SLIDE,
     (_event, slide: TestSlide | SlideItem, targetRoles?: string[], nextSlide?: SlideItem) => {
+      if ((slide as any).mediaType !== 'youtube') {
+        youtubeOutputManager.cleanupViews()
+      }
       return stateManager.sendSlide(slide, targetRoles, nextSlide)
     }
   )
@@ -620,6 +636,129 @@ export function registerIpcHandlers(): void {
     const updated = databaseService.getTimers()
     windowManager.broadcastToAll(IPC_CHANNELS.TIMERS_TICK, updated)
     return found
+  })
+
+  // --- Phase 5C: YouTube Integration Handlers ---
+  youtubeOutputManager.setAdStatusCallback((isAd) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_AD_STATUS, isAd)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_ITEMS, () => {
+    return databaseService.getYouTubeItems()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_SAVE_ITEM, (_event, item: YouTubeItem) => {
+    return databaseService.saveYouTubeItem(item)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_DELETE_ITEM, (_event, id: string) => {
+    return databaseService.deleteYouTubeItem(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_CHECK_AVAILABILITY, (_event, videoIdOrUrl: string) => {
+    return youtubeService.checkAvailability(videoIdOrUrl)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_VERIFY_PLAYLIST, (_event, items: ServiceItem[]) => {
+    return youtubeService.verifyPlaylistYouTubeItems(items)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_METADATA, (_event, videoIdOrUrl: string) => {
+    return youtubeService.fetchMetadata(videoIdOrUrl)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.YOUTUBE_OPEN_BROWSER,
+    (_event, bounds: { x: number; y: number; width: number; height: number }) => {
+      const opWin = windowManager.getOperatorWindow()
+      if (opWin && !opWin.isDestroyed()) {
+        youTubeBrowserManager.attachToWindow(opWin, bounds)
+        return true
+      }
+      return false
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_CLOSE_BROWSER, () => {
+    youTubeBrowserManager.close()
+    return true
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.YOUTUBE_NAVIGATE_BROWSER,
+    (_event, action: 'back' | 'forward' | 'home' | 'reload' | 'go', url?: string) => {
+      youTubeBrowserManager.navigate(action, url)
+      return true
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_BROWSER_URL, () => {
+    return youTubeBrowserManager.getCurrentUrl()
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.YOUTUBE_SET_BROWSER_BOUNDS,
+    (_event, bounds: { x: number; y: number; width: number; height: number }) => {
+      youTubeBrowserManager.setBounds(bounds)
+      return true
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_CLEAR_SESSION, async () => {
+    return await youtubeService.clearSession()
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.YOUTUBE_CONTROL,
+    (
+      _event,
+      action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+      payload?: any
+    ) => {
+      switch (action) {
+        case 'prepare':
+          youtubeOutputManager.prepareVideo(
+            payload as YouTubeItemConfig,
+            windowManager.getOutputWindows()
+          )
+          break
+        case 'go-live':
+          youtubeOutputManager.goLive()
+          break
+        case 'play':
+          youtubeOutputManager.play()
+          break
+        case 'pause':
+          youtubeOutputManager.pause()
+          break
+        case 'stop':
+          youtubeOutputManager.stop()
+          break
+        case 'seek':
+          youtubeOutputManager.seek(Number(payload) || 0)
+          break
+        case 'volume':
+          youtubeOutputManager.setVolume(Number(payload) || 1.0)
+          break
+        case 'mute':
+          youtubeOutputManager.setAudioMuted(Boolean(payload))
+          break
+      }
+      return youtubeOutputManager.getPlaybackState()
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_DOWNLOAD_VIDEO, async (_event, youtubeUrl: string) => {
+    const mediaDir = path.join(app.getPath('userData'), 'media')
+    if (!fs.existsSync(mediaDir)) {
+      fs.mkdirSync(mediaDir, { recursive: true })
+    }
+    const result = await youtubeService.downloadVideoToLocal(youtubeUrl, mediaDir)
+    if (result.success && result.filePath) {
+      const importedItem = await mediaService.importMediaFile(result.filePath, ['YouTube'])
+      return { success: true, item: importedItem }
+    }
+    return result
   })
 
   // Hook DisplayManager events

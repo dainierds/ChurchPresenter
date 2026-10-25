@@ -381,4 +381,50 @@ graph TD
 8. **FileDropOverlay**: Arrastrar y soltar nativo de archivos (PPTX, PDF, videos, imágenes) sobre la interfaz usando `webUtils.getPathForFile()`.
 9. **FileWatcherToast**: Notificación discreta de auto-recarga cuando un archivo PPTX o de medios externo es modificado en disco, con botón "Actualizar" que preserva la posición del servicio.
 
+---
+
+## 12. Arquitectura de Integración de YouTube (Fase 5C)
+
+```mermaid
+graph TD
+    subgraph MainProcess ["Main Process (Electron)"]
+        YTSession["Session: persist:youtube\n(Sandboxed, Hardware Permissions Denied)"]
+        AdBlocker["Ad-Blocker & Filter\n(webRequest.onBeforeRequest + Injected Script)"]
+        YTSvc["YouTubeService\n(oEmbed Metadata & Verifier)"]
+        BrowserMgr["YouTubeBrowserManager\n(Operator WebContentsView)"]
+        OutputMgr["YouTubeOutputManager\n(Output WebContentsViews)"]
+    end
+
+    subgraph OperatorUI ["Renderer Operador"]
+        ToolbarBtn["Modo YouTube (ProToolbar)"]
+        BrowserPanel["YouTubeBrowserPanel\n(Navegación, Atajo Ctrl+Y, Proyectar este video)"]
+        VerifyModal["YouTubeVerifyModal\n(Verificación Pre-Culto)"]
+    end
+
+    subgraph OutputWindows ["Ventanas de Salida"]
+        OutMain["Salida Sala (main)\n(WebContentsView persist:youtube + Audio ACTIVO)"]
+        OutStage["Salida Escenario (stage)\n(Cronómetros de Alto Contraste: Transcurrido / Restante)"]
+        OutLobby["Salida Lobby (lobby)\n(WebContentsView persist:youtube + Audio MUTED)"]
+    end
+
+    ToolbarBtn --> BrowserMgr
+    BrowserMgr --> YTSession
+    YTSession --> AdBlocker
+    BrowserPanel -->|Ctrl+Y / Proyectar| YTSvc
+    YTSvc -->|Valida oEmbed & Disponibilidad| BrowserPanel
+    BrowserPanel -->|IPC: youtube:control prepare/go-live| OutputMgr
+    OutputMgr -->|Vista 1| OutMain
+    OutputMgr -->|Vista 2| OutLobby
+    OutputMgr -->|Sync Slide & Timers| OutStage
+```
+
+### Características de la Integración de YouTube:
+1. **Aislamiento de Sesión y Persistencia**: Usa la partición de sesión dedicada `persist:youtube`. Las cookies, inicio de sesión (Google / YouTube Premium) y preferencias del usuario se almacenan en el perfil de datos local de manera segura y persistente. La aplicación jamás intercepta ni lee contraseñas.
+2. **Navegación Restringida a Dominios Esenciales**: Bloqueo estricto de navegación a cualquier dominio externo a `youtube.com`, `google.com`, `accounts.google.com`, `gstatic.com`, `ytimg.com`, `googlevideo.com` y `googleusercontent.com`. Enlaces externos se derivan automáticamente al navegador del sistema operativo.
+3. **Reproducción por Vistas Nativas sin Parpadeo (Opción b)**: En lugar de un iframe con almacenamiento particionado, las salidas utilizan vistas `WebContentsView` asociadas a `persist:youtube`. Durante la preparación se precargan en pausa y con visibilidad oculta; al pulsar "En vivo", se activan al instante sin recarga ni parpadeo.
+4. **Enrutamiento de Audio Exclusivo**: El audio se emite exclusivamente por el rol de salida asignado (por defecto Sala), silenciando por hardware las pantallas accesorias.
+5. **Verificación Pre-Culto de la Lista**: El operador dispone del botón "Verificar playlist", que comprueba en lote el estado de disponibilidad e incrustabilidad de todos los videos de YouTube del servicio antes del inicio de la reunión.
+6. **Integración con Emergencias y Monitor de Escenario**: Los controles de Negro (F1), Limpiar (F2) y Congelar (F4) actúan directamente sobre la reproducción de YouTube, y el monitor de escenario presenta el título y los cronómetros de tiempo transcurrido y restante.
+
+
 

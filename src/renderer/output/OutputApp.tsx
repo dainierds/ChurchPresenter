@@ -361,8 +361,8 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
               </div>
             )}
 
-            {/* Requirement B.10: During video playback, show elapsed and remaining time */}
-            {content?.mediaType === 'video' ? (
+            {/* Requirement B.10: During video or YouTube playback, show elapsed and remaining time */}
+            {content?.mediaType === 'video' || content?.mediaType === 'youtube' ? (
               <div
                 className="stage-video-panel"
                 style={{
@@ -501,6 +501,10 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                       )
                     }}
                   />
+                </div>
+              ) : content.mediaType === 'youtube' ? (
+                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}>
+                  {/* YouTube WebContentsView attaches directly to output window */}
                 </div>
               ) : content.mediaType === 'pdf' && content.mediaUrl ? (
                 <PdfPageView

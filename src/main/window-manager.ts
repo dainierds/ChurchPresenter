@@ -70,6 +70,10 @@ export class WindowManager {
     return this.operatorWindow
   }
 
+  public getOutputWindows(): Map<string, BrowserWindow> {
+    return this.outputWindows
+  }
+
   public syncOutputWindows(): void {
     const savedAssignments = databaseService.getRoleAssignments()
     const currentDisplays = displayManager.getDisplays()

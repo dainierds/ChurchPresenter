@@ -94,8 +94,26 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
   - Rediseño ergonómico completo de la ventana del operador al flujo ProPresenter 7 (3 columnas, TopMenuBar, ProToolbar, LibraryPanel, PlaylistPanel con cabeceras de sección de color, SlideGridPanel, MediaDrawer colapsable, RightSidePanel con preview, vúmetros, limpieza por capas y temporizadores).
   - Evidencia fotográfica verificada a 1920x1080 y 1366x768 (`docs/evidence/ui-operator-*.png` y `docs/evidence/ui-output-*.png`).
 
-### Fase 5C: YouTube y Transmisiones Web (Próxima)
-- Reproductor embebido o integración de videos y transmisiones en línea de YouTube.
+### Fase 5C: YouTube Integrado (Completada)
+- Panel del operador con navegador embebido (`WebContentsView`) aislado en partición persistente `persist:youtube`.
+- Navegación restringida a lista estricta de dominios permitidos (`youtube.com`, `google.com`, `accounts.google.com`, etc.) con derivación de enlaces externos al navegador predeterminado del sistema.
+- Permisos de hardware (cámara, micrófono, geolocalización, notificaciones) denegados por seguridad.
+- Bloqueo y filtrado de publicidad: reglas de cancelación de peticiones de anuncios en `webRequest.onBeforeRequest` y script inyectado de omisión automática de anuncios publicitarios.
+- Botón en Configuración: "Cerrar sesión / borrar datos de YouTube" para purgar cookies y datos de la partición bajo demanda.
+- Botón "Proyectar este video" y atajo de teclado (`Ctrl+Y`) para extraer videoId, título, canal, miniatura y duración desde videos normales, Shorts y listas de reproducción.
+- Nuevo tipo de elemento de servicio `'youtube'` con miniatura, duración, puntos de entrada y salida, acción al terminar y selección de pantallas y audio.
+- Comprobación automática de disponibilidad mediante endpoint oficial oEmbed (`ok`, `unembeddable`, `requires_auth`, `unavailable`, `offline`).
+- Modal "Verificar playlist" pre-culto para comprobar en lote la disponibilidad de todos los videos de YouTube del servicio.
+- Evaluación técnica y selección fundamentada de la Opción (b) (vista dedicada con partición `persist:youtube`) frente a la Opción (a) (IFrame) para evitar bloqueo de cookies de terceros y mantener la sesión/Premium del usuario.
+- Precarga oculta en pausa para transiciones inmediatas en vivo sin parpadeo negro.
+- Enrutamiento selectivo de audio por hardware y silencio automático en pantallas secundarias.
+- Sincronización multisalida con compensación de deriva superior a 250 ms.
+- Integración con controles globales (Negro F1, Limpiar, Congelar) y pantalla de escenario con temporizadores regresivos de alto contraste.
+- Modal de advertencia legal y de conectividad en el primer uso.
+- Soporte opcional para descarga y extracción local a la biblioteca de medios mediante `yt-dlp` desacoplado.
+- Suite de pruebas unitarias (`tests/youtube-utils.test.ts`, `tests/youtube-service.test.ts`) y prueba automatizada E2E con Playwright/Electron y capturas de evidencia en `docs/evidence/`.
+- **Pendiente para fases futuras**:
+  - Buscador propio nativo con la API de datos de YouTube v3 (requiere clave de API y administración de cuotas en Google Cloud) para presentar cuadrículas de búsqueda personalizadas dentro del estilo de la app sin abrir youtube.com.
 
 ### Fase 6: Escenario/temporizadores/control remoto
 - Vista de monitor de escenario (Stage Display / Confidence Monitor) personalizada con reloj, temporizador regresivo y diapositiva siguiente.

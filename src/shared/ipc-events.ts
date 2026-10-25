@@ -96,6 +96,24 @@ export const IPC_CHANNELS = {
   FFMPEG_CONVERT: 'ffmpeg:convert',
   FFMPEG_CANCEL: 'ffmpeg:cancel',
 
+  // Phase 5C: YouTube Integration
+  YOUTUBE_GET_ITEMS: 'youtube:get-items',
+  YOUTUBE_SAVE_ITEM: 'youtube:save-item',
+  YOUTUBE_DELETE_ITEM: 'youtube:delete-item',
+  YOUTUBE_CHECK_AVAILABILITY: 'youtube:check-availability',
+  YOUTUBE_VERIFY_PLAYLIST: 'youtube:verify-playlist',
+  YOUTUBE_GET_METADATA: 'youtube:get-metadata',
+  YOUTUBE_OPEN_BROWSER: 'youtube:open-browser',
+  YOUTUBE_CLOSE_BROWSER: 'youtube:close-browser',
+  YOUTUBE_NAVIGATE_BROWSER: 'youtube:navigate-browser',
+  YOUTUBE_GET_BROWSER_URL: 'youtube:get-browser-url',
+  YOUTUBE_SET_BROWSER_BOUNDS: 'youtube:set-browser-bounds',
+  YOUTUBE_CLEAR_SESSION: 'youtube:clear-session',
+  YOUTUBE_CONTROL: 'youtube:control',
+  YOUTUBE_SYNC_TICK: 'youtube:sync-tick',
+  YOUTUBE_DOWNLOAD_VIDEO: 'youtube:download-video',
+  YOUTUBE_AD_STATUS: 'youtube:ad-status',
+
   // Native Dialogs & File Access
   DIALOG_OPEN_FILE: 'dialog:open-file',
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',

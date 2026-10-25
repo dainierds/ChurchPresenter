@@ -30,7 +30,8 @@ import {
   UserLibrary,
   LibraryItemReference,
   PresentationTimer,
-  FileChangedEvent
+  FileChangedEvent,
+  YouTubeItem
 } from '../../shared/types'
 import { TopMenuBar } from './components/TopMenuBar'
 import { ProToolbar } from './components/ProToolbar'
@@ -41,6 +42,8 @@ import { MediaDrawer } from './components/MediaDrawer'
 import { RightSidePanel } from './components/RightSidePanel'
 import { FileDropOverlay } from './components/FileDropOverlay'
 import { FileWatcherToast } from './components/FileWatcherToast'
+import { YouTubeBrowserPanel } from './components/YouTubeBrowserPanel'
+import { YouTubeVerifyModal } from './components/YouTubeVerifyModal'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
   parseLyricsToGroups,
@@ -188,7 +191,9 @@ export const OperatorApp: React.FC = () => {
   const [isMediaDrawerOpen, setIsMediaDrawerOpen] = useState<boolean>(false)
   const [isDraggingFiles, setIsDraggingFiles] = useState<boolean>(false)
   const [fileWatcherEvent, setFileWatcherEvent] = useState<FileChangedEvent | null>(null)
-  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'more'>('show')
+  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'youtube' | 'more'>('show')
+  const [youtubeItems, setYoutubeItems] = useState<YouTubeItem[]>([])
+  const [isYouTubeVerifyOpen, setIsYouTubeVerifyOpen] = useState<boolean>(false)
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState<boolean>(false)
 
   // Save slide zoom preference
@@ -349,6 +354,15 @@ export const OperatorApp: React.FC = () => {
         try {
           const tmrs = await window.churchPresenterApi.getTimers()
           setPresentationTimers(tmrs || [])
+        } catch {
+          // ignore
+        }
+      }
+
+      if (window.churchPresenterApi.getYouTubeItems) {
+        try {
+          const yts = await window.churchPresenterApi.getYouTubeItems()
+          setYoutubeItems(yts || [])
         } catch {
           // ignore
         }
@@ -985,6 +999,12 @@ export const OperatorApp: React.FC = () => {
       const key = e.key.toUpperCase()
 
       // Function keys shortcuts
+      if ((e.ctrlKey || e.metaKey) && key === 'Y') {
+        e.preventDefault()
+        setActiveToolbarMode('youtube')
+        return
+      }
+
       if (key === shortcuts.black.toUpperCase()) {
         e.preventDefault()
         window.churchPresenterApi.toggleGlobalControl('black')
@@ -1870,6 +1890,7 @@ export const OperatorApp: React.FC = () => {
             songs={filteredSongs}
             presentations={filteredPresentations}
             mediaItems={mediaItems}
+            youtubeItems={youtubeItems}
             onItemSelect={(type, id) => {
               if (type === 'song') {
                 const s = songs.find((x) => x.id === id)
@@ -1879,6 +1900,33 @@ export const OperatorApp: React.FC = () => {
                     type: 'song',
                     name: s.title,
                     songId: s.id
+                  }
+                  const updated = { ...currentService, items: [...currentService.items, item] }
+                  setCurrentService(updated)
+                  setSelectedServiceItemIndex(updated.items.length - 1)
+                  window.churchPresenterApi.saveService(updated)
+                }
+              } else if (type === 'youtube') {
+                const y = youtubeItems.find((x) => x.id === id)
+                if (y && currentService) {
+                  const item: ServiceItem = {
+                    id: `item_yt_${Date.now()}`,
+                    type: 'youtube',
+                    name: y.title,
+                    youtubeConfig: {
+                      youtubeId: y.youtubeId,
+                      url: y.url,
+                      title: y.title,
+                      channelTitle: y.channelTitle,
+                      thumbnailUrl: y.thumbnailUrl,
+                      duration: y.duration,
+                      inPoint: y.inPoint,
+                      outPoint: y.outPoint,
+                      targetRoles: y.targetRoles,
+                      audioRole: y.audioRole,
+                      endAction: y.endAction,
+                      availabilityStatus: y.availabilityStatus
+                    }
                   }
                   const updated = { ...currentService, items: [...currentService.items, item] }
                   setCurrentService(updated)
@@ -1943,57 +1991,185 @@ export const OperatorApp: React.FC = () => {
               }
             }}
             onAddBlankItem={handleAddBlankItem}
+            onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
           />
         </aside>
 
-        {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer */}
+        {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube Browser Panel */}
         <section className="pro-center-column">
-          <SlideGridPanel
-            title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
-            subtitle={currentSong?.author}
-            slides={activeSlides}
-            selectedSlideIndex={previewSlideIndex}
-            onSelectSlideIndex={setPreviewSlideIndex}
-            liveSlideId={liveSlideId}
-            onGoLive={handleGoLive}
-            zoomLevel={slideZoom}
-            onZoomChange={setSlideZoom}
-            viewMode={slideViewMode}
-            onViewModeChange={setSlideViewMode}
-            onAddSlide={handleAddSlideToCurrent}
-            onOpenEditor={() => {
-              if (currentSong) handleOpenSongEditor(currentSong)
-            }}
-            theme={activeTheme}
-            arrangements={currentSong?.arrangements}
-            selectedArrangementId={selectedArrangementId}
-            onSelectArrangement={setSelectedArrangementId}
-          />
+          {activeToolbarMode === 'youtube' ? (
+            <YouTubeBrowserPanel
+              onAddToPlaylist={(item) => {
+                if (currentService) {
+                  const updated = { ...currentService, items: [...currentService.items, item] }
+                  setCurrentService(updated)
+                  window.churchPresenterApi.saveService(updated)
+                }
+              }}
+              onProjectNow={async (item) => {
+                if (item.youtubeConfig) {
+                  await window.churchPresenterApi.controlYouTube('prepare', item.youtubeConfig)
+                  await window.churchPresenterApi.controlYouTube('go-live')
+                  const slide: SlideItem = {
+                    id: `yt_slide_${item.youtubeConfig.youtubeId}`,
+                    title: item.youtubeConfig.title,
+                    body: `▶ YouTube: ${item.youtubeConfig.title}\nCanal: ${item.youtubeConfig.channelTitle || 'YouTube'}`,
+                    mediaType: 'youtube',
+                    mediaUrl: item.youtubeConfig.url,
+                    youtubeId: item.youtubeConfig.youtubeId,
+                    youtubeDuration: item.youtubeConfig.duration
+                  }
+                  await window.churchPresenterApi.sendSlide(slide, item.youtubeConfig.targetRoles)
+                }
+              }}
+            />
+          ) : (
+            <>
+              {currentServiceItem?.type === 'youtube' && currentServiceItem.youtubeConfig && (
+                <div
+                  className="pro-yt-active-control-card"
+                  style={{
+                    backgroundColor: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 8,
+                    padding: 16,
+                    margin: '12px 16px 0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16
+                  }}
+                >
+                  <img
+                    src={
+                      currentServiceItem.youtubeConfig.thumbnailUrl ||
+                      `https://i.ytimg.com/vi/${currentServiceItem.youtubeConfig.youtubeId}/hqdefault.jpg`
+                    }
+                    alt=""
+                    style={{
+                      width: 140,
+                      height: 80,
+                      objectFit: 'cover',
+                      borderRadius: 6,
+                      backgroundColor: '#000'
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: '2px 6px',
+                          borderRadius: 4
+                        }}
+                      >
+                        YOUTUBE
+                      </span>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
+                        {currentServiceItem.youtubeConfig.title}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
+                      {currentServiceItem.youtubeConfig.channelTitle || 'YouTube'} • In:{' '}
+                      {currentServiceItem.youtubeConfig.inPoint || 0}s
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className="pro-btn-secondary"
+                        onClick={async () => {
+                          if (currentServiceItem.youtubeConfig) {
+                            await window.churchPresenterApi.controlYouTube(
+                              'prepare',
+                              currentServiceItem.youtubeConfig
+                            )
+                          }
+                        }}
+                        style={{ fontSize: 12, padding: '5px 12px' }}
+                      >
+                        Preparar en Salidas
+                      </button>
+                      <button
+                        className="pro-btn-primary"
+                        onClick={async () => {
+                          if (currentServiceItem.youtubeConfig) {
+                            await window.churchPresenterApi.controlYouTube(
+                              'prepare',
+                              currentServiceItem.youtubeConfig
+                            )
+                            await window.churchPresenterApi.controlYouTube('go-live')
+                            const slide: SlideItem = {
+                              id: `yt_slide_${currentServiceItem.youtubeConfig.youtubeId}`,
+                              title: currentServiceItem.youtubeConfig.title,
+                              body: `▶ YouTube: ${currentServiceItem.youtubeConfig.title}\nCanal: ${
+                                currentServiceItem.youtubeConfig.channelTitle || 'YouTube'
+                              }`,
+                              mediaType: 'youtube',
+                              mediaUrl: currentServiceItem.youtubeConfig.url,
+                              youtubeId: currentServiceItem.youtubeConfig.youtubeId,
+                              youtubeDuration: currentServiceItem.youtubeConfig.duration
+                            }
+                            await window.churchPresenterApi.sendSlide(
+                              slide,
+                              currentServiceItem.youtubeConfig.targetRoles
+                            )
+                          }
+                        }}
+                        style={{ fontSize: 12, padding: '5px 14px', backgroundColor: '#ef4444' }}
+                      >
+                        ▶ Proyectar En Vivo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          {/* Collapsible Media Drawer */}
-          <MediaDrawer
-            isOpen={isMediaDrawerOpen}
-            onToggle={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
-            mediaItems={mediaItems}
-            onImportFile={handleNativeImportMedia}
-            onImportFolder={handleNativeImportFolder}
-            onPlayMedia={(item) => {
-              window.churchPresenterApi.playVideo({
-                mediaId: item.id,
-                mediaPath: item.filePath,
-                loop: true,
-                volume: 1.0,
-                endAction: 'freeze',
-                audioOutputRole: 'main'
-              })
-            }}
-            onSetAsBackground={(item) => {
-              window.churchPresenterApi.setBackground({
-                type: item.mediaType === 'video' ? 'video' : 'image',
-                value: item.filePath
-              })
-            }}
-          />
+              <SlideGridPanel
+                title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
+                subtitle={currentSong?.author}
+                slides={activeSlides}
+                selectedSlideIndex={previewSlideIndex}
+                onSelectSlideIndex={setPreviewSlideIndex}
+                liveSlideId={liveSlideId}
+                onGoLive={handleGoLive}
+                zoomLevel={slideZoom}
+                onZoomChange={setSlideZoom}
+                viewMode={slideViewMode}
+                onViewModeChange={setSlideViewMode}
+                onAddSlide={handleAddSlideToCurrent}
+                onOpenEditor={() => {
+                  if (currentSong) handleOpenSongEditor(currentSong)
+                }}
+                theme={activeTheme}
+                arrangements={currentSong?.arrangements}
+                selectedArrangementId={selectedArrangementId}
+                onSelectArrangement={setSelectedArrangementId}
+              />
+
+              {/* Collapsible Media Drawer */}
+              <MediaDrawer
+                isOpen={isMediaDrawerOpen}
+                onToggle={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+                mediaItems={mediaItems}
+                onImportFile={handleNativeImportMedia}
+                onImportFolder={handleNativeImportFolder}
+                onPlayMedia={(item) => {
+                  window.churchPresenterApi.playVideo({
+                    mediaId: item.id,
+                    mediaPath: item.filePath,
+                    loop: true,
+                    volume: 1.0,
+                    endAction: 'freeze',
+                    audioOutputRole: 'main'
+                  })
+                }}
+                onSetAsBackground={(item) => {
+                  // handle set background
+                }}
+              />
+            </>
+          )}
         </section>
 
         {/* Right Column: Preview, Audio VU, Layers, Transport & Timers */}
@@ -3041,6 +3217,28 @@ export const OperatorApp: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Requirement 1: YouTube Session & Privacy */}
+              <div className="settings-section">
+                <h3>Sesión y Privacidad de YouTube</h3>
+                <p className="section-note">
+                  La sesión de YouTube se almacena de forma aislada en la partición persistente <code>persist:youtube</code>. La aplicación nunca lee ni guarda sus contraseñas.
+                </p>
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    className="secondary-action-btn"
+                    style={{ borderColor: '#f59e0b', color: '#fbbf24' }}
+                    onClick={async () => {
+                      if (confirm('¿Desea cerrar la sesión y borrar todas las cookies y almacenamiento de YouTube?')) {
+                        await window.churchPresenterApi.clearYouTubeSession()
+                        alert('Sesión de YouTube cerrada y datos borrados con éxito.')
+                      }
+                    }}
+                  >
+                    <span>Cerrar sesión / borrar datos de YouTube</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -3610,6 +3808,13 @@ export const OperatorApp: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* YouTube Playlist Pre-Service Verification Modal */}
+      <YouTubeVerifyModal
+        isOpen={isYouTubeVerifyOpen}
+        items={currentService?.items || []}
+        onClose={() => setIsYouTubeVerifyOpen(false)}
+      />
 
       {/* Toast Notifications */}
       <div className="toasts-container">

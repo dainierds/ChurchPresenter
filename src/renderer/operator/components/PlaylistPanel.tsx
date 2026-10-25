@@ -13,7 +13,8 @@ import {
   ListOrdered,
   Radio,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  ShieldCheck
 } from 'lucide-react'
 import { ServicePlan, ServiceItem } from '../../../shared/types'
 
@@ -30,6 +31,7 @@ interface PlaylistPanelProps {
   onDuplicateItem: (index: number) => void
   onAddHeader: (title: string) => void
   onAddBlankItem: () => void
+  onVerifyPlaylist?: () => void
 }
 
 export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
@@ -44,7 +46,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onDeleteItem,
   onDuplicateItem,
   onAddHeader,
-  onAddBlankItem
+  onAddBlankItem,
+  onVerifyPlaylist
 }) => {
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [headerInput, setHeaderInput] = useState('')
@@ -79,6 +82,22 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         return <BookOpen size={12} className="pro-item-type-icon bible" />
       case 'media':
         return <Video size={12} className="pro-item-type-icon media" />
+      case 'youtube':
+        return (
+          <span
+            style={{
+              backgroundColor: '#ef4444',
+              color: '#ffffff',
+              fontSize: 9,
+              fontWeight: 800,
+              padding: '1px 4px',
+              borderRadius: 3,
+              marginRight: 6
+            }}
+          >
+            YT
+          </span>
+        )
       default:
         return <ListOrdered size={12} className="pro-item-type-icon generic" />
     }
@@ -107,6 +126,29 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         </div>
 
         <div className="pro-playlist-count-row">
+          {onVerifyPlaylist && (
+            <button
+              className="pro-btn-verify-playlist"
+              onClick={onVerifyPlaylist}
+              title="Verificar disponibilidad de videos de YouTube en la playlist antes del culto"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                color: '#38bdf8',
+                borderRadius: 4,
+                padding: '2px 7px',
+                fontSize: 10,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <ShieldCheck size={11} />
+              <span>Verificar</span>
+            </button>
+          )}
           <span className="pro-items-count-badge">{items.length} ITEMS</span>
           <div className="pro-add-item-wrapper">
             <button
@@ -221,7 +263,15 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
               onClick={() => onSelectItemIndex(index)}
             >
               <div className="pro-item-left">
-                {getItemIcon(item.type)}
+                {item.type === 'youtube' && item.youtubeConfig?.thumbnailUrl ? (
+                  <img
+                    src={item.youtubeConfig.thumbnailUrl}
+                    alt=""
+                    style={{ width: 34, height: 22, objectFit: 'cover', borderRadius: 3, marginRight: 6 }}
+                  />
+                ) : (
+                  getItemIcon(item.type)
+                )}
                 <div className="pro-item-title-col">
                   <span className="pro-item-name">{item.name}</span>
                   {item.notes && <span className="pro-item-notes">{item.notes}</span>}
@@ -229,6 +279,31 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
               </div>
 
               <div className="pro-item-right">
+                {item.type === 'youtube' && item.youtubeConfig?.availabilityStatus && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      marginRight: 4,
+                      backgroundColor:
+                        item.youtubeConfig.availabilityStatus === 'ok'
+                          ? 'rgba(16, 185, 129, 0.2)'
+                          : item.youtubeConfig.availabilityStatus === 'unembeddable'
+                          ? 'rgba(245, 158, 11, 0.2)'
+                          : 'rgba(239, 68, 68, 0.2)',
+                      color:
+                        item.youtubeConfig.availabilityStatus === 'ok'
+                          ? '#10b981'
+                          : item.youtubeConfig.availabilityStatus === 'unembeddable'
+                          ? '#f59e0b'
+                          : '#ef4444'
+                    }}
+                  >
+                    {item.youtubeConfig.availabilityStatus.toUpperCase()}
+                  </span>
+                )}
                 {isLive && (
                   <span className="pro-live-pill" title="Actualmente proyectándose en vivo">
                     <Radio size={10} className="pro-live-pulse-icon" />

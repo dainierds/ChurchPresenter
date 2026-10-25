@@ -11,7 +11,8 @@ import {
   RoleBibleConfigsMap,
   UserLibrary,
   LibraryItemReference,
-  PresentationTimer
+  PresentationTimer,
+  YouTubeItem
 } from '../../shared/types'
 
 export interface Migration {
@@ -298,6 +299,48 @@ const MIGRATIONS: Migration[] = [
            ('timer_preach_message', 'Mensaje / Predicación', 'countdown_duration', 2400, 2400, 0, 1, 0, ?, ?);`,
           [now, now, now, now]
         )
+      }
+    }
+  },
+  {
+    version: 7,
+    name: 'youtube_items_and_collections',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS youtube_items (
+          id TEXT PRIMARY KEY,
+          youtube_id TEXT NOT NULL,
+          url TEXT NOT NULL,
+          title TEXT NOT NULL,
+          channel_title TEXT,
+          thumbnail_url TEXT,
+          duration REAL DEFAULT 0,
+          in_point REAL DEFAULT 0,
+          out_point REAL,
+          target_roles TEXT DEFAULT '["main"]',
+          audio_role TEXT DEFAULT 'main',
+          end_action TEXT DEFAULT 'freeze',
+          availability_status TEXT DEFAULT 'ok',
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_youtube_ytid ON youtube_items(youtube_id);
+      `)
+
+      // Create a default YouTube library collection if user_libraries exists
+      try {
+        const libCount = db.exec("SELECT COUNT(*) as cnt FROM user_libraries WHERE id = 'lib_youtube';")
+        const count = libCount.length && libCount[0].values.length ? Number(libCount[0].values[0][0]) : 0
+        if (count === 0) {
+          const now = new Date().toISOString()
+          db.run(
+            `INSERT INTO user_libraries (id, name, is_special, sort_order, created_at, updated_at)
+             VALUES ('lib_youtube', 'YouTube', 0, 4, ?, ?);`,
+            [now, now]
+          )
+        }
+      } catch {
+        // user_libraries may not exist in minimal test environments
       }
     }
   }
@@ -1139,6 +1182,113 @@ export class DatabaseService {
 
   public deleteTimer(id: string): boolean {
     this.run('DELETE FROM presentation_timers WHERE id = ?;', [id])
+    return true
+  }
+
+  // --- YouTube Items DAO ---
+  public getYouTubeItems(): YouTubeItem[] {
+    const rows = this.query('SELECT * FROM youtube_items ORDER BY created_at DESC;')
+    return rows.map((r: any) => ({
+      id: r.id,
+      youtubeId: r.youtube_id,
+      url: r.url,
+      title: r.title,
+      channelTitle: r.channel_title || undefined,
+      thumbnailUrl: r.thumbnail_url || undefined,
+      duration: Number(r.duration) || 0,
+      inPoint: Number(r.in_point) || 0,
+      outPoint: r.out_point != null ? Number(r.out_point) : undefined,
+      targetRoles: (() => {
+        try {
+          return JSON.parse(r.target_roles)
+        } catch {
+          return ['main']
+        }
+      })(),
+      audioRole: r.audio_role || 'main',
+      endAction: r.end_action || 'freeze',
+      availabilityStatus: r.availability_status || 'ok',
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }))
+  }
+
+  public getYouTubeItemById(id: string): YouTubeItem | null {
+    const rows = this.query('SELECT * FROM youtube_items WHERE id = ? LIMIT 1;', [id])
+    if (!rows.length) return null
+    const r = rows[0]
+    return {
+      id: r.id,
+      youtubeId: r.youtube_id,
+      url: r.url,
+      title: r.title,
+      channelTitle: r.channel_title || undefined,
+      thumbnailUrl: r.thumbnail_url || undefined,
+      duration: Number(r.duration) || 0,
+      inPoint: Number(r.in_point) || 0,
+      outPoint: r.out_point != null ? Number(r.out_point) : undefined,
+      targetRoles: (() => {
+        try {
+          return JSON.parse(r.target_roles)
+        } catch {
+          return ['main']
+        }
+      })(),
+      audioRole: r.audio_role || 'main',
+      endAction: r.end_action || 'freeze',
+      availabilityStatus: r.availability_status || 'ok',
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }
+  }
+
+  public saveYouTubeItem(item: YouTubeItem): YouTubeItem {
+    const now = new Date().toISOString()
+    this.run(
+      `INSERT OR REPLACE INTO youtube_items (
+        id, youtube_id, url, title, channel_title, thumbnail_url,
+        duration, in_point, out_point, target_roles, audio_role,
+        end_action, availability_status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        item.id,
+        item.youtubeId,
+        item.url,
+        item.title,
+        item.channelTitle || null,
+        item.thumbnailUrl || null,
+        item.duration || 0,
+        item.inPoint || 0,
+        item.outPoint != null ? item.outPoint : null,
+        JSON.stringify(item.targetRoles || ['main']),
+        item.audioRole || 'main',
+        item.endAction || 'freeze',
+        item.availabilityStatus || 'ok',
+        item.createdAt || now,
+        now
+      ]
+    )
+
+    // Also auto-add to lib_youtube if not present
+    try {
+      this.insertLibraryItem({
+        id: `litem_yt_${item.id}`,
+        libraryId: 'lib_youtube',
+        itemType: 'youtube' as any,
+        itemId: item.id,
+        name: item.title,
+        subtitle: item.channelTitle || 'YouTube'
+      })
+    } catch {
+      // ignore
+    }
+
+    return { ...item, updatedAt: now }
+  }
+
+  public deleteYouTubeItem(id: string): boolean {
+    this.run('DELETE FROM youtube_items WHERE id = ?;', [id])
+    this.run("DELETE FROM library_items WHERE item_type = 'youtube' AND item_id = ?;", [id])
     return true
   }
 

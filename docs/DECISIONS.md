@@ -573,3 +573,67 @@ Este documento registra cada una de las decisiones arquitectónicas y técnicas 
 | **Logo de Iglesia** | `F3` | Ventana con foco | Quitado Ctrl+L para evitar colisiones con enlaces de texto |
 | **Congelar Salida** | `F4` | Ventana con foco | Quitado Ctrl+F para permitir el buscador universal de biblioteca |
 | **Atajos Globales a nivel de SO** | Desactivados | Todo Windows | Opción configurable en Preferencias sólo para teclas F con advertencia explícita |
+
+---
+
+## 43. Integración de YouTube (Fase 5C): Arquitectura, Evaluación Técnica y Seguridad
+
+### 1. Evaluación Técnica de Opciones de Reproducción en las Salidas
+
+Se evaluaron experimentalmente las dos alternativas para reproducir videos de YouTube en las ventanas de salida:
+
+- **Opción (a): Reproductor incrustado con la API oficial IFrame de YouTube (`YT.Player`)**:
+  - *Mecanismo*: Cargar un iframe con `https://www.youtube.com/embed/{id}?enablejsapi=1` dentro del DOM de `OutputApp.tsx`.
+  - *Limitación Crítica Identificada*: En las versiones modernas de Chromium (y Electron 45), las cookies de terceros y el almacenamiento en partición cruzada (CHIPS - Cookies Having Independent Partitioned State) están aislados por defecto. Esto significa que cuando el usuario inicia sesión en su cuenta de Google o YouTube Premium en el panel del operador (partición `persist:youtube`), **esas cookies y credenciales NO se transmiten al iframe de YouTube cargado dentro de un documento local `file://`**. En consecuencia, la opción (a) no reconoce la sesión Premium del usuario, mostrando anuncios y restricciones de edad/cuenta.
+  
+- **Opción (b): Vista dedicada (`WebContentsView`) con la partición compartida `persist:youtube` (ELEGIDA)**:
+  - *Mecanismo*: Se instancia una `WebContentsView` en el proceso principal ligada a la misma partición `session.fromPartition('persist:youtube')` y se acopla directamente a la ventana de salida (`outputWindow.contentView.addChildView(view)`).
+  - *Ventajas Clave*:
+    1. **Preservación Integral de la Sesión**: Al ejecutarse como contexto de primer nivel dentro de `persist:youtube`, la vista tiene acceso completo a las cookies de la iglesia y a la cuenta de YouTube (incluyendo membresías Premium sin anuncios).
+    2. **Transición sin Parpadeo (Zero-Flicker Live Switch)**: Durante la preparación del elemento en el servicio, la vista se monta con visibilidad oculta (`setVisible(false)`) y el video se precarga en pausa en el punto de entrada (`inPoint`). Al pulsar "En vivo", simplemente se hace visible (`setVisible(true)`) y se reanuda la reproducción, eliminando por completo cualquier parpadeo negro, recarga de página o salto visual.
+    3. **Enrutamiento de Audio por Hardware**: Permite silenciar las salidas secundarias por hardware con `view.webContents.setAudioMuted(role !== audioRole)`, evitando ecos y bucles de retorno en el templo.
+    4. **Integración con Controles Globales**: Responde instantáneamente a Negro (ocultando la vista), Limpiar (pausando y ocultando) y Congelar (pausando el fotograma en curso).
+  - *Conclusión*: Se eligió de forma definitiva la **Opción (b)** por su superioridad en fidelidad de sesión, ausencia de parpadeo y control de audio por hardware.
+
+### 2. Política de Dominios Permitidos (Whitelist) y Seguridad de Red
+
+Para evitar vectores de fuga de navegación o inyección de scripts externos, la navegación de la partición de YouTube está estrictamente limitada a la siguiente lista de dominios:
+- `youtube.com`
+- `www.youtube.com`
+- `m.youtube.com`
+- `youtube-nocookie.com`
+- `google.com`
+- `accounts.google.com`
+- `myaccount.google.com`
+- `gstatic.com`
+- `fonts.gstatic.com`
+- `ytimg.com`
+- `i.ytimg.com`
+- `googlevideo.com`
+- `googleusercontent.com`
+- `play.google.com`
+
+Cualquier enlace externo que intente navegar fuera de estos dominios (como enlaces en descripciones de videos) es interceptado por `will-navigate` y `setWindowOpenHandler`, bloqueado en la vista interna y derivado al navegador predeterminado del sistema operativo mediante `shell.openExternal()`. Todos los permisos de hardware (cámara, micrófono, geolocalización, notificaciones) son denegados incondicionalmente mediante `ses.setPermissionRequestHandler`.
+
+### 3. Bloqueo y Filtrado de Anuncios
+
+Siguiendo las directrices del operador:
+1. **Filtro de Peticiones Web**: Se interceptan peticiones a redes publicitarias conocidas (`*.doubleclick.net`, `*.googleadservices.com`, `*googleads*`, `*.youtube.com/api/stats/ads*`, `*.youtube.com/pagead/*`) cancelándolas antes de que inicien la descarga.
+2. **Script de Omisión Automática (Ad-Skipper)**: Se inyecta un script en el DOM de la vista que detecta botones de omisión de publicidad (`.ytp-ad-skip-button`, `.ytp-skip-ad-button`), forzando su clic inmediato, y silencia y adelanta videos publicitarios no omitibles.
+3. **Detección de Anuncio**: Si un anuncio publicitario entra en reproducción, la aplicación lo detecta a través del monitor de transporte y emite el evento `youtube:ad-status`, desplegando una insignia visual ámbar `[ANUNCIO EN CURSO]` en el panel de control del operador.
+
+### 4. Sincronización Multisalida y Tolerancia de Deriva
+
+Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. ej., Sala y Lobby):
+- Los streams de YouTube se transmiten de manera adaptativa e independiente por red (DASH/HLS).
+- El proceso principal monitorea los códigos de tiempo de cada salida cada 250 ms.
+- Si la deriva entre pantallas supera los **250 ms**, se emite una instrucción de resincronización automática (`video.currentTime = masterTime`).
+- *Recomendación Operativa*: Si la conexión a internet de la iglesia es lenta o inestable, se recomienda proyectar el video únicamente en la pantalla principal de Sala y usar el monitor de escenario como monitor de confianza con los cronómetros de tiempo restante.
+
+### 5. Evidencia de Pruebas Generada (Fase 5C)
+- Panel del Operador con Navegador de YouTube: [ui-operator-youtube-panel.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-operator-youtube-panel.png)
+- Modal de Verificación Pre-Culto de la Playlist: [ui-operator-youtube-verify.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-operator-youtube-verify.png)
+- Operador en Proyección de YouTube en Vivo: [ui-operator-youtube-live.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-operator-youtube-live.png)
+- Salida Sala Principal (Main): [ui-youtube-output-main.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-main.png)
+- Salida Escenario con Cronómetros (Stage): [ui-youtube-output-stage.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-stage.png)
+- Salida Lobby (Lobby): [ui-youtube-output-lobby.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-youtube-output-lobby.png)

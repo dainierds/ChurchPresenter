@@ -28,7 +28,10 @@ import {
   LibraryItemReference,
   PresentationTimer,
   OpenFileDialogOptions,
-  FileChangedEvent
+  FileChangedEvent,
+  YouTubeItem,
+  YouTubeAvailabilityStatus,
+  ServiceItem
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -432,6 +435,95 @@ const api: ChurchPresenterApi = {
     ipcRenderer.on(IPC_CHANNELS.TIMERS_TICK, handler)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.TIMERS_TICK, handler)
+    }
+  },
+
+  // Phase 5C: YouTube
+  getYouTubeItems: (): Promise<YouTubeItem[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_GET_ITEMS)
+  },
+
+  saveYouTubeItem: (item: YouTubeItem): Promise<YouTubeItem> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_SAVE_ITEM, item)
+  },
+
+  deleteYouTubeItem: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_DELETE_ITEM, id)
+  },
+
+  checkYouTubeAvailability: (videoIdOrUrl: string): Promise<YouTubeAvailabilityStatus> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CHECK_AVAILABILITY, videoIdOrUrl)
+  },
+
+  verifyYouTubePlaylist: (
+    items: ServiceItem[]
+  ): Promise<{
+    totalChecked: number
+    okCount: number
+    failedCount: number
+    results: { itemId: string; title: string; videoId: string; status: YouTubeAvailabilityStatus }[]
+  }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_VERIFY_PLAYLIST, items)
+  },
+
+  getYouTubeMetadata: (
+    videoIdOrUrl: string
+  ): Promise<{
+    videoId: string
+    title: string
+    channelTitle: string
+    thumbnailUrl: string
+    duration: number
+    availabilityStatus: YouTubeAvailabilityStatus
+  }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_GET_METADATA, videoIdOrUrl)
+  },
+
+  openYouTubeBrowser: (bounds: { x: number; y: number; width: number; height: number }): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_OPEN_BROWSER, bounds)
+  },
+
+  closeYouTubeBrowser: (): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CLOSE_BROWSER)
+  },
+
+  navigateYouTubeBrowser: (
+    action: 'back' | 'forward' | 'home' | 'reload' | 'go',
+    url?: string
+  ): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_NAVIGATE_BROWSER, action, url)
+  },
+
+  getYouTubeBrowserUrl: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_GET_BROWSER_URL)
+  },
+
+  setYouTubeBrowserBounds: (bounds: { x: number; y: number; width: number; height: number }): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_SET_BROWSER_BOUNDS, bounds)
+  },
+
+  clearYouTubeSession: (): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CLEAR_SESSION)
+  },
+
+  controlYouTube: (
+    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+    payload?: any
+  ): Promise<any> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CONTROL, action, payload)
+  },
+
+  downloadYouTubeVideo: (
+    youtubeUrl: string
+  ): Promise<{ success: boolean; item?: MediaItem; error?: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_DOWNLOAD_VIDEO, youtubeUrl)
+  },
+
+  onYouTubeAdStatus: (callback: (isAd: boolean) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, isAd: boolean) => callback(isAd)
+    ipcRenderer.on(IPC_CHANNELS.YOUTUBE_AD_STATUS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.YOUTUBE_AD_STATUS, handler)
     }
   },
 

@@ -13,7 +13,7 @@ import {
   ChevronRight,
   BookOpen
 } from 'lucide-react'
-import { UserLibrary, LibraryItemReference, Song, GenericPresentation, MediaItem } from '../../../shared/types'
+import { UserLibrary, LibraryItemReference, Song, GenericPresentation, MediaItem, YouTubeItem } from '../../../shared/types'
 
 interface LibraryPanelProps {
   libraries: UserLibrary[]
@@ -24,6 +24,7 @@ interface LibraryPanelProps {
   songs: Song[]
   presentations: GenericPresentation[]
   mediaItems: MediaItem[]
+  youtubeItems?: YouTubeItem[]
   onItemSelect: (itemType: string, itemId: string) => void
   onAddItemToPlaylist: (itemType: string, itemId: string, name: string) => void
 }
@@ -37,6 +38,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   songs,
   presentations,
   mediaItems,
+  youtubeItems,
   onItemSelect,
   onAddItemToPlaylist
 }) => {
@@ -79,6 +81,13 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         title: m.originalName,
         subtitle: `${Math.round(m.duration || 0)}s • ${m.container}`
       }))
+  } else if (activeLibraryId === 'lib_youtube') {
+    itemsToDisplay = (youtubeItems || []).map((y) => ({
+      id: y.id,
+      type: 'youtube',
+      title: y.title,
+      subtitle: y.channelTitle || 'YouTube'
+    }))
   } else {
     // Custom user library
     itemsToDisplay = songs
