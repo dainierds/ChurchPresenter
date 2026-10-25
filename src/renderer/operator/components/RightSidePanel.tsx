@@ -327,7 +327,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   <div
                     style={{
                       flex: 1,
-                      backgroundColor: '#0f172a',
+                      backgroundColor: 'var(--bg-base, #111215)',
                       borderRadius: 3,
                       padding: '4px 6px',
                       overflow: 'hidden'
@@ -342,7 +342,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   <div
                     style={{
                       flex: 1,
-                      backgroundColor: '#1e293b',
+                      backgroundColor: 'var(--bg-card, #18191E)',
                       borderRadius: 3,
                       padding: '4px 6px',
                       overflow: 'hidden'
@@ -378,7 +378,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  backgroundColor: roleBackground?.type === 'color' ? roleBackground.value : '#0f172a',
+                  backgroundColor: roleBackground?.type === 'color' ? roleBackground.value : '#000000',
                   backgroundImage: roleBackground?.type === 'gradient' ? roleBackground.value : undefined,
                   display: 'flex',
                   alignItems: 'center',
@@ -487,7 +487,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                       top: 4,
                       left: 4,
                       backgroundColor: 'rgba(56, 189, 248, 0.9)',
-                      color: '#0f172a',
+                      color: '#000000',
                       fontSize: 8,
                       fontWeight: 800,
                       padding: '1px 4px',

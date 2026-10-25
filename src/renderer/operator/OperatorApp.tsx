@@ -3525,10 +3525,10 @@ export const OperatorApp: React.FC = () => {
                         }
                       }}
                       style={{
-                        backgroundColor: '#1e293b',
-                        color: '#f8fafc',
-                        border: '1px solid #475569',
-                        borderRadius: 4,
+                        backgroundColor: 'var(--bg-input)',
+                        color: 'var(--text-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 3,
                         padding: '3px 8px',
                         fontSize: 12
                       }}
@@ -3993,7 +3993,7 @@ export const OperatorApp: React.FC = () => {
                 />
               </div>
 
-              <div style={{ marginTop: 12, padding: 8, background: '#1e293b', borderRadius: 4 }}>
+              <div style={{ marginTop: 12, padding: 8, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 3 }}>
                 <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
                   ¿Tiene un video en formato no compatible (MKV, AVI, MOV, HEVC)?
                 </div>

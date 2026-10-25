@@ -432,7 +432,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
           </select>
         </div>
 
-        <div className="pro-lib-items-list zone-content-list">
+        <div className="pro-lib-items-list">
           {filteredItems.map((item) => (
             <div
               key={`${item.type}_${item.id}`}
