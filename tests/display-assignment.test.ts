@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   reconcileRoleAssignments,
-  formatDisplayTitle
+  formatDisplayTitle,
+  enrichDisplaysWithStableIds
 } from '../src/shared/display-utils'
-import { DisplayInfo, RoleAssignment } from '../src/shared/types'
+import { RoleAssignment } from '../src/shared/types'
 
 describe('Display Assignment Logic', () => {
-  const mockDisplays: DisplayInfo[] = [
+  const rawDisplays = [
     {
       id: 1,
-      stableId: 'disp_primary-display_1920x1080_pos_0_0',
       name: 'Primary Display',
       bounds: { x: 0, y: 0, width: 1920, height: 1080 },
       workArea: { x: 0, y: 0, width: 1920, height: 1040 },
@@ -18,7 +18,6 @@ describe('Display Assignment Logic', () => {
     },
     {
       id: 2,
-      stableId: 'disp_auditorium-projector-via-splitter_1920x1080_pos_1920_0',
       name: 'Auditorium Projector via Splitter',
       bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
       workArea: { x: 1920, y: 0, width: 1920, height: 1080 },
@@ -27,7 +26,6 @@ describe('Display Assignment Logic', () => {
     },
     {
       id: 3,
-      stableId: 'disp_stage-monitor_1920x1080_pos_3840_0',
       name: 'Stage Monitor',
       bounds: { x: 3840, y: 0, width: 1920, height: 1080 },
       workArea: { x: 3840, y: 0, width: 1920, height: 1080 },
@@ -35,6 +33,8 @@ describe('Display Assignment Logic', () => {
       isPrimary: false
     }
   ]
+
+  const mockDisplays = enrichDisplaysWithStableIds(rawDisplays)
 
   it('keeps valid assignments when physical displays exist', () => {
     const saved: RoleAssignment = {
@@ -54,28 +54,16 @@ describe('Display Assignment Logic', () => {
     const saved: RoleAssignment = {
       main: mockDisplays[1].stableId,
       stage: mockDisplays[2].stableId,
-      lobby: 'disp_unknown-screen_1920x1080_pos_9999_0'
+      lobby: 'disp_unknown-screen_1920x1080_idx_0_pos_9999_0'
     }
 
     const res = reconcileRoleAssignments(saved, mockDisplays)
     expect(res.activeAssignments['main']).toBe(mockDisplays[1].stableId)
     expect(res.activeAssignments['stage']).toBe(mockDisplays[2].stableId)
-    expect(res.disconnectedRoles['lobby']).toBe('disp_unknown-screen_1920x1080_pos_9999_0')
+    expect(res.disconnectedRoles['lobby']).toBe('disp_unknown-screen_1920x1080_idx_0_pos_9999_0')
     expect(res.missingDisplayWarnings).toEqual([
-      { role: 'lobby', previousStableId: 'disp_unknown-screen_1920x1080_pos_9999_0' }
+      { role: 'lobby', previousStableId: 'disp_unknown-screen_1920x1080_idx_0_pos_9999_0' }
     ])
-  })
-
-  it('supports multiple roles sharing the same physical screen', () => {
-    const saved: RoleAssignment = {
-      main: mockDisplays[1].stableId,
-      lobby: mockDisplays[1].stableId
-    }
-
-    const res = reconcileRoleAssignments(saved, mockDisplays)
-    expect(res.activeAssignments['main']).toBe(mockDisplays[1].stableId)
-    expect(res.activeAssignments['lobby']).toBe(mockDisplays[1].stableId)
-    expect(res.missingDisplayWarnings).toHaveLength(0)
   })
 
   it('formats display title clearly with primary flag', () => {

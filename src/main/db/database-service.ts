@@ -36,22 +36,120 @@ const MIGRATIONS: Migration[] = [
     version: 2,
     name: 'alter_role_assignments_to_stable_id',
     up: (_db: Database) => {
-      // In SQLite, role_assignments already accepts TEXT display_id
-      // This migration ensures schema compatibility
+      // Schema compatibility for TEXT stable IDs
+    }
+  },
+  {
+    version: 3,
+    name: 'create_content_and_service_tables',
+    up: (db: Database) => {
+      // Songs library
+      db.run(`
+        CREATE TABLE IF NOT EXISTS songs (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          author TEXT DEFAULT '',
+          copyright TEXT DEFAULT '',
+          ccli_number TEXT DEFAULT '',
+          language TEXT DEFAULT 'es',
+          tags TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Song section groups (Verso 1, Coro, Puente, etc.)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS song_groups (
+          id TEXT PRIMARY KEY,
+          song_id TEXT NOT NULL,
+          group_type TEXT NOT NULL,
+          group_number INTEGER DEFAULT 1,
+          label TEXT NOT NULL,
+          content TEXT NOT NULL,
+          sort_order INTEGER DEFAULT 0,
+          FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+        );
+      `)
+
+      // Song arrangements
+      db.run(`
+        CREATE TABLE IF NOT EXISTS song_arrangements (
+          id TEXT PRIMARY KEY,
+          song_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          group_order TEXT NOT NULL,
+          is_default INTEGER DEFAULT 0,
+          FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+        );
+      `)
+
+      // Generic presentations (announcements, liturgies, sermons)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS generic_presentations (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          slides_json TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Themes
+      db.run(`
+        CREATE TABLE IF NOT EXISTS themes (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          is_default INTEGER DEFAULT 0,
+          config_json TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Background media
+      db.run(`
+        CREATE TABLE IF NOT EXISTS background_images (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          original_filename TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Services / Playlists & Templates
+      db.run(`
+        CREATE TABLE IF NOT EXISTS services (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          date TEXT NOT NULL,
+          items_json TEXT NOT NULL,
+          is_template INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
     }
   }
 ]
 
 const SQLITE_HEADER = 'SQLite format 3'
-const MAX_BACKUPS = 10
+const DEFAULT_RECENT_LIMIT = 10
+const DEFAULT_RETENTION_DAYS = 14
+const DEFAULT_INTERVAL_MINUTES = 15
 
 export class DatabaseService {
   private db: Database | null = null
   private dbPath: string = ''
   private backupsDir: string = ''
   private saveTimeout: NodeJS.Timeout | null = null
+  private periodicBackupTimer: NodeJS.Timeout | null = null
   private restoredFromBackup: boolean = false
   private SQL: SqlJsStatic | null = null
+  private isDirty: boolean = false
+  private lastBackupTimestamp: number = 0
 
   constructor(customPath?: string) {
     if (customPath) {
@@ -75,6 +173,14 @@ export class DatabaseService {
 
   public getBackupsDirectory(): string {
     return this.backupsDir
+  }
+
+  public setLastBackupTimestampForTest(timestamp: number): void {
+    this.lastBackupTimestamp = timestamp
+  }
+
+  public getDatabaseInstance(): Database | null {
+    return this.db
   }
 
   public async initialize(): Promise<void> {
@@ -115,7 +221,6 @@ export class DatabaseService {
           loadedValidDb = true
         } else {
           logger.error(`Database file at ${this.dbPath} is CORRUPTED. Attempting recovery from backup...`)
-          // Archive corrupt file
           const corruptArchive = `${this.dbPath}.corrupt_${Date.now()}`
           try {
             fs.renameSync(this.dbPath, corruptArchive)
@@ -141,11 +246,97 @@ export class DatabaseService {
 
       this.runMigrations()
       this.persist()
-      // Create initial backup on startup if valid
-      this.createBackup()
+
+      // Time-based policy: 1. Backup on app open
+      this.createBackup('startup')
+      this.createDailyBackupIfNeeded()
+
+      // 2. Start periodic backup check timer (runs every minute to check interval)
+      this.startPeriodicBackupTimer()
     } catch (err) {
       logger.error('Failed to initialize SQLite database:', err)
       throw err
+    }
+  }
+
+  private startPeriodicBackupTimer(): void {
+    if (this.periodicBackupTimer) clearInterval(this.periodicBackupTimer)
+    this.periodicBackupTimer = setInterval(() => {
+      this.checkPeriodicBackup(false)
+    }, 60 * 1000)
+  }
+
+  /**
+   * Checks whether a periodic backup is due (every 15 min, only if modified/dirty).
+   */
+  public checkPeriodicBackup(force: boolean = false): boolean {
+    if (!this.db) return false
+    const intervalMinutes = this.getConfigNumber('backup_interval_minutes', DEFAULT_INTERVAL_MINUTES)
+    const intervalMs = intervalMinutes * 60 * 1000
+    const now = Date.now()
+
+    if (force) {
+      if (!this.isDirty) return false
+      this.createBackup('periodic')
+      this.isDirty = false
+      this.lastBackupTimestamp = now
+      return true
+    }
+
+    if (this.isDirty && now - this.lastBackupTimestamp >= intervalMs) {
+      this.createBackup('periodic')
+      this.isDirty = false
+      this.lastBackupTimestamp = now
+      this.createDailyBackupIfNeeded()
+      return true
+    }
+
+    return false
+  }
+
+  private createDailyBackupIfNeeded(): void {
+    if (!this.db) return
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const dailyBackupPath = path.join(this.backupsDir, `daily_${today}.sqlite`)
+      if (!fs.existsSync(dailyBackupPath)) {
+        logger.info(`Creating daily backup for ${today}`)
+        const data = this.db.export()
+        const buffer = Buffer.from(data)
+        const tmp = `${dailyBackupPath}.tmp`
+        fs.writeFileSync(tmp, buffer)
+        fs.renameSync(tmp, dailyBackupPath)
+      }
+      const retentionDays = this.getConfigNumber('daily_retention_days', DEFAULT_RETENTION_DAYS)
+      this.cleanExpiredBackups(retentionDays)
+    } catch (err) {
+      logger.error('Error creating daily backup:', err)
+    }
+  }
+
+  public cleanExpiredBackups(retentionDays: number = DEFAULT_RETENTION_DAYS): void {
+    if (!fs.existsSync(this.backupsDir)) return
+    const now = Date.now()
+    const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000
+
+    try {
+      const files = fs.readdirSync(this.backupsDir)
+      for (const file of files) {
+        if (file.startsWith('daily_') && file.endsWith('.sqlite')) {
+          const filePath = path.join(this.backupsDir, file)
+          const stat = fs.statSync(filePath)
+          if (now - stat.mtimeMs > maxAgeMs) {
+            logger.info(`Deleting expired daily backup: ${file}`)
+            try {
+              fs.unlinkSync(filePath)
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('Error cleaning expired daily backups:', err)
     }
   }
 
@@ -155,7 +346,6 @@ export class DatabaseService {
       const stat = fs.statSync(filePath)
       if (stat.size < 100) return false
 
-      // Check SQLite 3 header magic string (16 bytes)
       const fd = fs.openSync(filePath, 'r')
       const headerBuf = Buffer.alloc(16)
       fs.readSync(fd, headerBuf, 0, 16, 0)
@@ -166,7 +356,6 @@ export class DatabaseService {
         return false
       }
 
-      // Verify that SQL.js can open and query it
       if (this.SQL) {
         const buffer = fs.readFileSync(filePath)
         const tempDb = new this.SQL.Database(new Uint8Array(buffer))
@@ -189,7 +378,7 @@ export class DatabaseService {
         fullPath: path.join(this.backupsDir, f),
         mtime: fs.statSync(path.join(this.backupsDir, f)).mtimeMs
       }))
-      .sort((a, b) => b.mtime - a.mtime) // newest first
+      .sort((a, b) => b.mtime - a.mtime)
 
     for (const backup of backups) {
       if (this.verifyDatabaseFile(backup.fullPath)) {
@@ -201,7 +390,7 @@ export class DatabaseService {
     return false
   }
 
-  public createBackup(): string | null {
+  public createBackup(tag: string = 'backup'): string | null {
     if (!this.db) return null
     try {
       if (!fs.existsSync(this.backupsDir)) {
@@ -209,12 +398,11 @@ export class DatabaseService {
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const backupPath = path.join(this.backupsDir, `backup_${timestamp}.sqlite`)
+      const backupPath = path.join(this.backupsDir, `${tag}_${timestamp}.sqlite`)
 
       const data = this.db.export()
       const buffer = Buffer.from(data)
 
-      // Atomic write for backup
       const tmpBackup = `${backupPath}.tmp`
       const fd = fs.openSync(tmpBackup, 'w')
       fs.writeSync(fd, buffer)
@@ -222,7 +410,8 @@ export class DatabaseService {
       fs.closeSync(fd)
       fs.renameSync(tmpBackup, backupPath)
 
-      this.rotateBackups()
+      this.lastBackupTimestamp = Date.now()
+      this.rotateRecentBackups()
       return backupPath
     } catch (err) {
       logger.error('Failed to create database backup:', err)
@@ -230,29 +419,32 @@ export class DatabaseService {
     }
   }
 
-  private rotateBackups(): void {
+  private rotateRecentBackups(): void {
     try {
       if (!fs.existsSync(this.backupsDir)) return
+      const recentLimit = this.getConfigNumber('recent_backups_limit', DEFAULT_RECENT_LIMIT)
+
+      // Only rotate non-daily backups (startup, periodic, exit, backup)
       const files = fs.readdirSync(this.backupsDir)
-        .filter((f) => f.endsWith('.sqlite'))
+        .filter((f) => f.endsWith('.sqlite') && !f.startsWith('daily_'))
         .map((f) => ({
           fullPath: path.join(this.backupsDir, f),
           mtime: fs.statSync(path.join(this.backupsDir, f)).mtimeMs
         }))
         .sort((a, b) => b.mtime - a.mtime)
 
-      if (files.length > MAX_BACKUPS) {
-        const toDelete = files.slice(MAX_BACKUPS)
+      if (files.length > recentLimit) {
+        const toDelete = files.slice(recentLimit)
         for (const file of toDelete) {
           try {
             fs.unlinkSync(file.fullPath)
           } catch {
-            // ignore unlink errors
+            // ignore
           }
         }
       }
     } catch (err) {
-      logger.error('Error rotating database backups:', err)
+      logger.error('Error rotating recent backups:', err)
     }
   }
 
@@ -302,6 +494,13 @@ export class DatabaseService {
     }
   }
 
+  public getConfigNumber(key: string, defaultValue: number): number {
+    const val = this.getConfig(key)
+    if (val === null) return defaultValue
+    const num = Number(val)
+    return isNaN(num) ? defaultValue : num
+  }
+
   public setConfig(key: string, value: string): void {
     if (!this.db) return
     this.db.run(
@@ -309,6 +508,7 @@ export class DatabaseService {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now');`,
       [key, value]
     )
+    this.isDirty = true
     this.schedulePersist()
   }
 
@@ -347,7 +547,37 @@ export class DatabaseService {
         [role, String(displayId)]
       )
     }
+    this.isDirty = true
     this.schedulePersist()
+  }
+
+  // --- Phase 3 SQL Query Helpers ---
+
+  public run(sql: string, params: any[] = []): void {
+    if (!this.db) return
+    this.db.run(sql, params)
+    this.isDirty = true
+    this.schedulePersist()
+  }
+
+  public query<T = any>(sql: string, params: any[] = []): T[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare(sql)
+    const rows: T[] = []
+    try {
+      stmt.bind(params)
+      while (stmt.step()) {
+        rows.push(stmt.getAsObject() as T)
+      }
+      return rows
+    } finally {
+      stmt.free()
+    }
+  }
+
+  public queryOne<T = any>(sql: string, params: any[] = []): T | null {
+    const rows = this.query<T>(sql, params)
+    return rows.length > 0 ? rows[0] : null
   }
 
   private schedulePersist(): void {
@@ -358,9 +588,6 @@ export class DatabaseService {
     }, 200)
   }
 
-  /**
-   * Atomic flush to disk: writes to temp file, executes fsync, and atomic renames.
-   */
   public persist(): void {
     if (!this.db) return
     try {
@@ -368,18 +595,15 @@ export class DatabaseService {
       const buffer = Buffer.from(data)
       const tmpPath = `${this.dbPath}.tmp`
 
-      // Write with synchronous file descriptor flush (fsync)
       const fd = fs.openSync(tmpPath, 'w')
       fs.writeSync(fd, buffer)
       fs.fsyncSync(fd)
       fs.closeSync(fd)
 
-      // Atomic rename
       if (fs.existsSync(this.dbPath)) {
         try {
           fs.renameSync(tmpPath, this.dbPath)
         } catch {
-          // On Windows, if target exists and is briefly locked, unlink and rename
           fs.unlinkSync(this.dbPath)
           fs.renameSync(tmpPath, this.dbPath)
         }
@@ -392,12 +616,21 @@ export class DatabaseService {
   }
 
   public close(): void {
+    if (this.periodicBackupTimer) {
+      clearInterval(this.periodicBackupTimer)
+      this.periodicBackupTimer = null
+    }
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout)
       this.saveTimeout = null
     }
     if (this.db) {
       this.persist()
+      // 3. Backup on app exit if there were changes
+      if (this.isDirty) {
+        this.createBackup('exit')
+        this.isDirty = false
+      }
       this.db.close()
       this.db = null
     }

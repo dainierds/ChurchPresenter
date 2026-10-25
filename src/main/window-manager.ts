@@ -48,7 +48,7 @@ export class WindowManager {
         preload: this.getPreloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false,
+        sandbox: true,
         backgroundThrottling: false
       }
     })
@@ -182,7 +182,7 @@ export class WindowManager {
         preload: this.getPreloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false,
+        sandbox: true,
         backgroundThrottling: false // Always render at 60 FPS even when unfocused or covered
       }
     })
@@ -273,7 +273,8 @@ export class WindowManager {
         backgroundColor: '#00000000',
         webPreferences: {
           nodeIntegration: false,
-          contextIsolation: true
+          contextIsolation: true,
+          sandbox: true
         }
       })
 

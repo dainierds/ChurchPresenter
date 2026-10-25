@@ -47,7 +47,7 @@ describe('DatabaseService Resilience & Backups', () => {
 
     const backupsDir = db.getBackupsDirectory()
     expect(fs.existsSync(backupsDir)).toBe(true)
-    const backupFiles = fs.readdirSync(backupsDir).filter((f) => f.endsWith('.sqlite'))
+    const backupFiles = fs.readdirSync(backupsDir).filter((f) => f.endsWith('.sqlite') && !f.startsWith('daily_'))
     expect(backupFiles.length).toBeLessThanOrEqual(10)
     db.close()
   })

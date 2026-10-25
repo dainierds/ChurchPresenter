@@ -1,7 +1,7 @@
 import { screen, Display } from 'electron'
 import { EventEmitter } from 'events'
 import { DisplayInfo } from '../shared/types'
-import { generateStableDisplayId } from '../shared/display-utils'
+import { enrichDisplaysWithStableIds } from '../shared/display-utils'
 import { logger } from './logger'
 
 export class DisplayManager extends EventEmitter {
@@ -54,46 +54,43 @@ export class DisplayManager extends EventEmitter {
 
   public getPrimaryDisplay(): DisplayInfo {
     const primary = screen.getPrimaryDisplay()
-    return this.mapDisplay(primary)
+    const all = this.getDisplays()
+    return all.find((d) => d.id === primary.id) || all[0]
   }
 
   private updateDisplays(): void {
     try {
       const all = screen.getAllDisplays()
-      this.displays = all.map((d) => this.mapDisplay(d))
+      const primary = screen.getPrimaryDisplay()
+
+      const raw = all.map((d: Display) => {
+        const isPrimary = d.id === primary.id
+        const displayName = d.label && d.label.trim().length > 0 ? d.label : `Pantalla ${d.id}`
+        return {
+          id: d.id,
+          name: displayName,
+          bounds: {
+            x: d.bounds.x,
+            y: d.bounds.y,
+            width: d.bounds.width,
+            height: d.bounds.height
+          },
+          workArea: {
+            x: d.workArea.x,
+            y: d.workArea.y,
+            width: d.workArea.width,
+            height: d.workArea.height
+          },
+          scaleFactor: d.scaleFactor,
+          isPrimary,
+          isInternal: d.internal
+        }
+      })
+
+      this.displays = enrichDisplaysWithStableIds(raw)
     } catch (err) {
       logger.error('Error querying screen displays:', err)
     }
-  }
-
-  private mapDisplay(d: Display): DisplayInfo {
-    const primary = screen.getPrimaryDisplay()
-    const isPrimary = d.id === primary.id
-    const displayName = d.label && d.label.trim().length > 0 ? d.label : `Pantalla ${d.id}`
-
-    const mapped: DisplayInfo = {
-      id: d.id,
-      stableId: '',
-      name: displayName,
-      bounds: {
-        x: d.bounds.x,
-        y: d.bounds.y,
-        width: d.bounds.width,
-        height: d.bounds.height
-      },
-      workArea: {
-        x: d.workArea.x,
-        y: d.workArea.y,
-        width: d.workArea.width,
-        height: d.workArea.height
-      },
-      scaleFactor: d.scaleFactor,
-      isPrimary,
-      isInternal: d.internal
-    }
-
-    mapped.stableId = generateStableDisplayId(mapped)
-    return mapped
   }
 }
 
