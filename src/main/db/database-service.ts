@@ -8,7 +8,10 @@ import {
   MediaItem,
   MediaType,
   RoleBibleConfig,
-  RoleBibleConfigsMap
+  RoleBibleConfigsMap,
+  UserLibrary,
+  LibraryItemReference,
+  PresentationTimer
 } from '../../shared/types'
 
 export interface Migration {
@@ -209,6 +212,93 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_media_hash ON media_items(hash);
         CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type);
       `)
+    }
+  },
+  {
+    version: 6,
+    name: 'user_libraries_and_timers',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS user_libraries (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          is_special INTEGER DEFAULT 0,
+          sort_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS library_items (
+          id TEXT PRIMARY KEY,
+          library_id TEXT NOT NULL,
+          item_type TEXT NOT NULL,
+          item_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          subtitle TEXT,
+          metadata TEXT,
+          sort_order INTEGER DEFAULT 0,
+          added_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_lib_items_lib ON library_items(library_id);
+        CREATE INDEX IF NOT EXISTS idx_lib_items_target ON library_items(item_type, item_id);
+
+        CREATE TABLE IF NOT EXISTS presentation_timers (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          target_time TEXT,
+          duration_seconds INTEGER DEFAULT 300,
+          current_seconds INTEGER DEFAULT 300,
+          is_running INTEGER DEFAULT 0,
+          show_on_stage INTEGER DEFAULT 1,
+          show_on_audience INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      const now = new Date().toISOString()
+      const libCount = db.exec('SELECT COUNT(*) as cnt FROM user_libraries;')
+      const count = libCount.length && libCount[0].values.length ? Number(libCount[0].values[0][0]) : 0
+      if (count === 0) {
+        db.run(
+          `INSERT INTO user_libraries (id, name, is_special, sort_order, created_at, updated_at) VALUES
+           ('lib_songs', 'Canciones', 0, 1, ?, ?),
+           ('lib_presentations', 'Presentaciones', 0, 2, ?, ?),
+           ('lib_videos', 'Videos', 0, 3, ?, ?),
+           ('lib_recent', 'Playlist anterior', 1, 99, ?, ?);`,
+          [now, now, now, now, now, now, now, now]
+        )
+
+        db.run(`
+          INSERT INTO library_items (id, library_id, item_type, item_id, name, subtitle, sort_order, added_at)
+          SELECT 'litem_s_' || id, 'lib_songs', 'song', id, title, author, 0, datetime('now')
+          FROM songs;
+        `)
+
+        db.run(`
+          INSERT INTO library_items (id, library_id, item_type, item_id, name, subtitle, sort_order, added_at)
+          SELECT 'litem_p_' || id, 'lib_presentations', 'presentation', id, title, description, 0, datetime('now')
+          FROM generic_presentations;
+        `)
+
+        db.run(`
+          INSERT INTO library_items (id, library_id, item_type, item_id, name, subtitle, sort_order, added_at)
+          SELECT 'litem_m_' || id, 'lib_videos', 'video', id, original_name, container, 0, datetime('now')
+          FROM media_items WHERE media_type = 'video';
+        `)
+      }
+
+      const timerCount = db.exec('SELECT COUNT(*) as cnt FROM presentation_timers;')
+      const tCount = timerCount.length && timerCount[0].values.length ? Number(timerCount[0].values[0][0]) : 0
+      if (tCount === 0) {
+        db.run(
+          `INSERT INTO presentation_timers (id, name, type, duration_seconds, current_seconds, is_running, show_on_stage, show_on_audience, created_at, updated_at) VALUES
+           ('timer_countdown_service', 'Conteo Regresivo Culto', 'countdown_duration', 300, 300, 0, 1, 1, ?, ?),
+           ('timer_preach_message', 'Mensaje / Predicación', 'countdown_duration', 2400, 2400, 0, 1, 0, ?, ?);`,
+          [now, now, now, now]
+        )
+      }
     }
   }
 ]
@@ -911,6 +1001,145 @@ export class DatabaseService {
 
   public deleteMediaItem(id: string): void {
     this.run('DELETE FROM media_items WHERE id = ?;', [id])
+  }
+
+  // --- USER LIBRARIES (ProPresenter 7 Collections) ---
+  public getLibraries(): UserLibrary[] {
+    const rows = this.query('SELECT * FROM user_libraries ORDER BY sort_order ASC, name ASC;')
+    return rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      isSpecial: Boolean(r.is_special),
+      sortOrder: r.sort_order || 0,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }))
+  }
+
+  public getLibraryItems(libraryId: string): LibraryItemReference[] {
+    const rows = this.query(
+      'SELECT * FROM library_items WHERE library_id = ? ORDER BY sort_order ASC, name ASC;',
+      [libraryId]
+    )
+    return rows.map((r: any) => ({
+      id: r.id,
+      libraryId: r.library_id,
+      itemType: r.item_type,
+      itemId: r.item_id,
+      name: r.name,
+      subtitle: r.subtitle || undefined,
+      metadata: r.metadata || undefined,
+      sortOrder: r.sort_order || 0,
+      addedAt: r.added_at
+    }))
+  }
+
+  public saveLibrary(lib: UserLibrary): UserLibrary {
+    const now = new Date().toISOString()
+    this.run(
+      `INSERT OR REPLACE INTO user_libraries (id, name, is_special, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?);`,
+      [lib.id, lib.name, lib.isSpecial ? 1 : 0, lib.sortOrder || 0, lib.createdAt || now, now]
+    )
+    return { ...lib, updatedAt: now }
+  }
+
+  public deleteLibrary(id: string): boolean {
+    // Prevent deleting special libraries like 'Playlist anterior'
+    const existing = this.queryOne('SELECT is_special FROM user_libraries WHERE id = ?;', [id])
+    if (existing && existing.is_special) {
+      throw new Error('No se pueden eliminar las bibliotecas protegidas del sistema.')
+    }
+    this.run('DELETE FROM library_items WHERE library_id = ?;', [id])
+    this.run('DELETE FROM user_libraries WHERE id = ?;', [id])
+    return true
+  }
+
+  public insertLibraryItem(item: LibraryItemReference): void {
+    this.run(
+      `INSERT OR REPLACE INTO library_items (id, library_id, item_type, item_id, name, subtitle, metadata, sort_order, added_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        item.id,
+        item.libraryId,
+        item.itemType,
+        item.itemId,
+        item.name,
+        item.subtitle || null,
+        item.metadata || null,
+        item.sortOrder || 0,
+        item.addedAt || new Date().toISOString()
+      ]
+    )
+  }
+
+  public deleteLibraryItem(id: string): void {
+    this.run('DELETE FROM library_items WHERE id = ?;', [id])
+  }
+
+  public moveLibraryItem(itemRefId: string, targetLibraryId: string): boolean {
+    this.run('UPDATE library_items SET library_id = ? WHERE id = ?;', [targetLibraryId, itemRefId])
+    return true
+  }
+
+  public updatePlaylistAnterior(serviceItems: any[]): void {
+    // Clear existing items in special library 'lib_recent'
+    this.run("DELETE FROM library_items WHERE library_id = 'lib_recent';")
+    const now = new Date().toISOString()
+    serviceItems.forEach((si, idx) => {
+      this.run(
+        `INSERT INTO library_items (id, library_id, item_type, item_id, name, subtitle, sort_order, added_at)
+         VALUES (?, 'lib_recent', ?, ?, ?, ?, ?, ?);`,
+        [`rec_${Date.now()}_${idx}`, si.type || 'blank', si.id, si.name || 'Elemento', si.notes || null, idx, now]
+      )
+    })
+  }
+
+  // --- PRESENTATION TIMERS ---
+  public getTimers(): PresentationTimer[] {
+    const rows = this.query('SELECT * FROM presentation_timers ORDER BY name ASC;')
+    return rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      targetTime: r.target_time || undefined,
+      durationSeconds: r.duration_seconds || 300,
+      currentSeconds: r.current_seconds || 300,
+      isRunning: Boolean(r.is_running),
+      showOnStage: Boolean(r.show_on_stage),
+      showOnAudience: Boolean(r.show_on_audience),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }))
+  }
+
+  public saveTimer(timer: PresentationTimer): PresentationTimer {
+    const now = new Date().toISOString()
+    this.run(
+      `INSERT OR REPLACE INTO presentation_timers (
+        id, name, type, target_time, duration_seconds, current_seconds,
+        is_running, show_on_stage, show_on_audience, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        timer.id,
+        timer.name,
+        timer.type,
+        timer.targetTime || null,
+        timer.durationSeconds,
+        timer.currentSeconds,
+        timer.isRunning ? 1 : 0,
+        timer.showOnStage ? 1 : 0,
+        timer.showOnAudience ? 1 : 0,
+        timer.createdAt || now,
+        now
+      ]
+    )
+    return { ...timer, updatedAt: now }
+  }
+
+  public deleteTimer(id: string): boolean {
+    this.run('DELETE FROM presentation_timers WHERE id = ?;', [id])
+    return true
   }
 
   private schedulePersist(): void {

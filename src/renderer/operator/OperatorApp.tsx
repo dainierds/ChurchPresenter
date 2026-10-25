@@ -26,8 +26,21 @@ import {
   PptConverterInfo,
   PptConverterType,
   PptPresentationManifest,
-  FfmpegStatus
+  FfmpegStatus,
+  UserLibrary,
+  LibraryItemReference,
+  PresentationTimer,
+  FileChangedEvent
 } from '../../shared/types'
+import { TopMenuBar } from './components/TopMenuBar'
+import { ProToolbar } from './components/ProToolbar'
+import { LibraryPanel } from './components/LibraryPanel'
+import { PlaylistPanel } from './components/PlaylistPanel'
+import { SlideGridPanel } from './components/SlideGridPanel'
+import { MediaDrawer } from './components/MediaDrawer'
+import { RightSidePanel } from './components/RightSidePanel'
+import { FileDropOverlay } from './components/FileDropOverlay'
+import { FileWatcherToast } from './components/FileWatcherToast'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
   parseLyricsToGroups,
@@ -162,6 +175,26 @@ export const OperatorApp: React.FC = () => {
   const [videoInPoint, setVideoInPoint] = useState<number>(0)
   const [videoOutPoint, setVideoOutPoint] = useState<number>(0)
   const [videoEndAction, setVideoEndAction] = useState<'freeze' | 'background' | 'next'>('freeze')
+
+  // ProPresenter 7 Workspace States
+  const [userLibraries, setUserLibraries] = useState<UserLibrary[]>([])
+  const [activeUserLibraryId, setActiveUserLibraryId] = useState<string>('lib_songs')
+  const [presentationTimers, setPresentationTimers] = useState<PresentationTimer[]>([])
+  const [slideZoom, setSlideZoom] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_slide_zoom')
+    return saved ? Number(saved) : 40
+  })
+  const [slideViewMode, setSlideViewMode] = useState<'grid' | 'list'>('grid')
+  const [isMediaDrawerOpen, setIsMediaDrawerOpen] = useState<boolean>(false)
+  const [isDraggingFiles, setIsDraggingFiles] = useState<boolean>(false)
+  const [fileWatcherEvent, setFileWatcherEvent] = useState<FileChangedEvent | null>(null)
+  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'more'>('show')
+  const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState<boolean>(false)
+
+  // Save slide zoom preference
+  useEffect(() => {
+    localStorage.setItem('cp_slide_zoom', String(slideZoom))
+  }, [slideZoom])
 
   // Independent Background Audio State
   const [independentAudio, setIndependentAudio] = useState<IndependentAudioState>({
@@ -302,6 +335,24 @@ export const OperatorApp: React.FC = () => {
       setBibleRecentHistory(bRecents)
       setMediaItems(mediaList)
       if (rbConfigs) setRoleBibleConfigs(rbConfigs)
+
+      if (window.churchPresenterApi.getLibraries) {
+        try {
+          const libs = await window.churchPresenterApi.getLibraries()
+          setUserLibraries(libs || [])
+        } catch {
+          // ignore
+        }
+      }
+
+      if (window.churchPresenterApi.getTimers) {
+        try {
+          const tmrs = await window.churchPresenterApi.getTimers()
+          setPresentationTimers(tmrs || [])
+        } catch {
+          // ignore
+        }
+      }
 
       if (window.churchPresenterApi.getEnvInfo) {
         try {
@@ -449,10 +500,26 @@ export const OperatorApp: React.FC = () => {
 
     navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
 
+    let unsubTimers: () => void = () => {}
+    if (window.churchPresenterApi.onTimersTick) {
+      unsubTimers = window.churchPresenterApi.onTimersTick((t) => {
+        setPresentationTimers(t || [])
+      })
+    }
+
+    let unsubFileWatcher: () => void = () => {}
+    if (window.churchPresenterApi.onFileChanged) {
+      unsubFileWatcher = window.churchPresenterApi.onFileChanged((evt) => {
+        setFileWatcherEvent(evt)
+      })
+    }
+
     return () => {
       unsubDisplays()
       unsubState()
       unsubNotif()
+      unsubTimers()
+      unsubFileWatcher()
       navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }
   }, [loadAllData, audioDeviceVideo, audioDeviceAmbient])
@@ -1519,1424 +1586,488 @@ export const OperatorApp: React.FC = () => {
     )
   }, [editingSong])
 
+  // ProPresenter 7 User Action Handlers
+  const handleNativeImportPpt = async () => {
+    const result = await window.churchPresenterApi.openFileDialog({
+      title: 'Seleccionar Presentación PowerPoint',
+      filters: [{ name: 'PowerPoint (*.pptx, *.ppt)', extensions: ['pptx', 'ppt', 'pptm', 'ppsx'] }],
+      properties: ['openFile']
+    })
+    if (!result.canceled && result.filePaths.length > 0) {
+      const selectedPath = result.filePaths[0]
+      setIsImportingPpt(true)
+      try {
+        const manifest = await window.churchPresenterApi.importPpt(selectedPath)
+        await loadAllData()
+        if (currentService) {
+          const newItem: ServiceItem = {
+            id: `item_p_${Date.now()}`,
+            type: 'presentation',
+            name: manifest.fileName,
+            presentationId: manifest.presentationId
+          }
+          const updated = { ...currentService, items: [...currentService.items, newItem] }
+          await window.churchPresenterApi.saveService(updated)
+          setCurrentService(updated)
+        }
+      } catch (err: any) {
+        alert(`Error al importar presentación: ${err.message}`)
+      } finally {
+        setIsImportingPpt(false)
+      }
+    }
+  }
+
+  const handleNativeImportMedia = async () => {
+    const result = await window.churchPresenterApi.openFileDialog({
+      title: 'Seleccionar Archivos de Medios',
+      filters: [
+        { name: 'Todos los Medios', extensions: ['mp4', 'webm', 'mov', 'mkv', 'jpg', 'jpeg', 'png', 'mp3', 'wav', 'pdf'] },
+        { name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'mkv'] },
+        { name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'webp'] },
+        { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+        { name: 'PDF', extensions: ['pdf'] }
+      ],
+      properties: ['openFile', 'multiSelections']
+    })
+    if (!result.canceled && result.filePaths.length > 0) {
+      for (const p of result.filePaths) {
+        await window.churchPresenterApi.importMediaFile(p)
+      }
+      await loadAllData()
+    }
+  }
+
+  const handleNativeImportFolder = async () => {
+    const result = await window.churchPresenterApi.openFolderDialog({
+      title: 'Seleccionar Carpeta de Medios'
+    })
+    if (!result.canceled && result.filePaths.length > 0) {
+      await window.churchPresenterApi.importMediaFolder(result.filePaths[0])
+      await loadAllData()
+    }
+  }
+
+  const handleCreateUserLibrary = async (name: string) => {
+    const newLib: UserLibrary = {
+      id: `lib_custom_${Date.now()}`,
+      name,
+      isSpecial: false,
+      sortOrder: userLibraries.length
+    }
+    await window.churchPresenterApi.saveLibrary(newLib)
+    const updated = await window.churchPresenterApi.getLibraries()
+    setUserLibraries(updated || [])
+    setActiveUserLibraryId(newLib.id)
+  }
+
+  const handleDeleteUserLibrary = async (id: string) => {
+    await window.churchPresenterApi.deleteLibrary(id)
+    const updated = await window.churchPresenterApi.getLibraries()
+    setUserLibraries(updated || [])
+    setActiveUserLibraryId('lib_songs')
+  }
+
+  const handleReorderPlaylistItem = (fromIdx: number, toIdx: number) => {
+    if (!currentService) return
+    const newItems = [...currentService.items]
+    const [moved] = newItems.splice(fromIdx, 1)
+    newItems.splice(toIdx, 0, moved)
+    const updated = { ...currentService, items: newItems }
+    setCurrentService(updated)
+    setSelectedServiceItemIndex(toIdx)
+    window.churchPresenterApi.saveService(updated)
+  }
+
+  const handleDeletePlaylistItem = (idx: number) => {
+    if (!currentService) return
+    const newItems = currentService.items.filter((_, i) => i !== idx)
+    const updated = { ...currentService, items: newItems }
+    setCurrentService(updated)
+    setSelectedServiceItemIndex(Math.max(0, idx - 1))
+    window.churchPresenterApi.saveService(updated)
+  }
+
+  const handleDuplicatePlaylistItem = (idx: number) => {
+    if (!currentService) return
+    const orig = currentService.items[idx]
+    const dup: ServiceItem = {
+      ...orig,
+      id: `item_${Date.now()}`,
+      name: `${orig.name} (Copia)`
+    }
+    const newItems = [...currentService.items]
+    newItems.splice(idx + 1, 0, dup)
+    const updated = { ...currentService, items: newItems }
+    setCurrentService(updated)
+    setSelectedServiceItemIndex(idx + 1)
+    window.churchPresenterApi.saveService(updated)
+  }
+
+  const handleAddSlideToCurrent = () => {
+    if (!currentSong) {
+      handleAddBlankItem()
+      return
+    }
+    const newGroup: SongGroup = {
+      id: `group_${Date.now()}`,
+      label: `Verso ${currentSong.groups.length + 1}`,
+      content: 'Nueva letra...'
+    }
+    const updatedSong: Song = {
+      ...currentSong,
+      groups: [...currentSong.groups, newGroup]
+    }
+    window.churchPresenterApi.saveSong(updatedSong).then(() => {
+      loadAllData()
+    })
+  }
+
+  const handleIdentifyDisplays = () => {
+    window.churchPresenterApi.openPreviewOutputWindow('main')
+    window.churchPresenterApi.openPreviewOutputWindow('stage')
+    window.churchPresenterApi.openPreviewOutputWindow('lobby')
+  }
+
+  // HTML5 Drag and Drop Handlers for Window
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingFiles(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (e.relatedTarget === null) {
+      setIsDraggingFiles(false)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingFiles(false)
+    const files = e.dataTransfer.files
+    if (!files || files.length === 0) return
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const nativePath = window.churchPresenterApi.getPathForFile(file)
+      if (!nativePath) continue
+
+      const ext = nativePath.split('.').pop()?.toLowerCase()
+      if (ext === 'pptx' || ext === 'ppt') {
+        try {
+          setIsImportingPpt(true)
+          const manifest = await window.churchPresenterApi.importPpt(nativePath)
+          await loadAllData()
+          if (currentService) {
+            const newItem: ServiceItem = {
+              id: `item_p_${Date.now()}_${i}`,
+              type: 'presentation',
+              name: manifest.fileName || file.name,
+              presentationId: manifest.presentationId
+            }
+            const updated = { ...currentService, items: [...currentService.items, newItem] }
+            await window.churchPresenterApi.saveService(updated)
+            setCurrentService(updated)
+          }
+        } catch (err: any) {
+          alert(`Error al importar PowerPoint: ${err.message}`)
+        } finally {
+          setIsImportingPpt(false)
+        }
+      } else if (['mp4', 'webm', 'mov', 'mkv', 'jpg', 'png', 'jpeg', 'mp3', 'wav', 'pdf'].includes(ext || '')) {
+        try {
+          const item = await window.churchPresenterApi.importMediaFile(nativePath)
+          await loadAllData()
+          if (currentService) {
+            const newItem: ServiceItem = {
+              id: `item_m_${Date.now()}_${i}`,
+              type: 'media',
+              name: item.originalName,
+              mediaId: item.id
+            }
+            const updated = { ...currentService, items: [...currentService.items, newItem] }
+            await window.churchPresenterApi.saveService(updated)
+            setCurrentService(updated)
+          }
+        } catch (err: any) {
+          alert(`Error al importar archivo: ${err.message}`)
+        }
+      }
+    }
+  }
+
   const activeTheme = state?.currentTheme || DEFAULT_THEME
 
   return (
-    <div className="operator-workspace">
-      {/* =========================================================
-          TOP BAR: Controls, Quick Actions & Status
-          ========================================================= */}
-      <header className="operator-topbar">
-        <div className="brand-section">
-          <div className="app-logo-badge">CP</div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="app-title">ChurchPresenter</span>
-              {isDev && (
-                <span className="dev-env-badge" id="dev-env-badge">
-                  DESARROLLO
-                </span>
-              )}
-            </div>
-            <div className="app-version">v{appVersion} | Modo Foco Seguro</div>
-          </div>
-        </div>
+    <div
+      className="pro-operator-container"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* 1. ProPresenter Top Menu Bar */}
+      <TopMenuBar
+        onNewService={handleCreateNewService}
+        onImportPpt={handleNativeImportPpt}
+        onImportMedia={handleNativeImportMedia}
+        onImportFolder={handleNativeImportFolder}
+        onExportService={handleExportLibrary}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onLoadDemoData={async () => {
+          await window.churchPresenterApi.loadDemoData()
+          await loadAllData()
+          alert('Datos de demostración cargados exitosamente.')
+        }}
+        onClearDemoData={async () => {
+          await window.churchPresenterApi.clearDemoData()
+          await loadAllData()
+          alert('Datos de demostración eliminados.')
+        }}
+        onToggleMediaDrawer={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+        onIdentifyDisplays={handleIdentifyDisplays}
+        onZoomIn={() => setSlideZoom((z) => Math.min(100, z + 15))}
+        onZoomOut={() => setSlideZoom((z) => Math.max(0, z - 15))}
+        onToggleViewMode={() => setSlideViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+        onOpenShortcutsHelp={() => setIsShortcutsHelpOpen(true)}
+      />
 
-        {/* Global Action Controls: F1 to F4 */}
-        <div className="global-controls-bar">
-          <button
-            className={`global-action-btn ${state?.controls.black ? 'active-black' : ''}`}
-            onClick={() => window.churchPresenterApi.toggleGlobalControl('black')}
-            title={`Negro (${shortcuts.black})`}
-          >
-            <Slash size={16} />
-            <span>NEGRO [{shortcuts.black}]</span>
-          </button>
+      {/* 2. ProPresenter Toolbar */}
+      <ProToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        activeMode={activeToolbarMode}
+        onModeChange={(m) => {
+          setActiveToolbarMode(m)
+          if (m === 'edit' && currentSong) {
+            handleOpenSongEditor(currentSong)
+          } else if (m === 'bible') {
+            setIsBibleImportModalOpen(false)
+          } else if (m === 'more') {
+            setIsSettingsModalOpen(true)
+          }
+        }}
+        onAddTextSlide={handleAddBlankItem}
+        onOpenThemeModal={() => setIsThemeModalOpen(true)}
+        state={state}
+        displays={displays}
+        assignments={assignments}
+        shortcuts={shortcuts}
+      />
 
-          <button
-            className={`global-action-btn ${state?.controls.clear ? 'active-clear' : ''}`}
-            onClick={() => window.churchPresenterApi.toggleGlobalControl('clear')}
-            title={`Limpiar (${shortcuts.clear})`}
-          >
-            <Eye size={16} />
-            <span>LIMPIAR [{shortcuts.clear}]</span>
-          </button>
-
-          <button
-            className={`global-action-btn ${state?.controls.logo ? 'active-logo' : ''}`}
-            onClick={() => window.churchPresenterApi.toggleGlobalControl('logo')}
-            title={`Logo (${shortcuts.logo})`}
-          >
-            <ShieldCheck size={16} />
-            <span>LOGO [{shortcuts.logo}]</span>
-          </button>
-
-          <button
-            className={`global-action-btn ${state?.controls.freeze ? 'active-freeze' : ''}`}
-            onClick={() => window.churchPresenterApi.toggleGlobalControl('freeze')}
-            title={`Congelar (${shortcuts.freeze})`}
-          >
-            <Snowflake size={16} />
-            <span>CONGELAR [{shortcuts.freeze}]</span>
-          </button>
-        </div>
-
-        {/* Stage Message Quick Bar */}
-        <div className="stage-message-bar">
-          <input
-            type="text"
-            className="stage-message-input"
-            placeholder="Mensaje a escenario (ej. 'Baja el volumen')..."
-            value={stageMessageText}
-            onChange={(e) => setStageMessageText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendStageMessage()}
+      {/* 3. Main Workspace: 3 Columns Layout */}
+      <div className="pro-main-columns-layout">
+        {/* Left Column: Library Collections (Top) + Service Playlist (Bottom) */}
+        <aside className="pro-left-column">
+          <LibraryPanel
+            libraries={userLibraries}
+            activeLibraryId={activeUserLibraryId}
+            onSelectLibrary={setActiveUserLibraryId}
+            onCreateLibrary={handleCreateUserLibrary}
+            onDeleteLibrary={handleDeleteUserLibrary}
+            songs={filteredSongs}
+            presentations={filteredPresentations}
+            mediaItems={mediaItems}
+            onItemSelect={(type, id) => {
+              if (type === 'song') {
+                const s = songs.find((x) => x.id === id)
+                if (s && currentService) {
+                  const item = {
+                    id: `item_s_${Date.now()}`,
+                    type: 'song',
+                    name: s.title,
+                    songId: s.id
+                  }
+                  const updated = { ...currentService, items: [...currentService.items, item] }
+                  setCurrentService(updated)
+                  setSelectedServiceItemIndex(updated.items.length - 1)
+                  window.churchPresenterApi.saveService(updated)
+                }
+              }
+            }}
+            onAddItemToPlaylist={(type, id, name) => {
+              if (currentService) {
+                const newItem = {
+                  id: `item_${Date.now()}`,
+                  type,
+                  name,
+                  songId: type === 'song' ? id : undefined,
+                  presentationId: type === 'presentation' ? id : undefined,
+                  mediaId: type === 'media' ? id : undefined
+                }
+                const updated = { ...currentService, items: [...currentService.items, newItem] }
+                setCurrentService(updated)
+                window.churchPresenterApi.saveService(updated)
+              }
+            }}
           />
-          <button
-            className={`stage-send-btn ${isStageMessageActive ? 'active' : ''}`}
-            onClick={handleSendStageMessage}
-            title="Enviar mensaje al monitor de escenario"
-          >
-            <Send size={14} />
-            <span>Enviar</span>
-          </button>
-          {isStageMessageActive && (
-            <button
-              className="stage-clear-btn"
-              onClick={handleClearStageMessage}
-              title="Quitar mensaje de escenario"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
 
-        {/* Phase 5A: Independent Background Audio Player */}
-        {independentAudio.mediaId && (
-          <div className="independent-audio-bar">
-            <Music size={13} className="audio-live-icon" />
-            <span className="audio-track-title">{independentAudio.title}</span>
-            <span className="audio-time-pill">{formatSeconds(independentAudio.currentTime)}</span>
-            <button
-              className="mini-audio-btn"
-              onClick={() => {
-                window.churchPresenterApi.controlIndependentAudio(
-                  independentAudio.isPlaying ? 'pause' : 'play'
-                )
-              }}
-              title={independentAudio.isPlaying ? 'Pausar' : 'Reanudar'}
-            >
-              {independentAudio.isPlaying ? <Pause size={12} /> : <Play size={12} />}
-            </button>
-            <button
-              className="mini-audio-btn fade"
-              onClick={() => {
-                window.churchPresenterApi.controlIndependentAudio('fade-out')
-              }}
-              title="Fundido suave de salida (Fade Out de 3s)"
-            >
-              Fundido
-            </button>
-            <button
-              className="mini-audio-btn stop"
-              onClick={() => {
-                window.churchPresenterApi.controlIndependentAudio('stop')
-              }}
-              title="Detener audio ambiental"
-            >
-              <Square size={11} fill="currentColor" />
-            </button>
-          </div>
-        )}
-
-        {/* Utility Buttons */}
-        <div className="topbar-actions">
-          <button
-            className="topbar-tool-btn"
-            onClick={() => setIsDisplaysModalOpen(true)}
-            title="Configuración de Pantallas Multi-salida"
-          >
-            <Monitor size={16} />
-            <span>Pantallas ({displays.length})</span>
-          </button>
-
-          <button
-            className="topbar-tool-btn"
-            onClick={() => setIsThemesModalOpen(true)}
-            title="Diseño y Temas de Salida"
-          >
-            <Palette size={16} />
-            <span>Temas</span>
-          </button>
-
-          <button
-            className="topbar-tool-btn"
-            onClick={() => setIsBackgroundsModalOpen(true)}
-            title="Fondos e Imágenes"
-          >
-            <ImageIcon size={16} />
-            <span>Fondos</span>
-          </button>
-
-          <button
-            className="topbar-tool-btn"
-            onClick={() => setIsSettingsOpen(true)}
-            title="Atajos, Datos de Demo y Respaldo"
-          >
-            <Settings size={16} />
-          </button>
-        </div>
-      </header>
-
-      {/* =========================================================
-          MAIN 3-ZONE LAYOUT
-          Zone 1: Library | Zone 2: Playlist | Zone 3: Slide Grid
-          ========================================================= */}
-      <main className="operator-main-zones">
-        {/* =======================================================
-            ZONE 1: BIBLIOTECA (Canciones, Presentaciones y Biblia)
-            ======================================================= */}
-        <section className="operator-zone zone-library">
-          <div className="zone-header">
-            <div className="zone-title">BIBLIOTECA</div>
-            <div className="library-tabs">
-              <button
-                className={`tab-btn ${libraryTab === 'songs' ? 'active' : ''}`}
-                onClick={() => setLibraryTab('songs')}
-              >
-                Canciones ({songs.length})
-              </button>
-              <button
-                className={`tab-btn ${libraryTab === 'presentations' ? 'active' : ''}`}
-                onClick={() => setLibraryTab('presentations')}
-              >
-                Avisos ({presentations.length})
-              </button>
-              <button
-                className={`tab-btn ${libraryTab === 'bible' ? 'active' : ''}`}
-                onClick={() => setLibraryTab('bible')}
-              >
-                Biblia
-              </button>
-              <button
-                className={`tab-btn ${libraryTab === 'media' ? 'active' : ''}`}
-                onClick={() => setLibraryTab('media')}
-              >
-                Medios ({mediaItems.length})
-              </button>
-            </div>
-          </div>
-
-          {/* TAB 1 & 2: Songs and Presentations */}
-          {libraryTab === 'songs' || libraryTab === 'presentations' ? (
-            <>
-              {/* Real-time search input */}
-              <div className="search-box">
-                <Search size={15} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Buscar título, letra, etiqueta o autor..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="search-input"
-                />
-                {searchQuery && (
-                  <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              {/* Library Items List */}
-              <div className="zone-content-list">
-                {libraryTab === 'songs' ? (
-                  filteredSongs.length > 0 ? (
-                    filteredSongs.map((song) => (
-                      <div key={song.id} className="library-item-card">
-                        <div className="item-info">
-                          <div className="item-title-row">
-                            <Music size={14} className="item-icon song-icon" />
-                            <span className="item-title">{song.title}</span>
-                            {song.isDemo && <span className="demo-badge">DEMO</span>}
-                          </div>
-                          <div className="item-meta">
-                            {song.author || 'Autor desconocido'} • {song.groups.length} partes
-                          </div>
-                        </div>
-                        <div className="item-actions">
-                          <button
-                            className="item-action-btn add-btn"
-                            onClick={() => handleAddItemToService('song', song.id, song.title)}
-                            title="Añadir a la lista de servicio"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <button
-                            className="item-action-btn edit-btn"
-                            onClick={() => handleOpenSongEditor(song)}
-                            title="Editar canción"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button
-                            className="item-action-btn delete-btn"
-                            onClick={() => handleDeleteSong(song.id, song.title)}
-                            title="Eliminar canción"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="empty-list-notice">
-                      No se encontraron canciones. Puede cargar himnos de demostración desde Configuración.
-                    </div>
+          <PlaylistPanel
+            currentService={currentService}
+            services={services}
+            onSelectService={(sid) => {
+              const found = services.find((s) => s.id === sid)
+              if (found) {
+                setCurrentService(found)
+                setSelectedServiceItemIndex(0)
+              }
+            }}
+            onNewService={handleCreateNewService}
+            selectedItemIndex={selectedServiceItemIndex}
+            onSelectItemIndex={setSelectedServiceItemIndex}
+            liveItemIndex={
+              currentService && liveSourceId
+                ? currentService.items.findIndex(
+                    (it) =>
+                      it.songId === liveSourceId ||
+                      it.presentationId === liveSourceId ||
+                      it.id === liveSourceId
                   )
-                ) : filteredPresentations.length > 0 ? (
-                  filteredPresentations.map((pres) => (
-                    <div key={pres.id} className="library-item-card">
-                      <div className="item-info">
-                        <div className="item-title-row">
-                          <FileText size={14} className="item-icon pres-icon" />
-                          <span className="item-title">{pres.title}</span>
-                          {pres.isDemo && <span className="demo-badge">DEMO</span>}
-                        </div>
-                        <div className="item-meta">{pres.slides.length} diapositivas</div>
-                      </div>
-                      <div className="item-actions">
-                        <button
-                          className="item-action-btn add-btn"
-                          onClick={() => handleAddItemToService('presentation', pres.id, pres.title)}
-                          title="Añadir a la lista de servicio"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-list-notice">No se encontraron presentaciones.</div>
-                )}
-              </div>
+                : null
+            }
+            onReorderItem={handleReorderPlaylistItem}
+            onDeleteItem={handleDeletePlaylistItem}
+            onDuplicateItem={handleDuplicatePlaylistItem}
+            onAddHeader={(headerName) => {
+              if (currentService) {
+                const newHeader = {
+                  id: `header_${Date.now()}`,
+                  type: 'header',
+                  name: headerName
+                }
+                const updated = { ...currentService, items: [...currentService.items, newHeader] }
+                setCurrentService(updated)
+                window.churchPresenterApi.saveService(updated)
+              }
+            }}
+            onAddBlankItem={handleAddBlankItem}
+          />
+        </aside>
 
-              {/* Zone 1 Footer Actions */}
-              <div className="zone-footer-actions">
-                {libraryTab === 'songs' ? (
-                  <button className="primary-action-btn" onClick={() => handleOpenSongEditor()}>
-                    <Plus size={14} />
-                    <span>Nueva Canción</span>
-                  </button>
-                ) : (
-                  <button
-                    className="primary-action-btn"
-                    onClick={() => handleOpenPresentationEditor()}
-                  >
-                    <Plus size={14} />
-                    <span>Nueva Presentación</span>
-                  </button>
-                )}
+        {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer */}
+        <section className="pro-center-column">
+          <SlideGridPanel
+            title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
+            subtitle={currentSong?.author}
+            slides={activeSlides}
+            selectedSlideIndex={previewSlideIndex}
+            onSelectSlideIndex={setPreviewSlideIndex}
+            liveSlideId={liveSlideId}
+            onGoLive={handleGoLive}
+            zoomLevel={slideZoom}
+            onZoomChange={setSlideZoom}
+            viewMode={slideViewMode}
+            onViewModeChange={setSlideViewMode}
+            onAddSlide={handleAddSlideToCurrent}
+            onOpenEditor={() => {
+              if (currentSong) handleOpenSongEditor(currentSong)
+            }}
+            theme={activeTheme}
+            arrangements={currentSong?.arrangements}
+            selectedArrangementId={selectedArrangementId}
+            onSelectArrangement={setSelectedArrangementId}
+          />
 
-                <div className="secondary-actions-row" style={{ alignItems: 'center' }}>
-                  <label className="secondary-action-btn file-upload-label" title="Importar Biblioteca JSON / CPR">
-                    <Upload size={13} />
-                    <span>Importar</span>
-                    <input
-                      type="file"
-                      accept=".json,.txt,.cpr"
-                      style={{ display: 'none' }}
-                      onChange={handleImportLibrary}
-                    />
-                  </label>
-
-                  <button
-                    className="secondary-action-btn"
-                    onClick={handleExportLibrary}
-                    title="Exportar toda la biblioteca"
-                  >
-                    <Download size={13} />
-                    <span>Exportar</span>
-                  </button>
-
-                  <label
-                    className="checkbox-label"
-                    style={{ fontSize: 11, cursor: 'pointer', marginLeft: 4 }}
-                    title="Incluir archivos de video, audio e imágenes dentro del archivo exportado (.cpr)"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={exportIncludeMedia}
-                      onChange={(e) => setExportIncludeMedia(e.target.checked)}
-                    />
-                    <span>+ Medios</span>
-                  </label>
-                </div>
-              </div>
-            </>
-          ) : libraryTab === 'bible' ? (
-            /* TAB 3: BIBLE CONTROLS & BROWSER */
-            <div className="bible-tab-container">
-              {/* Translation Selection Bar */}
-              <div className="bible-translations-bar">
-                <div className="bible-translation-select-group">
-                  <label>Traducción:</label>
-                  <select
-                    className="bible-select"
-                    value={primaryBibleAbbrev}
-                    onChange={(e) => setPrimaryBibleAbbrev(e.target.value)}
-                  >
-                    {bibleTranslations.map((t) => (
-                      <option key={t.id} value={t.abbrev}>
-                        {t.name} ({t.abbrev})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Dual translation toggle */}
-                <div className="dual-translation-toggle-row">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={isDualBibleActive}
-                      onChange={(e) => setIsDualBibleActive(e.target.checked)}
-                    />
-                    <span>Doble Traducción</span>
-                  </label>
-
-                  {isDualBibleActive && (
-                    <>
-                      <select
-                        className="bible-select mini"
-                        value={secondaryBibleAbbrev}
-                        onChange={(e) => setSecondaryBibleAbbrev(e.target.value)}
-                      >
-                        {bibleTranslations.map((t) => (
-                          <option key={t.id} value={t.abbrev}>
-                            {t.abbrev}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        className="bible-select mini"
-                        value={dualBibleLayout}
-                        onChange={(e) => setDualBibleLayout(e.target.value as any)}
-                        title="Disposición de doble traducción"
-                      >
-                        <option value="stacked">Apilado</option>
-                        <option value="sideBySide">Lado a Lado</option>
-                      </select>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Mode Switch: Go to Reference vs Text Search */}
-              <div className="bible-mode-switch">
-                <button
-                  className={`bible-mode-btn ${bibleSearchMode === 'reference' ? 'active' : ''}`}
-                  onClick={() => setBibleSearchMode('reference')}
-                >
-                  <BookOpen size={13} />
-                  <span>Ir a Referencia</span>
-                </button>
-                <button
-                  className={`bible-mode-btn ${bibleSearchMode === 'text' ? 'active' : ''}`}
-                  onClick={() => setBibleSearchMode('text')}
-                >
-                  <Search size={13} />
-                  <span>Buscar Palabras</span>
-                </button>
-              </div>
-
-              {/* REFERENCE MODE */}
-              {bibleSearchMode === 'reference' ? (
-                <div className="bible-reference-mode-box">
-                  <div className="bible-go-to-bar">
-                    <input
-                      type="text"
-                      className="bible-reference-input"
-                      placeholder="ej. Juan 3:16, 1 Co 13:4-7, Salmos 23..."
-                      value={bibleRefInput}
-                      onChange={(e) => setBibleRefInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          loadBiblePassage(bibleRefInput, false)
-                        }
-                      }}
-                    />
-                    <button
-                      className="bible-go-btn"
-                      onClick={() => loadBiblePassage(bibleRefInput, false)}
-                      title="Mostrar en Vista Previa (Enter)"
-                    >
-                      <Play size={13} fill="currentColor" />
-                      <span>Ir</span>
-                    </button>
-                  </div>
-
-                  {/* Actions for current loaded passage */}
-                  <div className="bible-passage-actions-row">
-                    <button
-                      className="secondary-action-btn mini-btn"
-                      onClick={() => {
-                        window.churchPresenterApi.toggleBibleFavorite(currentLoadedBibleRef).then(setBibleFavorites)
-                      }}
-                      title="Marcar / desmarcar como favorito"
-                    >
-                      <Star
-                        size={12}
-                        fill={bibleFavorites.includes(currentLoadedBibleRef) ? '#fbbf24' : 'none'}
-                        color={bibleFavorites.includes(currentLoadedBibleRef) ? '#fbbf24' : '#94a3b8'}
-                      />
-                      <span>Favorito</span>
-                    </button>
-
-                    <button
-                      className="primary-action-btn mini-btn"
-                      onClick={() =>
-                        handleAddItemToService('scripture', `scr_${Date.now()}`, currentLoadedBibleRef, currentLoadedBibleRef)
-                      }
-                      title="Añadir pasaje a la lista del servicio"
-                    >
-                      <Plus size={12} />
-                      <span>Al Servicio</span>
-                    </button>
-                  </div>
-
-                  {/* Favorites Quick Chips */}
-                  {bibleFavorites.length > 0 && (
-                    <div className="quick-references-section">
-                      <div className="section-subtitle">
-                        <Star size={11} color="#fbbf24" fill="#fbbf24" />
-                        <span>Favoritos</span>
-                      </div>
-                      <div className="chips-cloud">
-                        {bibleFavorites.map((fav) => (
-                          <button
-                            key={fav}
-                            className="ref-chip"
-                            onClick={() => loadBiblePassage(fav, false)}
-                          >
-                            {fav}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent History Quick Chips */}
-                  {bibleRecentHistory.length > 0 && (
-                    <div className="quick-references-section">
-                      <div className="section-subtitle">
-                        <History size={11} />
-                        <span>Recientes</span>
-                      </div>
-                      <div className="chips-cloud">
-                        {bibleRecentHistory.slice(0, 8).map((rec) => (
-                          <button
-                            key={rec}
-                            className="ref-chip recent"
-                            onClick={() => loadBiblePassage(rec, false)}
-                          >
-                            {rec}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* TEXT SEARCH MODE */
-                <div className="bible-text-search-box">
-                  <div className="search-box">
-                    <Search size={14} className="search-icon" />
-                    <input
-                      type="text"
-                      className="search-input"
-                      placeholder="Buscar palabras (ej. amor mundo)..."
-                      value={bibleTextQuery}
-                      onChange={(e) => setBibleTextQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleRunBibleTextSearch()}
-                    />
-                    <button className="bible-go-btn" onClick={handleRunBibleTextSearch}>
-                      Buscar
-                    </button>
-                  </div>
-
-                  {/* Filters by Testament */}
-                  <div className="bible-filters-row">
-                    <button
-                      className={`filter-pill ${bibleTestamentFilter === 'ALL' ? 'active' : ''}`}
-                      onClick={() => setBibleTestamentFilter('ALL')}
-                    >
-                      Todos
-                    </button>
-                    <button
-                      className={`filter-pill ${bibleTestamentFilter === 'OT' ? 'active' : ''}`}
-                      onClick={() => setBibleTestamentFilter('OT')}
-                    >
-                      Antiguo Testamento
-                    </button>
-                    <button
-                      className={`filter-pill ${bibleTestamentFilter === 'NT' ? 'active' : ''}`}
-                      onClick={() => setBibleTestamentFilter('NT')}
-                    >
-                      Nuevo Testamento
-                    </button>
-                  </div>
-
-                  {/* Search Results List */}
-                  <div className="bible-search-results-list">
-                    {bibleSearchResults.length > 0 ? (
-                      bibleSearchResults.map((res, rIdx) => (
-                        <div
-                          key={rIdx}
-                          className="bible-search-card"
-                          onClick={() => {
-                            loadBiblePassage(res.formattedReference, false)
-                          }}
-                        >
-                          <div className="bible-card-ref">{res.formattedReference}</div>
-                          <div
-                            className="bible-card-text"
-                            dangerouslySetInnerHTML={{ __html: res.highlightedText }}
-                          />
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-list-notice">
-                        {bibleTextQuery ? 'Sin resultados para la búsqueda.' : 'Escriba palabras para buscar en toda la Biblia.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Bible Zone Footer Tools */}
-              <div className="zone-footer-actions">
-                <div className="secondary-actions-row">
-                  <button
-                    className="secondary-action-btn"
-                    onClick={() => setIsBibleImportModalOpen(true)}
-                    title="Importar traducción (Zefania, OSIS, USFM, JSON)"
-                  >
-                    <Upload size={13} />
-                    <span>Importar Versión</span>
-                  </button>
-                  <button
-                    className="secondary-action-btn"
-                    onClick={() => setIsBibleManagerModalOpen(true)}
-                    title="Ver traducciones instaladas"
-                  >
-                    <Book size={13} />
-                    <span>Versiones ({bibleTranslations.length})</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* TAB 4: MEDIA LIBRARY (Videos, Audios, Images, PDFs) */
-            <div className="media-tab-container">
-              {/* Media Filter Pills */}
-              <div className="media-filters-bar">
-                <button
-                  className={`filter-pill ${mediaFilterType === 'all' ? 'active' : ''}`}
-                  onClick={() => setMediaFilterType('all')}
-                >
-                  Todos ({mediaItems.length})
-                </button>
-                <button
-                  className={`filter-pill ${mediaFilterType === 'video' ? 'active' : ''}`}
-                  onClick={() => setMediaFilterType('video')}
-                >
-                  Videos
-                </button>
-                <button
-                  className={`filter-pill ${mediaFilterType === 'audio' ? 'active' : ''}`}
-                  onClick={() => setMediaFilterType('audio')}
-                >
-                  Audios
-                </button>
-                <button
-                  className={`filter-pill ${mediaFilterType === 'image' ? 'active' : ''}`}
-                  onClick={() => setMediaFilterType('image')}
-                >
-                  Imágenes / PDF
-                </button>
-              </div>
-
-              {/* Media Tag Filter Chips */}
-              {allMediaTags.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 4px', marginBottom: 6 }}>
-                  <button
-                    className={`media-tag-chip ${selectedMediaTag === 'all' ? 'active' : ''}`}
-                    onClick={() => setSelectedMediaTag('all')}
-                  >
-                    Todas las etiquetas
-                  </button>
-                  {allMediaTags.map((tag) => (
-                    <button
-                      key={tag}
-                      className={`media-tag-chip ${selectedMediaTag === tag ? 'active' : ''}`}
-                      onClick={() => setSelectedMediaTag(tag)}
-                    >
-                      #{tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Media Search Input */}
-              <div className="search-box">
-                <Search size={14} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Buscar medios por nombre o etiqueta..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-
-              {/* Media Items List */}
-              <div className="zone-content-list media-list">
-                {filteredMediaItems.length > 0 ? (
-                  filteredMediaItems.map((item) => (
-                    <div key={item.id} className="library-item-card media-card">
-                      <div className="item-info">
-                        <div className="item-title-row">
-                          {item.mediaType === 'video' ? (
-                            <Video size={14} className="item-icon video-icon" />
-                          ) : item.mediaType === 'audio' ? (
-                            <Music size={14} className="item-icon audio-icon" />
-                          ) : (
-                            <ImageIcon size={14} className="item-icon image-icon" />
-                          )}
-                          <span className="item-title">{item.originalName}</span>
-                          {item.isMissing && <span className="missing-badge">FALTANTE</span>}
-                        </div>
-                        <div className="item-meta">
-                          {item.container} {item.codec ? `(${item.codec})` : ''} • {(item.fileSize / (1024 * 1024)).toFixed(1)} MB
-                          {item.duration > 0 && ` • ${formatSeconds(item.duration)}`}
-                        </div>
-                      </div>
-
-                      <div className="item-actions">
-                        <button
-                          className="item-action-btn add-btn"
-                          title="Añadir a la lista del servicio"
-                          onClick={() => {
-                            if (item.mediaType === 'video') {
-                              handleAddItemToService('video', item.id, item.originalName)
-                            } else if (item.mediaType === 'audio') {
-                              handleAddItemToService('audio', item.id, item.originalName)
-                            } else if (item.originalName.toLowerCase().endsWith('.pdf')) {
-                              handleAddItemToService('pdf', item.id, item.originalName)
-                            } else {
-                              handleAddItemToService('image_presentation', item.id, item.originalName)
-                            }
-                          }}
-                        >
-                          <Plus size={14} />
-                        </button>
-
-                        {item.mediaType === 'audio' && (
-                          <button
-                            className="item-action-btn play-audio-btn"
-                            title="Reproducir música ambiental de fondo"
-                            onClick={() => {
-                              window.churchPresenterApi.playIndependentAudio(
-                                item.id,
-                                item.filePath,
-                                item.originalName
-                              )
-                            }}
-                          >
-                            <Play size={13} />
-                          </button>
-                        )}
-
-                        <button
-                          className="item-action-btn delete-btn"
-                          title="Eliminar medio"
-                          onClick={async () => {
-                            if (confirm(`¿Eliminar definitivamente el medio "${item.originalName}"?`)) {
-                              await window.churchPresenterApi.deleteMediaItem(item.id)
-                              loadAllData()
-                            }
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-list-notice">
-                    No se encontraron archivos de medios. Haga clic en "+ Importar Medio".
-                  </div>
-                )}
-              </div>
-
-              {/* Media Footer Actions */}
-              <div className="zone-footer-actions">
-                <button
-                  className="primary-action-btn"
-                  onClick={() => setIsMediaImportModalOpen(true)}
-                >
-                  <Plus size={14} />
-                  <span>Importar Medio</span>
-                </button>
-
-                <button
-                  className="secondary-action-btn"
-                  onClick={() => setIsFolderImportModalOpen(true)}
-                  title="Importar una carpeta completa con imágenes"
-                >
-                  <FolderPlus size={13} />
-                  <span>+ Carpeta</span>
-                </button>
-
-                <button
-                  className="secondary-action-btn"
-                  onClick={() => setIsPptImportModalOpen(true)}
-                  title="Importar presentación PowerPoint (.pptx)"
-                >
-                  <Film size={13} />
-                  <span>+ PowerPoint</span>
-                </button>
-
-                <button
-                  className="secondary-action-btn"
-                  onClick={async () => {
-                    const res = await window.churchPresenterApi.checkMediaIntegrity()
-                    if (res.missingCount === 0) {
-                      alert('Todos los archivos de medios están íntegros y presentes en disco.')
-                    } else {
-                      alert(`Atención: Se detectaron ${res.missingCount} archivo(s) faltantes o dañados en disco.`)
-                    }
-                    loadAllData()
-                  }}
-                  title="Verificar si los archivos físicos existen en disco"
-                >
-                  <ShieldCheck size={13} />
-                  <span>Integridad</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* =======================================================
-            ZONE 2: LISTA DEL SERVICIO (Service Playlist)
-            ======================================================= */}
-        <section className="operator-zone zone-playlist">
-          <div className="zone-header">
-            <div className="playlist-title-box">
-              <div className="zone-title">SERVICIO</div>
-              {services.length > 1 && (
-                <select
-                  className="service-selector-dropdown"
-                  value={currentService?.id || ''}
-                  onChange={(e) => {
-                    const found = services.find((s) => s.id === e.target.value)
-                    if (found) {
-                      setCurrentService(found)
-                      setSelectedServiceItemIndex(0)
-                    }
-                  }}
-                >
-                  {services.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <input
-                type="text"
-                className="service-name-input"
-                value={currentService?.name || ''}
-                onChange={(e) => {
-                  if (currentService) {
-                    setCurrentService({ ...currentService, name: e.target.value })
-                  }
-                }}
-                onBlur={() => {
-                  if (currentService) {
-                    window.churchPresenterApi.saveService(currentService)
-                  }
-                }}
-                placeholder="Nombre del Servicio"
-              />
-            </div>
-
-            <div className="service-quick-actions">
-              <button
-                className="mini-icon-btn"
-                onClick={handleCreateNewService}
-                title="Nuevo servicio en blanco"
-              >
-                <Plus size={14} />
-              </button>
-              <button
-                className="mini-icon-btn"
-                onClick={handleDuplicateCurrentService}
-                title="Duplicar servicio actual"
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                className="mini-icon-btn"
-                onClick={handleSaveAsTemplate}
-                title="Guardar como plantilla de servicio"
-              >
-                <Sparkles size={14} />
-              </button>
-              <button
-                className="mini-icon-btn"
-                onClick={() => setIsTemplateModalOpen(true)}
-                title="Cargar desde plantilla"
-              >
-                <FolderOpen size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Add Separator / Blank bar */}
-          <div className="playlist-add-helpers">
-            <button className="helper-add-btn" onClick={handleAddBlankItem}>
-              <Minus size={12} />
-              <span>+ En Blanco</span>
-            </button>
-            <button className="helper-add-btn" onClick={handleAddHeaderItem}>
-              <Layers size={12} />
-              <span>+ Separador</span>
-            </button>
-          </div>
-
-          {/* Playlist Items */}
-          <div className="zone-content-list">
-            {currentService && currentService.items.length > 0 ? (
-              currentService.items.map((item, index) => {
-                const isSelected = selectedServiceItemIndex === index
-                const songData = item.type === 'song' ? songs.find((s) => s.id === item.songId) : null
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`playlist-item-card ${isSelected ? 'selected' : ''} ${item.type === 'header' ? 'item-header-type' : ''} ${item.type === 'scripture' ? 'item-scripture-type' : ''}`}
-                    onClick={() => {
-                      setSelectedServiceItemIndex(index)
-                      setPreviewSlideIndex(0)
-                    }}
-                  >
-                    <div className="playlist-index">{index + 1}</div>
-
-                    <div className="playlist-item-details">
-                      <div className="playlist-item-title-row">
-                        {item.type === 'song' ? (
-                          <Music size={13} className="song-icon" />
-                        ) : item.type === 'presentation' ? (
-                          <FileText size={13} className="pres-icon" />
-                        ) : item.type === 'powerpoint' ? (
-                          <Film size={13} style={{ color: '#eab308' }} />
-                        ) : item.type === 'video' ? (
-                          <Video size={13} className="video-icon" />
-                        ) : item.type === 'pdf' ? (
-                          <FileText size={13} style={{ color: '#f43f5e' }} />
-                        ) : item.type === 'image_presentation' ? (
-                          <ImageIcon size={13} className="image-icon" />
-                        ) : item.type === 'scripture' ? (
-                          <BookOpen size={13} className="scripture-icon" />
-                        ) : item.type === 'header' ? (
-                          <Layers size={13} className="header-icon" />
-                        ) : (
-                          <Minus size={13} className="blank-icon" />
-                        )}
-                        <span className="playlist-item-name">{item.name}</span>
-                      </div>
-
-                      {/* Song Arrangement Selector Dropdown */}
-                      {songData && songData.arrangements.length > 1 && (
-                        <div className="arrangement-selector-box" onClick={(e) => e.stopPropagation()}>
-                          <label>Arreglo:</label>
-                          <select
-                            className="arrangement-select"
-                            value={item.arrangementId || songData.arrangements.find((a) => a.isDefault)?.id}
-                            onChange={(e) => handleServiceArrangementChange(index, e.target.value)}
-                          >
-                            {songData.arrangements.map((arr) => (
-                              <option key={arr.id} value={arr.id}>
-                                {arr.name} ({arr.groupIds.length} partes)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="playlist-item-controls" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="control-btn"
-                        onClick={() => handleMovePlaylistItem(index, 'up')}
-                        disabled={index === 0}
-                        title="Subir"
-                      >
-                        <ArrowUp size={12} />
-                      </button>
-                      <button
-                        className="control-btn"
-                        onClick={() => handleMovePlaylistItem(index, 'down')}
-                        disabled={index === currentService.items.length - 1}
-                        title="Bajar"
-                      >
-                        <ArrowDown size={12} />
-                      </button>
-                      <button
-                        className="control-btn delete-btn"
-                        onClick={() => handleRemovePlaylistItem(index)}
-                        title="Quitar de la lista"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                )
+          {/* Collapsible Media Drawer */}
+          <MediaDrawer
+            isOpen={isMediaDrawerOpen}
+            onToggle={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
+            mediaItems={mediaItems}
+            onImportFile={handleNativeImportMedia}
+            onImportFolder={handleNativeImportFolder}
+            onPlayMedia={(item) => {
+              window.churchPresenterApi.playVideo({
+                mediaId: item.id,
+                mediaPath: item.filePath,
+                loop: true,
+                volume: 1.0,
+                endAction: 'freeze',
+                audioOutputRole: 'main'
               })
-            ) : (
-              <div className="empty-list-notice">
-                La lista de servicio está vacía. Añada canciones, pasajes bíblicos o avisos.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* =======================================================
-            ZONE 3: CUADRÍCULA DE DIAPOSITIVAS Y MONITORES
-            ======================================================= */}
-        <section className="operator-zone zone-slides">
-          {/* Header of Zone 3 */}
-          <div className="zone-header">
-            <div className="active-item-title-box">
-              <div className="zone-title">DIAPOSITIVAS</div>
-              <div className="active-item-name">
-                {libraryTab === 'bible' && bibleDirectSlides.length > 0
-                  ? currentLoadedBibleRef
-                  : currentServiceItem?.name || 'Ningún elemento seleccionado'}
-              </div>
-            </div>
-
-            <div className="slides-header-actions">
-              {/* Alert if edited while live */}
-              {isLiveDirty && (
-                <button
-                  className="update-live-btn"
-                  onClick={handleUpdateLiveProjection}
-                  title="Aplicar cambios de la canción en vivo"
-                >
-                  <AlertCircle size={14} />
-                  <span>Actualizar en vivo</span>
-                </button>
-              )}
-
-              {currentSong && (
-                <button
-                  className="secondary-action-btn"
-                  onClick={() => handleOpenSongEditor(currentSong)}
-                >
-                  <Edit3 size={13} />
-                  <span>Editar Canción</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Dual Live / Preview Mini Monitors */}
-          <div className="monitors-preview-bar">
-            {/* Live Monitor */}
-            <div className="mini-monitor-box live-box">
-              <div className="monitor-header">
-                <span className="live-pill">EN VIVO</span>
-                <span className="monitor-label">Salida Principal</span>
-              </div>
-              <div className="monitor-screen">
-                {state?.currentSlide?.mediaType === 'video' ? (
-                  <div className="monitor-text" style={{ color: '#38bdf8' }}>
-                    ▶ REPRODUCIENDO VIDEO: {state.currentSlide.title}
-                  </div>
-                ) : state?.currentSlide?.mediaType === 'pdf' ? (
-                  <div className="monitor-text" style={{ color: '#fbbf24' }}>
-                    📄 PDF: {state.currentSlide.title} (Pág {state.currentSlide.pdfPage})
-                  </div>
-                ) : state?.currentSlide?.body ? (
-                  <div className="monitor-text">{state.currentSlide.body}</div>
-                ) : (
-                  <div className="monitor-empty">(Pantalla en blanco)</div>
-                )}
-              </div>
-            </div>
-
-            {/* Preview Monitor */}
-            <div className="mini-monitor-box preview-box">
-              <div className="monitor-header">
-                <span className="preview-pill">VISTA PREVIA</span>
-                <button className="send-to-live-btn" onClick={sendPreviewToLive}>
-                  <Play size={12} fill="currentColor" />
-                  <span>Proyectar (Enter)</span>
-                </button>
-              </div>
-              <div className="monitor-screen">
-                {activeSlides[previewSlideIndex]?.sourceType === 'video' ? (
-                  <div className="monitor-text" style={{ color: '#38bdf8' }}>
-                    VIDEO: {activeSlides[previewSlideIndex].title}
-                  </div>
-                ) : activeSlides[previewSlideIndex]?.sourceType === 'pdf' ? (
-                  <div className="monitor-text" style={{ color: '#fbbf24' }}>
-                    PDF: {activeSlides[previewSlideIndex].title} ({activeSlides[previewSlideIndex].subtitle})
-                  </div>
-                ) : activeSlides[previewSlideIndex]?.body ? (
-                  <div className="monitor-text">{activeSlides[previewSlideIndex].body}</div>
-                ) : (
-                  <div className="monitor-empty">(Sin selección)</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Phase 5A: Video Control Deck (shown when video item is active) */}
-          {currentServiceItem?.type === 'video' && (
-            <div className="video-control-deck">
-              <div className="video-transport-bar">
-                <button
-                  className="transport-main-btn"
-                  onClick={() => {
-                    const action = isVideoPlaying ? 'pause' : 'play'
-                    window.churchPresenterApi.controlVideo(action)
-                    setIsVideoPlaying(!isVideoPlaying)
-                  }}
-                  title="Reproducir / Pausar (Espacio)"
-                >
-                  {isVideoPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
-                  <span>{isVideoPlaying ? 'Pausar' : 'Reproducir'}</span>
-                </button>
-
-                <button
-                  className="transport-sec-btn"
-                  onClick={() => {
-                    window.churchPresenterApi.controlVideo('stop')
-                    setIsVideoPlaying(false)
-                  }}
-                  title="Detener video y volver al inicio"
-                >
-                  <Square size={13} fill="currentColor" />
-                  <span>Detener</span>
-                </button>
-
-                <button
-                  className="transport-sec-btn"
-                  onClick={() => {
-                    window.churchPresenterApi.controlVideo('seek', Math.max(0, videoCurrentTime - 10))
-                  }}
-                  title="Retroceder 10 segundos"
-                >
-                  <RotateCcw size={12} />
-                  <span>-10s</span>
-                </button>
-
-                <button
-                  className="transport-sec-btn"
-                  onClick={() => {
-                    window.churchPresenterApi.controlVideo('seek', videoCurrentTime + 10)
-                  }}
-                  title="Avanzar 10 segundos"
-                >
-                  <span>+10s</span>
-                </button>
-
-                {/* Scrubber time slider */}
-                <div className="scrubber-container">
-                  <span className="time-label">{formatSeconds(videoCurrentTime)}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={videoDuration || 100}
-                    step={0.5}
-                    value={videoCurrentTime}
-                    onChange={(e) => {
-                      const t = parseFloat(e.target.value)
-                      setVideoCurrentTime(t)
-                      window.churchPresenterApi.controlVideo('seek', t)
-                    }}
-                    className="time-slider"
-                  />
-                  <span className="time-label">{formatSeconds(videoDuration)}</span>
-                </div>
-
-                {/* Volume slider */}
-                <div className="volume-slider-box">
-                  {videoVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={videoVolume}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value)
-                      setVideoVolume(v)
-                      window.churchPresenterApi.controlIndependentAudio('volume', v)
-                    }}
-                    className="volume-slider"
-                  />
-                </div>
-              </div>
-
-              {/* Video Options & Routing */}
-              <div className="video-options-grid">
-                <div className="video-option-item">
-                  <label>Punto Entrada (in):</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={videoInPoint}
-                    onChange={(e) => setVideoInPoint(parseFloat(e.target.value) || 0)}
-                    className="mini-num-input"
-                  />
-                  <span>seg</span>
-                </div>
-
-                <div className="video-option-item">
-                  <label>Punto Salida (out):</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={videoOutPoint}
-                    onChange={(e) => setVideoOutPoint(parseFloat(e.target.value) || 0)}
-                    className="mini-num-input"
-                  />
-                  <span>seg</span>
-                </div>
-
-                <div className="video-option-item">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={videoLoop}
-                      onChange={(e) => setVideoLoop(e.target.checked)}
-                    />
-                    <span>Bucle</span>
-                  </label>
-                </div>
-
-                <div className="video-option-item">
-                  <label>Fin del video:</label>
-                  <select
-                    value={videoEndAction}
-                    onChange={(e) => setVideoEndAction(e.target.value as any)}
-                    className="mini-select"
-                  >
-                    <option value="freeze">Congelar último fotograma</option>
-                    <option value="background">Volver al fondo</option>
-                    <option value="next">Avanzar al siguiente</option>
-                  </select>
-                </div>
-
-                <div className="video-option-item">
-                  <label>Audio por:</label>
-                  <select
-                    value={audioOutputRole}
-                    onChange={(e) => setAudioOutputRole(e.target.value)}
-                    className="mini-select"
-                  >
-                    <option value="main">Sala Principal (main)</option>
-                    <option value="stage">Escenario (stage)</option>
-                    <option value="lobby">Vestíbulo / Lobby</option>
-                  </select>
-                </div>
-
-                <div className="video-option-item">
-                  <label>Fundido Entrada:</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.5}
-                    value={videoFadeInSec}
-                    onChange={(e) => setVideoFadeInSec(parseFloat(e.target.value) || 0)}
-                    className="mini-num-input"
-                  />
-                  <span>seg</span>
-                </div>
-
-                <div className="video-option-item">
-                  <label>Fundido Salida:</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.5}
-                    value={videoFadeOutSec}
-                    onChange={(e) => setVideoFadeOutSec(parseFloat(e.target.value) || 0)}
-                    className="mini-num-input"
-                  />
-                  <span>seg</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Phase 5A: PDF Fit Mode Switcher (shown when PDF item is active) */}
-          {currentServiceItem?.type === 'pdf' && (
-            <div className="pdf-toolbar-bar">
-              <span className="pdf-info-label">
-                Documento PDF: {pdfPageCount} páginas detectadas
-              </span>
-              <div className="pdf-fit-mode-group">
-                <label>Ajuste de página:</label>
-                <button
-                  className={`filter-pill ${pdfFitMode === 'contain' ? 'active' : ''}`}
-                  onClick={() => setPdfFitMode('contain')}
-                >
-                  Encajar completo
-                </button>
-                <button
-                  className={`filter-pill ${pdfFitMode === 'cover' ? 'active' : ''}`}
-                  onClick={() => setPdfFitMode('cover')}
-                >
-                  Rellenar
-                </button>
-                <button
-                  className={`filter-pill ${pdfFitMode === 'center' ? 'active' : ''}`}
-                  onClick={() => setPdfFitMode('center')}
-                >
-                  Centrado
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Phase 5B: PowerPoint Toolbar Bar */}
-          {currentServiceItem?.type === 'powerpoint' && (
-            <div className="pdf-toolbar-bar" style={{ background: '#1e1e38', borderColor: '#4338ca' }}>
-              <span className="pdf-info-label" style={{ color: '#a5b4fc' }}>
-                Presentación PowerPoint: {activeSlides.length} diapositivas
-              </span>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  className="secondary-action-btn mini-btn"
-                  onClick={() => {
-                    if (currentServiceItem.powerpointConfig?.originalPath) {
-                      window.churchPresenterApi.editInPowerPoint(currentServiceItem.powerpointConfig.originalPath)
-                    }
-                  }}
-                  title="Abrir en Microsoft PowerPoint para editar"
-                >
-                  <ExternalLink size={12} />
-                  <span>Editar en PowerPoint</span>
-                </button>
-
-                <button
-                  className="secondary-action-btn mini-btn"
-                  onClick={async () => {
-                    if (currentServiceItem.powerpointConfig) {
-                      try {
-                        const modified = await window.churchPresenterApi.checkPowerPointModified(
-                          currentServiceItem.powerpointConfig.originalPath,
-                          currentServiceItem.powerpointConfig.hash
-                        )
-                        if (modified) {
-                          if (
-                            confirm(
-                              'Se detectaron cambios en el archivo PowerPoint original.\n¿Desea reimportar las diapositivas actualizadas?'
-                            )
-                          ) {
-                            const manifest = await window.churchPresenterApi.importPowerPoint(
-                              currentServiceItem.powerpointConfig.originalPath
-                            )
-                            setPptManifests((prev) => ({
-                              ...prev,
-                              [manifest.hash]: manifest,
-                              [manifest.originalPath]: manifest
-                            }))
-                            alert('Diapositivas de PowerPoint actualizadas con éxito.')
-                          }
-                        } else {
-                          alert('El archivo PowerPoint no ha sido modificado externamente.')
-                        }
-                      } catch (err: any) {
-                        alert(`Error al verificar: ${err.message}`)
-                      }
-                    }
-                  }}
-                  title="Comprobar si el archivo fue modificado"
-                >
-                  <RefreshCw size={12} />
-                  <span>Comprobar Cambios</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Slide Cards Grid */}
-          <div className="slides-grid-container">
-            {activeSlides.length > 0 ? (
-              activeSlides.map((slide, idx) => {
-                const isSelected = previewSlideIndex === idx
-                const isLive = liveSlideId === slide.id
-
-                return (
-                  <div
-                    key={slide.id}
-                    className={`slide-card ${isSelected ? 'selected-preview' : ''} ${isLive ? 'is-live' : ''}`}
-                    onClick={() => setPreviewSlideIndex(idx)}
-                    onDoubleClick={() => handleGoLive(slide, activeSlides[idx + 1])}
-                  >
-                    <div className="slide-card-header">
-                      <span className="slide-group-label">{slide.groupLabel || `Diapositiva ${idx + 1}`}</span>
-                      {isLive && <span className="live-badge">EN VIVO</span>}
-                    </div>
-
-                    <div className="slide-card-body">
-                      {slide.sourceType === 'powerpoint' && slide.mediaUrl ? (
-                        <div style={{ textAlign: 'center' }}>
-                          <img
-                            src={slide.mediaUrl}
-                            alt={slide.title}
-                            style={{ width: '100%', maxHeight: 90, objectFit: 'contain', borderRadius: 4, marginBottom: 4 }}
-                          />
-                          {slide.warnings && slide.warnings.length > 0 && (
-                            <div className="ppt-warning-pill" title={slide.warnings.join(' • ')}>
-                              ⚠ {slide.warnings.length} advertencia(s)
-                            </div>
-                          )}
-                          {slide.speakerNotes && (
-                            <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 4, textAlign: 'left' }} title={slide.speakerNotes}>
-                              📝 {slide.speakerNotes.slice(0, 45)}...
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        slide.body || '(Diapositiva en blanco)'
-                      )}
-                    </div>
-
-                    <div className="slide-card-footer">
-                      <span>#{idx + 1}</span>
-                      <span className="hint-text">Doble clic para proyectar</span>
-                    </div>
-                  </div>
-                )
+            }}
+            onSetAsBackground={(item) => {
+              window.churchPresenterApi.setBackground({
+                type: item.mediaType === 'video' ? 'video' : 'image',
+                value: item.filePath
               })
-            ) : (
-              <div className="empty-grid-notice">
-                Seleccione un elemento del servicio o busque un pasaje bíblico para proyectar.
-              </div>
-            )}
-          </div>
+            }}
+          />
         </section>
-      </main>
+
+        {/* Right Column: Preview, Audio VU, Layers, Transport & Timers */}
+        <aside className="pro-right-panel">
+          <RightSidePanel
+            state={state}
+            currentSlide={activeSlides[previewSlideIndex] || null}
+            timers={presentationTimers}
+            onControlTimer={async (id, action) => {
+              await window.churchPresenterApi.controlTimer(id, action)
+            }}
+            onSaveTimer={async (timer) => {
+              await window.churchPresenterApi.saveTimer(timer)
+              const updated = await window.churchPresenterApi.getTimers()
+              setPresentationTimers(updated || [])
+            }}
+            onDeleteTimer={async (id) => {
+              await window.churchPresenterApi.deleteTimer(id)
+              const updated = await window.churchPresenterApi.getTimers()
+              setPresentationTimers(updated || [])
+            }}
+            onClearLayer={(layer) => {
+              if (layer === 'all') {
+                window.churchPresenterApi.toggleGlobalControl('clear')
+              } else if (layer === 'background') {
+                window.churchPresenterApi.clearBackground()
+              } else if (layer === 'slide') {
+                window.churchPresenterApi.clearSlide()
+              } else if (layer === 'audio') {
+                window.churchPresenterApi.controlIndependentAudio('stop')
+              } else if (layer === 'media') {
+                window.churchPresenterApi.controlVideo('stop')
+              } else if (layer === 'message') {
+                handleClearStageMessage()
+              }
+            }}
+            onControlVideo={(action, time) => {
+              window.churchPresenterApi.controlVideo(action, time)
+            }}
+          />
+        </aside>
+      </div>
+
+      {/* Drag & Drop Overlay */}
+      <FileDropOverlay isDragging={isDraggingFiles} />
+
+      {/* External File Watcher Toast */}
+      <FileWatcherToast
+        event={fileWatcherEvent}
+        onRefresh={async (evt) => {
+          try {
+            if (evt.type === 'powerpoint') {
+              await window.churchPresenterApi.importPpt(evt.filePath)
+            } else {
+              await window.churchPresenterApi.importMediaFile(evt.filePath)
+            }
+            await loadAllData()
+            setToasts((prev) => [
+              ...prev,
+              {
+                id: `watcher_ref_${Date.now()}`,
+                title: 'Archivo Actualizado',
+                message: 'El contenido externo se ha sincronizado correctamente.',
+                type: 'info',
+                timestamp: Date.now()
+              }
+            ])
+          } catch (err) {
+            alert(`Error al actualizar archivo: ${err.message}`)
+          }
+          setFileWatcherEvent(null)
+        }}
+        onDismiss={() => setFileWatcherEvent(null)}
+      />
 
       {/* =========================================================
           FIRST-TIME LAUNCH DEMO PROMPT MODAL

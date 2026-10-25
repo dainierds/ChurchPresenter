@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-events'
 import {
   ChurchPresenterApi,
@@ -23,7 +23,12 @@ import {
   RoleBibleConfigsMap,
   MediaType,
   MediaItem,
-  VideoItemConfig
+  VideoItemConfig,
+  UserLibrary,
+  LibraryItemReference,
+  PresentationTimer,
+  OpenFileDialogOptions,
+  FileChangedEvent
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -352,6 +357,82 @@ const api: ChurchPresenterApi = {
 
   importImageFolder: (folderPath: string): Promise<any[]> => {
     return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_IMPORT_FOLDER, folderPath)
+  },
+
+  // Native Dialogs & File Access (A.4)
+  openFileDialog: (options?: OpenFileDialogOptions): Promise<string[] | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILE, options)
+  },
+
+  openFolderDialog: (options?: { title?: string; defaultPath?: string }): Promise<string | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, options)
+  },
+
+  getPathForFile: (file: File): string => {
+    return webUtils.getPathForFile(file)
+  },
+
+  // File Watching (A.5)
+  watchFile: (filePath: string, type: 'powerpoint' | 'media'): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WATCH_FILE, filePath, type)
+  },
+
+  unwatchFile: (filePath: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.UNWATCH_FILE, filePath)
+  },
+
+  onFileChanged: (callback: (event: FileChangedEvent) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, payload: FileChangedEvent) => callback(payload)
+    ipcRenderer.on(IPC_CHANNELS.FILE_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.FILE_CHANGED, handler)
+    }
+  },
+
+  // User Libraries (B.1)
+  getLibraries: (): Promise<UserLibrary[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_GET)
+  },
+
+  getLibraryItems: (libraryId: string): Promise<LibraryItemReference[]> => {
+    return ipcRenderer.invoke('libraries:get-items', libraryId)
+  },
+
+  saveLibrary: (library: UserLibrary): Promise<UserLibrary> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_SAVE, library)
+  },
+
+  deleteLibrary: (libraryId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_DELETE, libraryId)
+  },
+
+  moveLibraryItem: (itemRefId: string, targetLibraryId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARIES_MOVE_ITEM, itemRefId, targetLibraryId)
+  },
+
+  // Timers (Fase 6 adelantada)
+  getTimers: (): Promise<PresentationTimer[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.TIMERS_GET)
+  },
+
+  saveTimer: (timer: PresentationTimer): Promise<PresentationTimer> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.TIMERS_SAVE, timer)
+  },
+
+  deleteTimer: (timerId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.TIMERS_DELETE, timerId)
+  },
+
+  controlTimer: (timerId: string, action: 'start' | 'pause' | 'reset'): Promise<PresentationTimer> => {
+    return ipcRenderer.invoke('timers:control', timerId, action)
+  },
+
+  onTimersTick: (callback: (timers: PresentationTimer[]) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, timers: PresentationTimer[]) => callback(timers)
+    ipcRenderer.on(IPC_CHANNELS.TIMERS_TICK, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.TIMERS_TICK, handler)
+    }
   },
 
   // Diagnostics & Logging

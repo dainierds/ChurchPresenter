@@ -96,6 +96,27 @@ export const IPC_CHANNELS = {
   FFMPEG_CONVERT: 'ffmpeg:convert',
   FFMPEG_CANCEL: 'ffmpeg:cancel',
 
+  // Native Dialogs & File Access
+  DIALOG_OPEN_FILE: 'dialog:open-file',
+  DIALOG_OPEN_FOLDER: 'dialog:open-folder',
+
+  // File Watching (External Changes)
+  WATCH_FILE: 'watch:file',
+  UNWATCH_FILE: 'watch:unwatch-file',
+  FILE_CHANGED: 'watch:file-changed',
+
+  // Libraries (ProPresenter Style Collections)
+  LIBRARIES_GET: 'libraries:get',
+  LIBRARIES_SAVE: 'libraries:save',
+  LIBRARIES_DELETE: 'libraries:delete',
+  LIBRARIES_MOVE_ITEM: 'libraries:move-item',
+
+  // Timers
+  TIMERS_GET: 'timers:get',
+  TIMERS_SAVE: 'timers:save',
+  TIMERS_DELETE: 'timers:delete',
+  TIMERS_TICK: 'timers:tick',
+
   // Diagnostics & Logging
   LOG_FPS_DROP: 'log:fps-drop',
   LOG_MEDIA_ERROR: 'log:media-error',

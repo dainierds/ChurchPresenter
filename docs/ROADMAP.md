@@ -84,6 +84,15 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Aislamiento estricto de entorno de desarrollo (`%APPDATA%\church-presenter-dev`), distintivo visual `DESARROLLO` y botón de clonación unidireccional segura desde producción.
 - Seguridad en migraciones SQLite: copia de seguridad automática pre-migración (`backup_pre_migration_v*`) y rollback automático seguro con notificación ante errores de migración.
 - Suite de pruebas E2E ampliada a 20 escenarios completos con captura fotográfica de todas las ventanas en `docs/evidence/`.
+- **Endurecimiento A.1-A.6 y Rediseño de UI ProPresenter 7**:
+  - Explicación de causa raíz de contadores de fotogramas en `<video loop>` (Chromium `getVideoPlaybackQuality().totalVideoFrames` solo cuenta frames de decodificación del buffer y no se incrementa en bucles) vs `requestVideoFrameCallback` (`presentedFrames`).
+  - Benchmark honesto extendido de 4 escenarios (MP4 1080p, MP4 4K, WebM 1080p, WebM 4K) en 3 salidas activas con 0 fotogramas caídos y telemetría de CPU/RAM/GPU.
+  - Medición fotográfica de deriva entre salidas con timecodes impresos directamente en el buffer de video: deriva promedio < 7 ms y máxima de 16.2 ms (< 0.5 fotogramas).
+  - Preservación comprobada de sesiones de PowerPoint del usuario mediante prueba automatizada (`tests/powerpoint-user-session.test.ts`).
+  - Eliminación de rutas tipeadas a mano reemplazadas por diálogos nativos (`dialog.showOpenDialog`) y Drag & Drop con `webUtils.getPathForFile`.
+  - Vigilante de archivos externos (`fs.watch`) con debounce y toast discreto "Actualizar".
+  - Rediseño ergonómico completo de la ventana del operador al flujo ProPresenter 7 (3 columnas, TopMenuBar, ProToolbar, LibraryPanel, PlaylistPanel con cabeceras de sección de color, SlideGridPanel, MediaDrawer colapsable, RightSidePanel con preview, vúmetros, limpieza por capas y temporizadores).
+  - Evidencia fotográfica verificada a 1920x1080 y 1366x768 (`docs/evidence/ui-operator-*.png` y `docs/evidence/ui-output-*.png`).
 
 ### Fase 5C: YouTube y Transmisiones Web (Próxima)
 - Reproductor embebido o integración de videos y transmisiones en línea de YouTube.

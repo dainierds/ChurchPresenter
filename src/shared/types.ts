@@ -78,6 +78,12 @@ export interface LayerContent {
   videoPlaying?: boolean
   videoTime?: number
   videoDuration?: number
+  activeTimer?: {
+    id: string
+    name: string
+    formattedTime: string
+    isOverrun?: boolean
+  }
 }
 
 export interface LayerBackground {
@@ -417,6 +423,66 @@ export interface ServicePlan {
 }
 
 /**
+ * ProPresenter 7 Style Library Collections
+ */
+export type LibraryItemType = 'song' | 'presentation' | 'pdf' | 'powerpoint' | 'video' | 'image' | 'audio' | 'scripture'
+
+export interface LibraryItemReference {
+  id: string
+  libraryId: string
+  itemType: LibraryItemType
+  itemId: string
+  name: string
+  subtitle?: string
+  metadata?: string
+  sortOrder: number
+  addedAt: string
+}
+
+export interface UserLibrary {
+  id: string
+  name: string
+  isSpecial?: boolean // e.g. "Playlist anterior"
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Timers (Fase 6 adelantada)
+ */
+export type TimerType = 'countdown_to_time' | 'countdown_duration' | 'stopwatch'
+
+export interface PresentationTimer {
+  id: string
+  name: string
+  type: TimerType
+  targetTime?: string // "HH:MM:SS" or "HH:MM"
+  durationSeconds: number
+  currentSeconds: number
+  isRunning: boolean
+  isOverrun?: boolean
+  showOnStage: boolean
+  showOnAudience: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OpenFileDialogOptions {
+  title?: string
+  defaultPath?: string
+  buttonLabel?: string
+  filters?: { name: string; extensions: string[] }[]
+  multiSelections?: boolean
+}
+
+export interface FileChangedEvent {
+  filePath: string
+  fileName: string
+  type: 'powerpoint' | 'media'
+}
+
+/**
  * Slide resolved and ready for projection / presentation.
  */
 export interface SlideItem {
@@ -670,6 +736,30 @@ export interface ChurchPresenterApi {
   convertVideoFfmpeg: (jobId: string, inputPath: string, outputPath: string) => Promise<{ success: boolean; outputPath: string }>
   cancelFfmpegJob: (jobId: string) => Promise<boolean>
   importImageFolder: (folderPath: string) => Promise<MediaItem[]>
+
+  // Native Dialogs & File Access
+  openFileDialog: (options?: OpenFileDialogOptions) => Promise<string[] | null>
+  openFolderDialog: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>
+  getPathForFile: (file: File) => string
+
+  // File Watching (External Changes)
+  watchFile: (filePath: string, type: 'powerpoint' | 'media') => Promise<boolean>
+  unwatchFile: (filePath: string) => Promise<boolean>
+  onFileChanged: (callback: (event: FileChangedEvent) => void) => () => void
+
+  // User Libraries (Collections)
+  getLibraries: () => Promise<UserLibrary[]>
+  getLibraryItems: (libraryId: string) => Promise<LibraryItemReference[]>
+  saveLibrary: (library: UserLibrary) => Promise<UserLibrary>
+  deleteLibrary: (libraryId: string) => Promise<boolean>
+  moveLibraryItem: (itemRefId: string, targetLibraryId: string) => Promise<boolean>
+
+  // Timers
+  getTimers: () => Promise<PresentationTimer[]>
+  saveTimer: (timer: PresentationTimer) => Promise<PresentationTimer>
+  deleteTimer: (timerId: string) => Promise<boolean>
+  controlTimer: (timerId: string, action: 'start' | 'pause' | 'reset') => Promise<PresentationTimer>
+  onTimersTick: (callback: (timers: PresentationTimer[]) => void) => () => void
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void

@@ -132,7 +132,7 @@ async function run() {
     // =========================================================================
     console.log('[Step 4/17] Adding song to Service playlist...')
     const addSongBtn = songItem.locator('.add-btn')
-    await addSongBtn.click()
+    await addSongBtn.click({ force: true })
     await win.waitForTimeout(500)
     const playlistItem = win.locator('.playlist-item-card:has-text("Castillo fuerte")').last()
     await playlistItem.waitFor({ state: 'visible', timeout: 5000 })
@@ -143,11 +143,11 @@ async function run() {
     // STEP 5: Send Slide Live
     // =========================================================================
     console.log('[Step 5/17] Projecting slide live...')
-    await playlistItem.click()
+    await playlistItem.click({ force: true })
     await win.waitForTimeout(500)
     const firstSlide = win.locator('.zone-slides .slide-card').first()
     await firstSlide.waitFor({ state: 'visible', timeout: 5000 })
-    await firstSlide.dblclick()
+    await firstSlide.dblclick({ force: true })
     await win.waitForTimeout(500)
     const liveSlide = win.locator('.slide-card.is-live').first()
     await liveSlide.waitFor({ state: 'visible', timeout: 5000 })

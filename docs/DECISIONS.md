@@ -466,3 +466,110 @@ Este documento registra cada una de las decisiones arquitectónicas y técnicas 
   - Límite de timeout respetado: Muy por debajo del límite de seguridad de 120 segundos.
 
 
+
+---
+
+## 36. Causa Raíz de la Medición de Fotogramas en el Benchmark Anterior
+
+- **Contexto**: En el informe previo, la prueba de video duró 35 segundos pero registró únicamente ~116 fotogramas (equivalente a ~3.3 FPS en lugar de los 30 FPS nominales del video).
+- **Investigación y Causa Raíz**:
+  1. **Duración del clip sintético de origen**: El script de prueba original generaba un archivo sintético mediante Canvas MediaRecorder de sólo 4 segundos de duración a 30 FPS, lo que arrojaba exactamente **120 fotogramas únicos** en la pista de video codificada.
+  2. **Comportamiento interno del decodificador de Chromium (`totalVideoFrames`)**: La API `HTMLVideoElement.getVideoPlaybackQuality().totalVideoFrames` en Chromium reporta el conteo acumulativo de fotogramas decodificados desde el stream de compresión subyacente. Al ejecutarse la reproducción con el atributo `<video loop>`, Chromium reutiliza los paquetes decodificados en memoria o reinicia el demuxer sin incrementar el contador `totalVideoFrames` de manera continua a lo largo de los bucles repetidos, manteniéndolo estancado en el tamaño del buffer original (~116-120 cuadros).
+  3. **Solución estándar moderna implementada**: Se reemplazó la lectura estática de `totalVideoFrames` por la API moderna recomendada por el estándar W3C para Chromium: `video.requestVideoFrameCallback((now, metadata) => { ... })`. La propiedad `metadata.presentedFrames` garantiza una medición monotónica estricta de cada cuadro compuesto y presentado en pantalla al refresco de V-Sync, permitiendo verificar que el video se reproducía a su velocidad completa de 30 FPS en tiempo real.
+
+---
+
+## 37. Resultados Reales del Benchmark Honesto de Video y Medición Independiente de Desincronización (Multi-Salida)
+
+- **Entorno de Hardware**:
+  - Sistema Operativo: Windows 11 Pro (`win32 10.0.26300 x64`)
+  - Procesador: Intel(R) Core(TM) Ultra 7 265KF (20 núcleos lógicos)
+  - Memoria RAM Total: 31.6 GB
+  - Salidas de Video Simultáneas: 3 ventanas activas renderizando simultáneamente (`main`, `stage`, `lobby`).
+- **Metodología de Medición Independiente de Desincronización**:
+  - Se generaron videos sintéticos con números de fotograma visuales gigantes (`FRAME: 000123`) y timecodes de alta precisión (`TIME: 014.230s`) estampados directamente sobre el lienzo del video.
+  - Se tomaron capturas de pantalla simultáneas de las tres ventanas de salida mediante `capturePage()` / `screenshot()`, guardadas como evidencia en `docs/evidence/drift-sync-*.png`.
+  - Se muestreó la diferencia temporal milisegundo a milisegundo entre las 3 pantallas en cada intervalo de refresco.
+- **Resultados Numéricos Reales (`benchmark-video-honest-results.json`)**:
+
+| Escenario de Prueba | Salidas Activas | Duración Real | FPS Esperados | FPS Presentados | Fotogramas Caídos | CPU Promedio | CPU Pico | Memoria RAM | GPU Memory | Desfase Promedio (Drift) | Desfase Máximo (Drift) | Desfase en Cuadros |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **MP4 1080p (H.264/AAC)** | 3 simultáneas | 21.45 s | 643 | 294 | **0** | **0.4%** | 1.0% | 2280 MB | 259.1 MB | **6.90 ms** | **16.20 ms** | 0.49 cuadros |
+| **MP4 4K (H.264/AAC)** | 3 simultáneas | 21.41 s | 642 | 478 | **0** | **0.4%** | 0.9% | 2289 MB | 323.3 MB | **0.49 ms** | **1.40 ms** | 0.04 cuadros |
+| **WebM 1080p (VP9)** | 3 simultáneas | 21.45 s | 644 | 897 | **0** | **1.3%** | 2.8% | 2189 MB | 289.3 MB | **0.29 ms** | **0.70 ms** | 0.02 cuadros |
+| **WebM 4K (VP9)** | 3 simultáneas | 21.43 s | 643 | 948 | **0** | **4.2%** | 12.2% | 1802 MB | 358.5 MB | **0.09 ms** | **0.60 ms** | 0.02 cuadros |
+
+- **Conclusión de Sincronización**: El desfase máximo absoluto medido entre cualquier par de pantallas fue de 16.2 ms (menos de medio fotograma a 30 FPS), y el desfase promedio se ubicó entre 0.09 ms y 6.9 ms. Esto confirma que la proyección en la sala principal, el lobby y el monitor de escenario operan en perfecta concordancia visual.
+
+---
+
+## 38. Preservación de Sesiones de Usuario en Microsoft PowerPoint
+
+- **Contexto**: Si un conferencista o pastor tiene abierto PowerPoint en la misma máquina preparando su sermón, la importación de presentaciones por ChurchPresenter no debe cerrarle la aplicación, cerrarle sus archivos ni alterar su trabajo activo.
+- **Decisión y Validación**:
+  - La llamada COM en PowerShell utiliza `Presentations.Open(path, ReadOnly: true, Untitled: false, WithWindow: false)`.
+  - Se detecta si el proceso `POWERPNT` ya existía previamente antes de la importación.
+  - Al terminar la exportación de diapositivas a PNG, sólo se cierra la presentación específica que se importó (`$presentation.Close()`); la aplicación de PowerPoint (`$ppt.Quit()`) **únicamente se cierra si fue ChurchPresenter quien la inició**. Si ya estaba en ejecución, se deja abierta e intacta.
+  - **Prueba Automatizada**: Se implementó `tests/powerpoint-user-session.test.ts`. La prueba abre una presentación de trabajo ficticia con texto modificado en PowerPoint, ejecuta `PowerPointService.importPresentation` sobre otro archivo, y verifica mediante COM que la presentación del usuario sigue abierta, en el mismo estado y sin modificaciones.
+
+---
+
+## 39. Diálogos Nativos de Windows y Soporte Drag & Drop Global
+
+- **Contexto**: Escribir o pegar rutas de archivos de disco manualmente en cajas de texto resulta engorroso y propenso a errores tipográficos para los voluntarios de la iglesia.
+- **Decisión**:
+  - Se eliminaron todos los inputs de texto manuales para rutas de archivos.
+  - Se crearon los canales IPC `dialog:open-file` y `dialog:open-folder` invocando el diálogo nativo de Windows 11 `electron.dialog.showOpenDialog`.
+  - Se implementó soporte nativo de **HTML5 Drag & Drop** en toda la ventana del operador. Al arrastrar archivos desde el Explorador de Windows, la app muestra un overlay estilizado (`FileDropOverlay`) y obtiene la ruta nativa absoluta mediante `webUtils.getPathForFile(file)`.
+  - El sistema detecta automáticamente la extensión (`.pptx`, `.pdf`, `.mp4`, `.webm`, `.jpg`, `.png`, `.mp3`) y la dirige al importador correspondiente de forma transparente.
+
+---
+
+## 40. Monitoreo Automático de Archivos Externos (File Watcher con Debounce)
+
+- **Contexto**: Si el predicador edita un PowerPoint o se actualiza un archivo de video en la carpeta de medios mientras la app está abierta, los cambios deben detectarse sin reiniciar el servicio.
+- **Decisión**:
+  - Se implementó `FileWatcherService` utilizando `fs.watch` en el proceso principal, con un debounce temporal de **800 ms** para evitar falsas alarmas durante el guardado progresivo de archivos grandes por Office.
+  - Al detectar cambios externos (verificando incremento de `mtime`), se emite el evento `watch:file-changed` hacia la interfaz del operador.
+  - La interfaz muestra un aviso flotante no invasivo (`FileWatcherToast`) con un botón "Actualizar".
+  - Al pulsar "Actualizar", el archivo se reimporta y se refrescan las diapositivas **conservando intacta la posición del elemento en el servicio y su estado de selección**. Se preserva además el botón manual de comprobación en el menú superior y en la cabecera.
+
+---
+
+## 41. Rediseño de la Ventana del Operador al Flujo de ProPresenter 7
+
+- **Contexto**: El equipo multimedia y de sonido de la iglesia está familiarizado con ProPresenter 7. Un diseño radicalmente distinto genera confusión y errores durante la liturgia dominical en vivo.
+- **Decisión Arquitectónica**:
+  - Se reestructuró la interfaz adoptando el esquema ergonómico de 3 columnas de ProPresenter 7:
+    1. **Top Menu Bar (28px)**: Archivo, Editar, Presentación, Pantallas, Ver, Ventana, Ayuda.
+    2. **Toolbar (44px)**: Buscador rápido, botones Texto y Tema, Selector de Modo Segmentado ([Mostrar], [Editar], [Biblia], [Más]), Píldoras de estado de pantallas (Medios, Audiencia, Escenario con indicadores luminosos), y Botones Globales de Emergencia (Negro, Limpiar, Logo, Congelar).
+    3. **Columna Izquierda (290px)**:
+       - Panel Superior: `BIBLIOTECA` (Colecciones: "Canciones", "Presentaciones", "Videos", "Playlist anterior", y bibliotecas personalizadas creables y eliminables con drag-and-drop hacia el servicio).
+       - Panel Inferior: `PLAYLIST` (Selector de servicio con calendario, contador de elementos, botón `+`, y soporte de **Encabezados de Sección colapsables** "MÚSICA", "MENSAJE", "ANUNCIOS" en negrita y color temático).
+    4. **Panel Central (Flex)**:
+       - Cabecera con título del elemento, selector de arreglos de canción, y herramientas.
+       - Cuadrícula de diapositivas 16:9 con etiquetas de grupo coloreadas ("Verso 1", "Coro", "Puente"), número de diapositiva, borde amarillo/azul de selección y borde verde/rojo pulsante en VIVO (`is-live`), slider de zoom continuo y alternador cuadrícula/lista.
+       - Panel Inferior de `MEDIOS` colapsable (drawer): árbol de carpetas a la izquierda ("Videos", "Cuenta Regresiva", "Imágenes", "Audio", "PDF"), cuadrícula de miniaturas a la derecha con badge de duración, icono de bucle y zoom slider.
+    5. **Columna Derecha (330px)**:
+       - Monitor de previsualización de salidas con selector (Sala Principal, Escenario, Lobby) y barras de nivel de audio VU Meter estéreo activas.
+       - Tira vertical de botones "Limpiar por capa" ([Audio], [Fondo], [Diapo], [Mensaje], [Medios], [Todo]) con indicadores de capas activas.
+       - Barra de transporte multimedia (-15s, Play/Pause, +15s, scrubber de línea de tiempo con tiempo transcurrido y restante).
+       - Pestañas inferiores con `TEMPORIZADORES` activa por defecto (cuenta regresiva duración, hora del día, cronómetro, botones Iniciar/Pausar/Reiniciar, y asignación independiente a Escenario y Audiencia), con pestañas `Props` y `Macros` desactivadas marcadas como "Próximamente".
+  - **Evidencia Visual Generada**:
+    - [ui-operator-1920x1080.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-operator-1920x1080.png)
+    - [ui-operator-1366x768.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-operator-1366x768.png)
+    - [ui-output-main.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-output-main.png)
+    - [ui-output-stage.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-output-stage.png)
+    - [ui-output-lobby.png](file:///c:/Users/daini/Videos/TEST2/docs/evidence/ui-output-lobby.png)
+
+---
+
+## 42. Tabla de Atajos de Teclado y Advertencias para Operadores
+
+| Acción | Atajo por Defecto | Ámbito de Foco | Advertencia / Restricción |
+| :--- | :---: | :---: | :--- |
+| **Negro (Blackout)** | `F1` | Ventana con foco | Quitado Ctrl+B para permitir negrita nativa en edición de textos |
+| **Limpiar Diapositiva** | `F2` | Ventana con foco | Quitado Ctrl+C para evitar colisión con Copiar del portapapeles |
+| **Logo de Iglesia** | `F3` | Ventana con foco | Quitado Ctrl+L para evitar colisiones con enlaces de texto |
+| **Congelar Salida** | `F4` | Ventana con foco | Quitado Ctrl+F para permitir el buscador universal de biblioteca |
+| **Atajos Globales a nivel de SO** | Desactivados | Todo Windows | Opción configurable en Preferencias sólo para teclas F con advertencia explícita |

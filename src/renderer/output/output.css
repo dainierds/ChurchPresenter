@@ -424,3 +424,85 @@
   font-weight: 800;
   color: white;
 }
+
+/* Presentation Timers on Stage & Audience */
+.stage-active-timers-strip {
+  position: absolute;
+  top: 30px;
+  right: 50px;
+  display: flex;
+  gap: 20px;
+  z-index: 50;
+}
+
+.stage-timer-badge {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #38bdf8;
+  border-radius: 12px;
+  padding: 10px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+.stage-timer-badge.urgent {
+  border-color: #f59e0b;
+  background: rgba(69, 26, 3, 0.95);
+}
+
+.stage-timer-badge.overtime {
+  border-color: #ef4444;
+  background: rgba(69, 10, 10, 0.95);
+  animation: blink 0.8s infinite;
+}
+
+.stage-timer-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin-bottom: 2px;
+}
+
+.stage-timer-digits {
+  font-size: 42px;
+  font-weight: 900;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #f8fafc;
+}
+
+.audience-active-timers-strip {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 8px 30px;
+  backdrop-filter: blur(8px);
+}
+
+.audience-timer-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audience-timer-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.audience-timer-digits {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #38bdf8;
+}

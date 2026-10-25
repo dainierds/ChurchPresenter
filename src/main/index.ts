@@ -2,8 +2,10 @@ import { app } from 'electron'
 
 app.name = 'church-presenter'
 
+const isTest = process.env.NODE_ENV === 'test'
+
 // Separate dev and production user data folders (Requirement A.6)
-if (!app.isPackaged) {
+if (!app.isPackaged && !isTest) {
   try {
     const defaultUserData = app.getPath('userData')
     if (!defaultUserData.endsWith('-dev')) {
@@ -24,8 +26,8 @@ import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
 
-// Single instance lock
-const gotTheLock = app.requestSingleInstanceLock()
+// Single instance lock (bypassed in test environment)
+const gotTheLock = isTest ? true : app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
 } else {

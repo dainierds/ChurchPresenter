@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react'
-import { PresenterState, DEFAULT_THEME, ThemeConfig, LayerBackground } from '../../shared/types'
+import {
+  PresenterState,
+  DEFAULT_THEME,
+  ThemeConfig,
+  LayerBackground,
+  PresentationTimer
+} from '../../shared/types'
 import { computeLayerVisibility } from '../../shared/state-utils'
 import { PdfPageView } from '../components/PdfPageView'
 import './output.css'
@@ -8,6 +14,18 @@ const formatSeconds = (sec: number): string => {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+const formatTimerDisplay = (seconds: number, isOvertime?: boolean): string => {
+  const abs = Math.abs(seconds)
+  const h = Math.floor(abs / 3600)
+  const m = Math.floor((abs % 3600) / 60)
+  const s = Math.floor(abs % 60)
+  const sign = isOvertime ? '-' : ''
+  if (h > 0) {
+    return `${sign}${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+  return `${sign}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 function toMediaUrl(raw?: string): string {
@@ -134,6 +152,18 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     })
 
     return () => unsubState()
+  }, [])
+
+  // Presentation Timers synchronization
+  const [timers, setTimers] = useState<PresentationTimer[]>([])
+  useEffect(() => {
+    if (window.churchPresenterApi?.getTimers) {
+      window.churchPresenterApi.getTimers().then((t) => setTimers(t || [])).catch(() => {})
+    }
+    if (window.churchPresenterApi?.onTimersTick) {
+      const unsubTimers = window.churchPresenterApi.onTimersTick((t) => setTimers(t || []))
+      return () => unsubTimers()
+    }
   }, [])
 
   // Auto-fit text calculation: shrink text if it overflows safe margins
@@ -588,6 +618,42 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
             {/* Layer 4: Operator message overlay */}
             {visibility.showMessage && roleLayerState?.message?.visible && (
               <div className="layer-message">{roleLayerState.message.text}</div>
+            )}
+
+            {/* Layer 5: Active Presentation Timers on Stage & Audience */}
+            {isStage && (
+              <div className="stage-active-timers-strip">
+                {timers
+                  .filter((t) => t.showOnStage && (t.isRunning || t.isOvertime))
+                  .map((t) => (
+                    <div
+                      key={t.id}
+                      className={`stage-timer-badge ${
+                        t.isOvertime ? 'overtime' : t.remainingSeconds <= 60 ? 'urgent' : ''
+                      }`}
+                    >
+                      <span className="stage-timer-title">{t.name}</span>
+                      <span className="stage-timer-digits">
+                        {formatTimerDisplay(t.remainingSeconds, t.isOvertime)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {!isStage && (
+              <div className="audience-active-timers-strip">
+                {timers
+                  .filter((t) => t.showOnAudience && t.isRunning)
+                  .map((t) => (
+                    <div key={t.id} className="audience-timer-pill">
+                      <span className="audience-timer-title">{t.name}:</span>
+                      <span className="audience-timer-digits">
+                        {formatTimerDisplay(t.remainingSeconds, t.isOvertime)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
             )}
           </>
         )}

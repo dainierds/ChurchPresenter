@@ -1,0 +1,297 @@
+import React, { useState } from 'react'
+import {
+  Calendar,
+  Plus,
+  Trash2,
+  Copy,
+  ChevronDown,
+  ChevronRight,
+  Music,
+  FileText,
+  BookOpen,
+  Video,
+  ListOrdered,
+  Radio,
+  ArrowUp,
+  ArrowDown
+} from 'lucide-react'
+import { ServicePlan, ServiceItem } from '../../../shared/types'
+
+interface PlaylistPanelProps {
+  currentService: ServicePlan | null
+  services: ServicePlan[]
+  onSelectService: (serviceId: string) => void
+  onNewService: () => void
+  selectedItemIndex: number
+  onSelectItemIndex: (index: number) => void
+  liveItemIndex: number | null
+  onReorderItem: (fromIndex: number, toIndex: number) => void
+  onDeleteItem: (index: number) => void
+  onDuplicateItem: (index: number) => void
+  onAddHeader: (title: string) => void
+  onAddBlankItem: () => void
+}
+
+export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
+  currentService,
+  services,
+  onSelectService,
+  onNewService,
+  selectedItemIndex,
+  onSelectItemIndex,
+  liveItemIndex,
+  onReorderItem,
+  onDeleteItem,
+  onDuplicateItem,
+  onAddHeader,
+  onAddBlankItem
+}) => {
+  const [showAddMenu, setShowAddMenu] = useState(false)
+  const [headerInput, setHeaderInput] = useState('')
+  const [isAddingHeader, setIsAddingHeader] = useState(false)
+  const [collapsedHeaders, setCollapsedHeaders] = useState<Record<string, boolean>>({})
+
+  const items = currentService?.items || []
+
+  const toggleHeader = (headerId: string) => {
+    setCollapsedHeaders((prev) => ({
+      ...prev,
+      [headerId]: !prev[headerId]
+    }))
+  }
+
+  const handleHeaderSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (headerInput.trim()) {
+      onAddHeader(headerInput.trim())
+      setHeaderInput('')
+      setIsAddingHeader(false)
+    }
+  }
+
+  const getItemIcon = (type: string) => {
+    switch (type) {
+      case 'song':
+        return <Music size={12} className="pro-item-type-icon song" />
+      case 'presentation':
+        return <FileText size={12} className="pro-item-type-icon pres" />
+      case 'scripture':
+        return <BookOpen size={12} className="pro-item-type-icon bible" />
+      case 'media':
+        return <Video size={12} className="pro-item-type-icon media" />
+      default:
+        return <ListOrdered size={12} className="pro-item-type-icon generic" />
+    }
+  }
+
+  // Calculate items under headers for collapsible logic
+  let isCurrentHeaderCollapsed = false
+
+  return (
+    <div className="pro-playlist-panel">
+      {/* Service Header Bar */}
+      <div className="pro-playlist-header">
+        <div className="pro-service-selector-box">
+          <Calendar size={13} className="pro-cal-icon" />
+          <select
+            className="pro-service-select"
+            value={currentService?.id || ''}
+            onChange={(e) => onSelectService(e.target.value)}
+          >
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.date})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="pro-playlist-count-row">
+          <span className="pro-items-count-badge">{items.length} ITEMS</span>
+          <div className="pro-add-item-wrapper">
+            <button
+              className="pro-btn-add-item"
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              title="Agregar al servicio"
+            >
+              <Plus size={13} />
+            </button>
+            {showAddMenu && (
+              <div className="pro-playlist-add-dropdown">
+                <button
+                  className="pro-dropdown-action"
+                  onClick={() => {
+                    setShowAddMenu(false)
+                    setIsAddingHeader(true)
+                  }}
+                >
+                  + Encabezado de Sección (Música, Mensaje...)
+                </button>
+                <button
+                  className="pro-dropdown-action"
+                  onClick={() => {
+                    setShowAddMenu(false)
+                    onAddBlankItem()
+                  }}
+                >
+                  + Diapositiva en Blanco
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Header creation inline input */}
+      {isAddingHeader && (
+        <form onSubmit={handleHeaderSubmit} className="pro-header-create-form">
+          <input
+            type="text"
+            className="pro-header-create-input"
+            placeholder="Nombre de sección (ej. MÚSICA)..."
+            autoFocus
+            value={headerInput}
+            onChange={(e) => setHeaderInput(e.target.value)}
+          />
+          <button type="submit" className="pro-btn-confirm">
+            ✓
+          </button>
+          <button
+            type="button"
+            className="pro-btn-dismiss"
+            onClick={() => setIsAddingHeader(false)}
+          >
+            ✕
+          </button>
+        </form>
+      )}
+
+      {/* Playlist Items List */}
+      <div className="pro-playlist-items-scroll">
+        {items.map((item, index) => {
+          const isHeader = item.type === 'header'
+          const isSelected = selectedItemIndex === index
+          const isLive = liveItemIndex === index
+
+          if (isHeader) {
+            isCurrentHeaderCollapsed = Boolean(collapsedHeaders[item.id])
+            return (
+              <div
+                key={item.id}
+                className={`pro-playlist-header-row ${isSelected ? 'selected' : ''}`}
+                onClick={() => {
+                  toggleHeader(item.id)
+                  onSelectItemIndex(index)
+                }}
+              >
+                <div className="pro-header-title-row">
+                  {collapsedHeaders[item.id] ? (
+                    <ChevronRight size={13} />
+                  ) : (
+                    <ChevronDown size={13} />
+                  )}
+                  <span className="pro-header-text">{item.name}</span>
+                </div>
+                <div className="pro-item-actions">
+                  <button
+                    className="pro-item-mini-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteItem(index)
+                    }}
+                    title="Eliminar sección"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            )
+          }
+
+          if (isCurrentHeaderCollapsed) {
+            return null // Hide child items when section header is collapsed
+          }
+
+          return (
+            <div
+              key={item.id}
+              className={`pro-playlist-item-row playlist-item-card ${isSelected ? 'selected' : ''} ${
+                isLive ? 'is-live' : ''
+              }`}
+              onClick={() => onSelectItemIndex(index)}
+            >
+              <div className="pro-item-left">
+                {getItemIcon(item.type)}
+                <div className="pro-item-title-col">
+                  <span className="pro-item-name">{item.name}</span>
+                  {item.notes && <span className="pro-item-notes">{item.notes}</span>}
+                </div>
+              </div>
+
+              <div className="pro-item-right">
+                {isLive && (
+                  <span className="pro-live-pill" title="Actualmente proyectándose en vivo">
+                    <Radio size={10} className="pro-live-pulse-icon" />
+                    LIVE
+                  </span>
+                )}
+                <div className="pro-item-hover-actions">
+                  {index > 0 && (
+                    <button
+                      className="pro-item-mini-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onReorderItem(index, index - 1)
+                      }}
+                      title="Mover arriba"
+                    >
+                      <ArrowUp size={10} />
+                    </button>
+                  )}
+                  {index < items.length - 1 && (
+                    <button
+                      className="pro-item-mini-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onReorderItem(index, index + 1)
+                      }}
+                      title="Mover abajo"
+                    >
+                      <ArrowDown size={10} />
+                    </button>
+                  )}
+                  <button
+                    className="pro-item-mini-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDuplicateItem(index)
+                    }}
+                    title="Duplicar elemento"
+                  >
+                    <Copy size={10} />
+                  </button>
+                  <button
+                    className="pro-item-mini-btn danger"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteItem(index)
+                    }}
+                    title="Eliminar de servicio"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {items.length === 0 && (
+          <div className="pro-playlist-empty">
+            <span>Servicio vacío. Arrastre canciones desde la biblioteca o haga clic en +</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

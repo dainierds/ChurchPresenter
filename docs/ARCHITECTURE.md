@@ -328,3 +328,57 @@ graph TD
 4. **Caché Determinista por Resolución y Hash**: Evita re-exportaciones redundantes de presentaciones ya procesadas.
 5. **Detección de Modificaciones y Apertura Externa**: Permite abrir la presentación en PowerPoint nativo para edición y detectar cambios externos por hash para reimportar en caliente con un clic.
 
+---
+
+## 11. Arquitectura del Rediseño de Interfaz del Operador (Inspirada en ProPresenter 7)
+
+Para reducir la curva de aprendizaje del equipo de audiovisuales de la iglesia y mantener un flujo de trabajo fluido y familiar, la ventana del operador se rediseñó modularmente en React siguiendo la ergonomía y densidad visual de ProPresenter 7:
+
+```mermaid
+graph TD
+    subgraph OperatorLayout ["Ventana del Operador (ProPresenter 7 Ergonomics)"]
+        TopBar["TopMenuBar (Archivo, Editar, Presentación, Pantallas, Ver, Ventana, Ayuda)"]
+        Toolbar["ProToolbar (Búsqueda Rápida, Modos, Pastillas de Pantallas, Botones de Acción Rápida)"]
+        
+        subgraph ThreeColumnLayout ["Distribución de 3 Columnas"]
+            subgraph LeftCol ["Columna Izquierda (240px - 280px)"]
+                LibPanel["LibraryPanel\n(BIBLIOTECA: Default, Canciones, Jóvenes, +)"]
+                PlayPanel["PlaylistPanel\n(LISTA DE CULTO: Secciones plegables con color, badge En Vivo)"]
+            end
+            
+            subgraph CenterCol ["Columna Central (Flex 1)"]
+                SlideHeader["SlideHeader\n(Detalles del elemento activo, herramientas rápidas)"]
+                SlideGrid["SlideGridPanel\n(Cuadrícula/Lista con miniaturas, badges de grupo, zoom)"]
+                MediaDrawer["MediaDrawer (Plegable abajo)\n(Árbol de carpetas, miniaturas, duración, bucle)"]
+            end
+            
+            subgraph RightCol ["Columna Derecha (300px - 340px)"]
+                PreviewSwitcher["OutputPreviewSwitcher\n(Main / Stage / Lobby + VU meters estéreo)"]
+                ClearLayers["ClearLayerButtons\n(Audio, Fondo, Diapo, Mensaje, Medios, Todo)"]
+                TransportDeck["VideoTransportDeck\n(Play/Pause, barra de progreso, volumen, loop)"]
+                BottomTabs["RightSidePanel Tabs\n(TEMPORIZADORES / Props / Macros)"]
+            end
+        end
+        
+        FileDrop["FileDropOverlay (Drag & Drop nativo)"]
+        FileToast["FileWatcherToast (Avisos de cambio externo)"]
+    end
+```
+
+### Componentes Modulares del Operador:
+1. **TopMenuBar**: Barra superior oscura compacta con menús desplegables estándar de Windows y atajos de teclado asociados.
+2. **ProToolbar**: Barra de herramientas con campo de búsqueda rápida (`Ctrl+K`), selector de modos (Mostrar, Editar, Biblia, Ajustes), indicadores activos de pantallas (Medios, Audiencia, Escenario) y botones de acción rápida inmediatos (Negro, Limpiar, Logo, Congelar).
+3. **LibraryPanel**: Gestión de colecciones/librerías de usuario almacenadas en SQLite (`user_libraries`), permitiendo organizar elementos por ministerios o cultos y arrastrarlos directamente al servicio.
+4. **PlaylistPanel**: Selector de servicios con cabeceras de sección con color configurable (p. ej., "MÚSICA", "MENSAJE", "ANUNCIOS"), reordenamiento drag-and-drop, conteo de diapositivas y distintivo "EN VIVO" en el elemento proyectado.
+5. **SlideGridPanel**: Visor central de diapositivas con miniaturas de alta legibilidad, distintivos coloreados por grupo litúrgico (Verso 1, Coro, etc.), números de diapositiva ordenados, control deslizante de zoom y alternancia entre vista en cuadrícula y vista de lista.
+6. **MediaDrawer**: Cajón inferior colapsable tipo ProPresenter para examinar medios de fondo y videos con árbol de carpetas, distintivos de duración y bucle, y control de zoom.
+7. **RightSidePanel**:
+   - **Previsualizador de Salida**: Selector de pantalla activa (`main`, `stage`, `lobby`) con vúmetros animados en verde/amarillo/rojo.
+   - **Botones de Limpieza por Capas**: Acceso rápido para limpiar selectivamente `Audio`, `Fondo`, `Diapo`, `Mensaje`, `Medios` o `Todo`.
+   - **Deck de Transporte de Video**: Reproducción sincronizada con reloj maestro.
+   - **Pestaña de Temporizadores Activa**: Cuenta regresiva por duración (`MM:SS`), cuenta hacia una hora del día (`HH:MM`) y cronómetro progresivo con botones de Iniciar/Pausa/Reiniciar y opción de visibilidad en audiencia o escenario.
+   - **Pestañas Props y Macros**: Deshabilitadas con distintivo "Próximamente" sin afectar el flujo del operador.
+8. **FileDropOverlay**: Arrastrar y soltar nativo de archivos (PPTX, PDF, videos, imágenes) sobre la interfaz usando `webUtils.getPathForFile()`.
+9. **FileWatcherToast**: Notificación discreta de auto-recarga cuando un archivo PPTX o de medios externo es modificado en disco, con botón "Actualizar" que preserva la posición del servicio.
+
+

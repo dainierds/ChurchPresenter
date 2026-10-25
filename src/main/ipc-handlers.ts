@@ -1,4 +1,4 @@
-import { ipcMain, app } from 'electron'
+import { ipcMain, app, dialog, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-events'
 import {
   GlobalControls,
@@ -10,7 +10,10 @@ import {
   ThemeConfig,
   ServicePlan,
   RoleBibleConfig,
-  VideoItemConfig
+  VideoItemConfig,
+  UserLibrary,
+  LibraryItemReference,
+  PresentationTimer
 } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
@@ -24,6 +27,7 @@ import { masterMediaSyncService } from './media/master-media-sync-service'
 import { pdfService } from './pdf/pdf-service'
 import { powerpointService } from './powerpoint/powerpoint-service'
 import { ffmpegService } from './media/ffmpeg-service'
+import { fileWatcherService } from './media/file-watcher-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -482,6 +486,140 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.DEV_COPY_PROD_LIBRARY, () => {
     return databaseService.copyFromProduction()
+  })
+
+  // --- NATIVE DIALOGS (A.4) ---
+  ipcMain.handle(
+    IPC_CHANNELS.DIALOG_OPEN_FILE,
+    async (_event, options?: { title?: string; defaultPath?: string; buttonLabel?: string; filters?: { name: string; extensions: string[] }[]; multiSelections?: boolean }) => {
+      const parent = BrowserWindow.getFocusedWindow() || undefined
+      const res = await dialog.showOpenDialog(parent as any, {
+        title: options?.title || 'Seleccionar Archivo',
+        defaultPath: options?.defaultPath,
+        buttonLabel: options?.buttonLabel || 'Seleccionar',
+        filters: options?.filters,
+        properties: options?.multiSelections ? ['openFile', 'multiSelections'] : ['openFile']
+      })
+      if (res.canceled) return null
+      return res.filePaths
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.DIALOG_OPEN_FOLDER,
+    async (_event, options?: { title?: string; defaultPath?: string }) => {
+      const parent = BrowserWindow.getFocusedWindow() || undefined
+      const res = await dialog.showOpenDialog(parent as any, {
+        title: options?.title || 'Seleccionar Carpeta',
+        defaultPath: options?.defaultPath,
+        properties: ['openDirectory']
+      })
+      if (res.canceled || res.filePaths.length === 0) return null
+      return res.filePaths[0]
+    }
+  )
+
+  // --- EXTERNAL FILE WATCHING (A.5) ---
+  ipcMain.handle(IPC_CHANNELS.WATCH_FILE, (_event, filePath: string, type: 'powerpoint' | 'media') => {
+    return fileWatcherService.watch(filePath, type)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.UNWATCH_FILE, (_event, filePath: string) => {
+    return fileWatcherService.unwatch(filePath)
+  })
+
+  // --- USER LIBRARIES (ProPresenter 7 Style) ---
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_GET, () => {
+    return databaseService.getLibraries()
+  })
+
+  ipcMain.handle('libraries:get-items', (_event, libraryId: string) => {
+    return databaseService.getLibraryItems(libraryId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_SAVE, (_event, library: UserLibrary) => {
+    return databaseService.saveLibrary(library)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_DELETE, (_event, id: string) => {
+    return databaseService.deleteLibrary(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LIBRARIES_MOVE_ITEM, (_event, itemRefId: string, targetLibraryId: string) => {
+    return databaseService.moveLibraryItem(itemRefId, targetLibraryId)
+  })
+
+  // --- TIMERS ---
+  let activeTimersInterval: NodeJS.Timeout | null = null
+
+  function ensureTimersLoop() {
+    if (activeTimersInterval) return
+    activeTimersInterval = setInterval(() => {
+      const timers = databaseService.getTimers()
+      const running = timers.filter((t) => t.isRunning)
+      if (running.length === 0) {
+        if (activeTimersInterval) {
+          clearInterval(activeTimersInterval)
+          activeTimersInterval = null
+        }
+        return
+      }
+
+      for (const t of running) {
+        if (t.type === 'stopwatch') {
+          t.currentSeconds += 1
+        } else if (t.type === 'countdown_duration') {
+          t.currentSeconds -= 1
+        } else if (t.type === 'countdown_to_time' && t.targetTime) {
+          const now = new Date()
+          const parts = t.targetTime.split(':').map(Number)
+          const target = new Date(now)
+          target.setHours(parts[0] || 0, parts[1] || 0, parts[2] || 0, 0)
+          const diff = Math.floor((target.getTime() - now.getTime()) / 1000)
+          t.currentSeconds = diff
+        }
+        databaseService.saveTimer(t)
+      }
+
+      windowManager.broadcastToAll(IPC_CHANNELS.TIMERS_TICK, timers)
+    }, 1000)
+  }
+
+  ipcMain.handle(IPC_CHANNELS.TIMERS_GET, () => {
+    return databaseService.getTimers()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.TIMERS_SAVE, (_event, timer: PresentationTimer) => {
+    const saved = databaseService.saveTimer(timer)
+    if (saved.isRunning) ensureTimersLoop()
+    return saved
+  })
+
+  ipcMain.handle(IPC_CHANNELS.TIMERS_DELETE, (_event, id: string) => {
+    return databaseService.deleteTimer(id)
+  })
+
+  ipcMain.handle('timers:control', (_event, timerId: string, action: 'start' | 'pause' | 'reset') => {
+    const timers = databaseService.getTimers()
+    const found = timers.find((t) => t.id === timerId)
+    if (!found) throw new Error('Temporizador no encontrado')
+
+    if (action === 'start') {
+      found.isRunning = true
+      databaseService.saveTimer(found)
+      ensureTimersLoop()
+    } else if (action === 'pause') {
+      found.isRunning = false
+      databaseService.saveTimer(found)
+    } else if (action === 'reset') {
+      found.isRunning = false
+      found.currentSeconds = found.type === 'stopwatch' ? 0 : found.durationSeconds
+      databaseService.saveTimer(found)
+    }
+
+    const updated = databaseService.getTimers()
+    windowManager.broadcastToAll(IPC_CHANNELS.TIMERS_TICK, updated)
+    return found
   })
 
   // Hook DisplayManager events
