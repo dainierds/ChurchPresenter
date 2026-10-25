@@ -1,0 +1,13 @@
+{
+  "testDate": "2026-10-25T04:15:12.076Z",
+  "startMemMb": 65.6,
+  "platform": "win32 10.0.26300 (x64)",
+  "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
+  "cpuCores": 20,
+  "converterUsed": "powerpoint_com",
+  "slideCount": 80,
+  "targetResolution": "1920x1080",
+  "totalDurationSeconds": 2.63,
+  "slidesPerSecond": 30.4,
+  "memoryRssMb": 71.8
+}

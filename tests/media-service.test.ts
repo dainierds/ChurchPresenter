@@ -14,6 +14,8 @@ describe('MediaService (Biblioteca de Medios y Deduplicación)', () => {
   beforeEach(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'church-presenter-media-test-'))
     const dbPath = path.join(tempDir, 'test.db')
+    databaseService.close()
+    ;(databaseService as any).customPath = dbPath
     ;(databaseService as any).dbPath = dbPath
     await databaseService.initialize()
 

@@ -75,6 +75,7 @@ export const IPC_CHANNELS = {
   // Phase 5A: Media & PDF
   MEDIA_GET: 'media:get',
   MEDIA_IMPORT: 'media:import',
+  MEDIA_IMPORT_FOLDER: 'media:import-folder',
   MEDIA_DELETE: 'media:delete',
   MEDIA_CHECK_INTEGRITY: 'media:check-integrity',
   VIDEO_PLAY: 'video:play',
@@ -85,10 +86,22 @@ export const IPC_CHANNELS = {
   PDF_RENDER_PAGE: 'pdf:render-page',
   PDF_GET_PAGE_COUNT: 'pdf:get-page-count',
 
+  // Phase 5B: PowerPoint & Video Conversion
+  POWERPOINT_DETECT_CONVERTERS: 'powerpoint:detect-converters',
+  POWERPOINT_IMPORT: 'powerpoint:import',
+  POWERPOINT_EDIT: 'powerpoint:edit',
+  POWERPOINT_CHECK_MODIFIED: 'powerpoint:check-modified',
+  POWERPOINT_CANCEL: 'powerpoint:cancel',
+  FFMPEG_DETECT: 'ffmpeg:detect',
+  FFMPEG_CONVERT: 'ffmpeg:convert',
+  FFMPEG_CANCEL: 'ffmpeg:cancel',
+
   // Diagnostics & Logging
   LOG_FPS_DROP: 'log:fps-drop',
   LOG_MEDIA_ERROR: 'log:media-error',
   OUTPUT_CAPTURE_ROLE: 'output:capture-role',
   OUTPUT_OPEN_PREVIEW: 'output:open-preview',
-  APP_GET_VERSION: 'app:get-version'
+  APP_GET_VERSION: 'app:get-version',
+  APP_GET_ENV_INFO: 'app:get-env-info',
+  DEV_COPY_PROD_LIBRARY: 'dev:copy-prod-library'
 } as const

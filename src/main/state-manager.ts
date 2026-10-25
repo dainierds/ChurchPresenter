@@ -108,10 +108,16 @@ export class StateManager extends EventEmitter {
           ? 'video'
           : (slide as any).sourceType === 'pdf'
             ? 'pdf'
-            : undefined)
+            : (slide as any).sourceType === 'powerpoint'
+              ? 'powerpoint'
+              : (slide as any).sourceType === 'image'
+                ? 'image'
+                : undefined)
       const pdfPage = (slide as any).pdfPage
       const pdfPageCount = (slide as any).pdfPageCount
       const fitMode = (slide as any).fitMode || 'contain'
+      const speakerNotes = (slide as any).speakerNotes
+      const warnings = (slide as any).warnings
 
       // Special handling for stage (confidence monitor): pass current + next
       if (role === 'stage') {
@@ -129,7 +135,9 @@ export class StateManager extends EventEmitter {
             mediaType,
             pdfPage,
             pdfPageCount,
-            fitMode
+            fitMode,
+            speakerNotes,
+            warnings
           },
           theme: this.state.currentTheme
         }
@@ -146,12 +154,26 @@ export class StateManager extends EventEmitter {
             mediaType,
             pdfPage,
             pdfPageCount,
-            fitMode
+            fitMode,
+            speakerNotes,
+            warnings
           },
           theme: this.state.currentTheme
         }
       }
     }
+
+    const currentSlideMediaType =
+      (slide as any).mediaType ||
+      ((slide as any).sourceType === 'video'
+        ? 'video'
+        : (slide as any).sourceType === 'pdf'
+          ? 'pdf'
+          : (slide as any).sourceType === 'powerpoint'
+            ? 'powerpoint'
+            : (slide as any).sourceType === 'image'
+              ? 'image'
+              : undefined)
 
     this.state = {
       ...this.state,
@@ -163,10 +185,12 @@ export class StateManager extends EventEmitter {
         nextSlideTitle: nextSlide?.title || nextSlide?.subtitle,
         nextSlideBody: nextSlide?.body,
         mediaUrl: (slide as any).mediaUrl,
-        mediaType: (slide as any).mediaType,
+        mediaType: currentSlideMediaType,
         pdfPage: (slide as any).pdfPage,
         pdfPageCount: (slide as any).pdfPageCount,
-        fitMode: (slide as any).fitMode
+        fitMode: (slide as any).fitMode,
+        speakerNotes: (slide as any).speakerNotes,
+        warnings: (slide as any).warnings
       },
       activeLayers: newActiveLayers,
       controls: {

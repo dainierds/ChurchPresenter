@@ -448,8 +448,87 @@ async function run() {
     console.log('  -> Captured: 17_video_background_theme.png')
     await captureOutputWindows('17_video_background')
 
+    // =========================================================================
+    // STEP 18: PowerPoint (.pptx) Import, Fidelity Warnings & Stage Speaker Notes
+    // =========================================================================
+    console.log('[Step 18/20] Testing PowerPoint (.pptx) Import & Stage Speaker Notes...')
+    const samplePptxPath = path.resolve(__dirname, '../tests/fixtures/sample_presentation.pptx')
+
+    // Import the sample PowerPoint via IPC
+    const pptManifest = await win.evaluate(async (pptxPath) => {
+      const manifest = await window.churchPresenterApi.importPowerPoint(pptxPath)
+      // Send first slide to live (with speaker notes)
+      const firstSlide = manifest.slides[0]
+      const secondSlide = manifest.slides[1]
+      const slideItem = {
+        id: `ppt_slide_1`,
+        sourceId: 'sample_pptx',
+        sourceType: 'powerpoint',
+        title: 'Mensaje de Bienvenida',
+        body: firstSlide.speakerNotes || '',
+        mediaUrl: firstSlide.imagePath,
+        speakerNotes: firstSlide.speakerNotes,
+        warnings: firstSlide.warnings
+      }
+      const nextSlideItem = secondSlide ? {
+        id: `ppt_slide_2`,
+        sourceId: 'sample_pptx',
+        sourceType: 'powerpoint',
+        title: 'Diapositiva 2',
+        body: secondSlide.speakerNotes || ''
+      } : undefined
+
+      await window.churchPresenterApi.sendSlide(slideItem, ['main', 'lobby', 'stage'], nextSlideItem)
+      return manifest
+    }, samplePptxPath)
+
+    await win.waitForTimeout(2000)
+    console.log(`  -> PowerPoint imported: ${pptManifest.slideCount} slides converted.`)
+
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '18_powerpoint_operator.png') })
+    console.log('  -> Captured: 18_powerpoint_operator.png')
+    await captureOutputWindows('18_powerpoint')
+
+    // =========================================================================
+    // STEP 19: Audio Device Configuration & Dev Environment Badge
+    // =========================================================================
+    console.log('[Step 19/20] Verifying Settings Modal, Audio Routing & Dev Badge...')
+    // Open Settings modal
+    const settingsBtn = win.locator('button[title*="Atajos"]')
+    await settingsBtn.click()
+    const settingsModal = win.locator('.modal-content.settings-modal')
+    await settingsModal.waitFor({ state: 'visible', timeout: 5000 })
+    await win.waitForTimeout(1000)
+
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '19_settings_audio_dev.png') })
+    console.log('  -> Captured: 19_settings_audio_dev.png')
+
+    // Close settings modal
+    const closeSettingsBtn = settingsModal.locator('button:has-text("Cancelar")')
+    await closeSettingsBtn.click()
+    await settingsModal.waitFor({ state: 'hidden', timeout: 5000 })
+
+    // =========================================================================
+    // STEP 20: Image Folder Presentation Import
+    // =========================================================================
+    console.log('[Step 20/20] Testing Image Folder Import...')
+    const testFolderDir = path.join(tempUserDataDir, 'test_images_folder')
+    fs.mkdirSync(testFolderDir, { recursive: true })
+    // Create 2 test PNG images
+    fs.writeFileSync(path.join(testFolderDir, 'image_1.png'), Buffer.from('fake png image 1 content'))
+    fs.writeFileSync(path.join(testFolderDir, 'image_2.png'), Buffer.from('fake png image 2 content'))
+
+    const importedImages = await win.evaluate(async (fDir) => {
+      return await window.churchPresenterApi.importImageFolder(fDir)
+    }, testFolderDir)
+    console.log(`  -> Folder imported: ${importedImages.length} images added to media library.`)
+
+    await win.waitForTimeout(1000)
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '20_image_folder_import.png') })
+    console.log('  -> Captured: 20_image_folder_import.png')
+
     console.log('=====================================================')
-    console.log('   ALL 17 E2E SCENARIOS VERIFIED & ALL OUTPUTS CAPTURED! ')
+    console.log('   ALL 20 E2E SCENARIOS VERIFIED & ALL OUTPUTS CAPTURED! ')
     console.log('=====================================================')
   } finally {
     await app.close()

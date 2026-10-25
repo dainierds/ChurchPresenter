@@ -22,7 +22,11 @@ import {
   MediaType,
   RoleBibleConfigsMap,
   DEFAULT_ROLE_BIBLE_CONFIGS,
-  IndependentAudioState
+  IndependentAudioState,
+  PptConverterInfo,
+  PptConverterType,
+  PptPresentationManifest,
+  FfmpegStatus
 } from '../../shared/types'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -72,7 +76,11 @@ import {
   VolumeX,
   Square,
   Pause,
-  RotateCcw
+  RotateCcw,
+  FolderPlus,
+  ExternalLink,
+  Film,
+  RefreshCw
 } from 'lucide-react'
 import './operator.css'
 
@@ -171,6 +179,42 @@ export const OperatorApp: React.FC = () => {
   const [pdfPageCount, setPdfPageCount] = useState<number>(1)
   const [pdfFitMode, setPdfFitMode] = useState<'contain' | 'cover' | 'center'>('contain')
 
+  // Dev Environment State (Requirement A.6)
+  const [isDev, setIsDev] = useState<boolean>(false)
+  const [userDataPath, setUserDataPath] = useState<string>('')
+
+  // Audio Output Devices (Requirement A.2)
+  const [audioDevices, setAudioDevices] = useState<{ deviceId: string; label: string }[]>([])
+  const [audioDeviceVideo, setAudioDeviceVideo] = useState<string>(localStorage.getItem('cp_audio_device_video') || '')
+  const [audioDeviceAmbient, setAudioDeviceAmbient] = useState<string>(localStorage.getItem('cp_audio_device_ambient') || '')
+
+  // Video Fade Controls (Requirement A.3)
+  const [videoFadeInSec, setVideoFadeInSec] = useState<number>(0)
+  const [videoFadeOutSec, setVideoFadeOutSec] = useState<number>(0)
+
+  // Media Library Search & Tags (Requirement A.3)
+  const [selectedMediaTag, setSelectedMediaTag] = useState<string>('all')
+  const [isFolderImportModalOpen, setIsFolderImportModalOpen] = useState<boolean>(false)
+  const [importFolderPath, setImportFolderPath] = useState<string>('')
+  const [exportIncludeMedia, setExportIncludeMedia] = useState<boolean>(false)
+
+  // FFmpeg State (Requirement A.5)
+  const [ffmpegStatus, setFfmpegStatus] = useState<FfmpegStatus>({ available: false, path: null, version: null })
+  const [isFfmpegModalOpen, setIsFfmpegModalOpen] = useState<boolean>(false)
+  const [ffmpegInputPath, setFfmpegInputPath] = useState<string>('')
+  const [ffmpegProgress, setFfmpegProgress] = useState<number>(0)
+  const [isConvertingFfmpeg, setIsConvertingFfmpeg] = useState<boolean>(false)
+
+  // PowerPoint State (Fase 5B)
+  const [pptConverters, setPptConverters] = useState<PptConverterInfo[]>([])
+  const [preferredPptConverter, setPreferredPptConverter] = useState<PptConverterType>('powerpoint_com')
+  const [isPptImportModalOpen, setIsPptImportModalOpen] = useState<boolean>(false)
+  const [importPptPath, setImportPptPath] = useState<string>('')
+  const [pptJobId, setPptJobId] = useState<string | null>(null)
+  const [isPptConverting, setIsPptConverting] = useState<boolean>(false)
+  const [pptConvertStep, setPptConvertStep] = useState<string>('')
+  const [pptManifests, setPptManifests] = useState<Record<string, PptPresentationManifest>>({})
+
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [isDisplaysModalOpen, setIsDisplaysModalOpen] = useState<boolean>(false)
@@ -259,6 +303,56 @@ export const OperatorApp: React.FC = () => {
       setMediaItems(mediaList)
       if (rbConfigs) setRoleBibleConfigs(rbConfigs)
 
+      if (window.churchPresenterApi.getEnvInfo) {
+        try {
+          const env = await window.churchPresenterApi.getEnvInfo()
+          setIsDev(env.isDev)
+          setUserDataPath(env.userDataPath)
+        } catch {
+          // ignore
+        }
+      }
+
+      if (window.churchPresenterApi.detectFfmpeg) {
+        try {
+          const ff = await window.churchPresenterApi.detectFfmpeg()
+          setFfmpegStatus(ff)
+        } catch {
+          // ignore
+        }
+      }
+
+      if (window.churchPresenterApi.detectPptConverters) {
+        try {
+          const convs = await window.churchPresenterApi.detectPptConverters()
+          setPptConverters(convs)
+          if (convs.some((c) => c.type === 'powerpoint_com' && c.isAvailable)) {
+            setPreferredPptConverter('powerpoint_com')
+          } else if (convs.some((c) => c.type === 'libreoffice' && c.isAvailable)) {
+            setPreferredPptConverter('libreoffice')
+          } else {
+            setPreferredPptConverter('manual')
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devs = await navigator.mediaDevices.enumerateDevices()
+          const outs = devs
+            .filter((d) => d.kind === 'audiooutput')
+            .map((d) => ({
+              deviceId: d.deviceId,
+              label: d.label || `Dispositivo de Audio (${d.deviceId.slice(0, 5)}...)`
+            }))
+          setAudioDevices(outs)
+        } catch {
+          // ignore
+        }
+      }
+
       if (servList.length > 0 && !currentService) {
         setCurrentService(servList[0])
       }
@@ -306,12 +400,62 @@ export const OperatorApp: React.FC = () => {
       }, 4500)
     })
 
+    const onDeviceChange = async () => {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devs = await navigator.mediaDevices.enumerateDevices()
+          const outs = devs
+            .filter((d) => d.kind === 'audiooutput')
+            .map((d) => ({
+              deviceId: d.deviceId,
+              label: d.label || `Dispositivo de Audio (${d.deviceId.slice(0, 5)}...)`
+            }))
+          setAudioDevices(outs)
+
+          if (audioDeviceVideo && !outs.some((o) => o.deviceId === audioDeviceVideo)) {
+            setAudioDeviceVideo('')
+            localStorage.removeItem('cp_audio_device_video')
+            setToasts((prev) => [
+              ...prev,
+              {
+                id: `aud_disc_${Date.now()}`,
+                title: 'Dispositivo de Audio Desconectado',
+                message: 'El dispositivo de audio para video se ha desconectado. Se usará el predeterminado.',
+                type: 'warn',
+                timestamp: Date.now()
+              }
+            ])
+          }
+
+          if (audioDeviceAmbient && !outs.some((o) => o.deviceId === audioDeviceAmbient)) {
+            setAudioDeviceAmbient('')
+            localStorage.removeItem('cp_audio_device_ambient')
+            setToasts((prev) => [
+              ...prev,
+              {
+                id: `aud_disc_amb_${Date.now()}`,
+                title: 'Dispositivo de Audio Desconectado',
+                message: 'El dispositivo de audio ambiental se ha desconectado. Se usará el predeterminado.',
+                type: 'warn',
+                timestamp: Date.now()
+              }
+            ])
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
+
     return () => {
       unsubDisplays()
       unsubState()
       unsubNotif()
+      navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }
-  }, [loadAllData])
+  }, [loadAllData, audioDeviceVideo, audioDeviceAmbient])
 
   // Current service item
   const currentServiceItem: ServiceItem | undefined =
@@ -515,6 +659,44 @@ export const OperatorApp: React.FC = () => {
       ]
     }
 
+    if (currentServiceItem.type === 'powerpoint') {
+      const manifest =
+        (currentServiceItem.powerpointConfig?.hash && pptManifests[currentServiceItem.powerpointConfig.hash]) ||
+        (currentServiceItem.powerpointConfig?.originalPath && pptManifests[currentServiceItem.powerpointConfig.originalPath])
+
+      if (manifest && manifest.slides && manifest.slides.length > 0) {
+        return manifest.slides.map((s) => ({
+          id: `ppt_${currentServiceItem.id}_slide_${s.index}`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'powerpoint' as const,
+          groupLabel: `Diapositiva ${s.index}`,
+          slideIndex: s.index,
+          totalSlidesInGroup: manifest.slideCount,
+          title: currentServiceItem.name,
+          subtitle: `Diapositiva ${s.index} de ${manifest.slideCount}`,
+          body: s.speakerNotes || '',
+          mediaUrl: s.imagePath,
+          speakerNotes: s.speakerNotes,
+          warnings: s.warnings
+        }))
+      }
+
+      return [
+        {
+          id: `ppt_${currentServiceItem.id}_empty`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'powerpoint' as const,
+          groupLabel: 'PowerPoint',
+          slideIndex: 1,
+          totalSlidesInGroup: 1,
+          title: currentServiceItem.name,
+          subtitle: 'Presentación PowerPoint',
+          body: 'Cargando diapositivas...',
+          speakerNotes: ''
+        }
+      ]
+    }
+
     if (currentServiceItem.type === 'audio') {
       return [
         {
@@ -541,8 +723,56 @@ export const OperatorApp: React.FC = () => {
     currentPresentation,
     mediaItems,
     pdfPageCount,
-    pdfFitMode
+    pdfFitMode,
+    pptManifests
   ])
+
+  // Automatically load PowerPoint manifest if selected item is powerpoint
+  useEffect(() => {
+    if (
+      currentServiceItem?.type === 'powerpoint' &&
+      currentServiceItem.powerpointConfig?.originalPath
+    ) {
+      const key = currentServiceItem.powerpointConfig.hash || currentServiceItem.powerpointConfig.originalPath
+      if (!pptManifests[key]) {
+        window.churchPresenterApi
+          .importPowerPoint(currentServiceItem.powerpointConfig.originalPath)
+          .then((manifest) => {
+            setPptManifests((prev) => ({
+              ...prev,
+              [manifest.hash]: manifest,
+              [manifest.originalPath]: manifest
+            }))
+          })
+          .catch((err) => console.warn('Could not load PowerPoint manifest:', err))
+      }
+    }
+  }, [currentServiceItem, pptManifests])
+
+  // Audio test chime helper
+  const playTestAudioChime = async (deviceId?: string) => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      if (deviceId && typeof (audioCtx as any).setSinkId === 'function') {
+        await (audioCtx as any).setSinkId(deviceId)
+      }
+      const osc = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime) // C5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15) // E5
+      osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3) // G5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start()
+      osc.stop(audioCtx.currentTime + 0.6)
+    } catch (err: any) {
+      console.warn('Audio test chime error:', err)
+      alert(`Prueba de audio: ${err.message || 'No se pudo reproducir en este dispositivo'}`)
+    }
+  }
 
   // Clamp preview slide index when activeSlides change
   useEffect(() => {
@@ -589,6 +819,8 @@ export const OperatorApp: React.FC = () => {
             volume: videoVolume,
             inPoint: videoInPoint > 0 ? videoInPoint : undefined,
             outPoint: videoOutPoint > 0 ? videoOutPoint : undefined,
+            fadeInSeconds: videoFadeInSec > 0 ? videoFadeInSec : undefined,
+            fadeOutSeconds: videoFadeOutSec > 0 ? videoFadeOutSec : undefined,
             endAction: videoEndAction,
             audioOutputRole: audioOutputRole || 'main'
           })
@@ -600,7 +832,7 @@ export const OperatorApp: React.FC = () => {
       setLiveSourceId(slide.sourceId)
       setIsLiveDirty(false)
     },
-    [currentServiceItem, mediaItems, videoLoop, videoVolume, videoInPoint, videoOutPoint, videoEndAction, audioOutputRole]
+    [currentServiceItem, mediaItems, videoLoop, videoVolume, videoInPoint, videoOutPoint, videoFadeInSec, videoFadeOutSec, videoEndAction, audioOutputRole]
   )
 
   // Send current preview slide to live
@@ -765,6 +997,18 @@ export const OperatorApp: React.FC = () => {
     ])
   }, [presentations, searchQuery])
 
+  const allMediaTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    for (const item of mediaItems) {
+      if (item.tags) {
+        for (const t of item.tags) {
+          if (t.trim()) tagSet.add(t.trim())
+        }
+      }
+    }
+    return Array.from(tagSet)
+  }, [mediaItems])
+
   const filteredMediaItems = useMemo(() => {
     return mediaItems.filter((item) => {
       if (mediaFilterType !== 'all') {
@@ -773,6 +1017,11 @@ export const OperatorApp: React.FC = () => {
             return false
           }
         } else if (item.mediaType !== mediaFilterType) {
+          return false
+        }
+      }
+      if (selectedMediaTag !== 'all') {
+        if (!item.tags || !item.tags.includes(selectedMediaTag)) {
           return false
         }
       }
@@ -785,7 +1034,7 @@ export const OperatorApp: React.FC = () => {
       }
       return true
     })
-  }, [mediaItems, mediaFilterType, searchQuery])
+  }, [mediaItems, mediaFilterType, selectedMediaTag, searchQuery])
 
   // Bible Text Search Runner
   const handleRunBibleTextSearch = async () => {
@@ -1196,12 +1445,12 @@ export const OperatorApp: React.FC = () => {
 
   // Library Export & Import
   const handleExportLibrary = async () => {
-    const jsonStr = await window.churchPresenterApi.exportLibrary()
+    const jsonStr = await window.churchPresenterApi.exportLibrary(exportIncludeMedia)
     const blob = new Blob([jsonStr], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ChurchPresenter_Biblioteca_${new Date().toISOString().split('T')[0]}.json`
+    a.download = `ChurchPresenter_Biblioteca_${new Date().toISOString().split('T')[0]}.cpr`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -1281,7 +1530,14 @@ export const OperatorApp: React.FC = () => {
         <div className="brand-section">
           <div className="app-logo-badge">CP</div>
           <div>
-            <div className="app-title">ChurchPresenter</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="app-title">ChurchPresenter</span>
+              {isDev && (
+                <span className="dev-env-badge" id="dev-env-badge">
+                  DESARROLLO
+                </span>
+              )}
+            </div>
             <div className="app-version">v{appVersion} | Modo Foco Seguro</div>
           </div>
         </div>
@@ -1580,13 +1836,13 @@ export const OperatorApp: React.FC = () => {
                   </button>
                 )}
 
-                <div className="secondary-actions-row">
-                  <label className="secondary-action-btn file-upload-label" title="Importar Biblioteca JSON">
+                <div className="secondary-actions-row" style={{ alignItems: 'center' }}>
+                  <label className="secondary-action-btn file-upload-label" title="Importar Biblioteca JSON / CPR">
                     <Upload size={13} />
                     <span>Importar</span>
                     <input
                       type="file"
-                      accept=".json,.txt"
+                      accept=".json,.txt,.cpr"
                       style={{ display: 'none' }}
                       onChange={handleImportLibrary}
                     />
@@ -1595,11 +1851,24 @@ export const OperatorApp: React.FC = () => {
                   <button
                     className="secondary-action-btn"
                     onClick={handleExportLibrary}
-                    title="Exportar toda la biblioteca a archivo JSON"
+                    title="Exportar toda la biblioteca"
                   >
                     <Download size={13} />
                     <span>Exportar</span>
                   </button>
+
+                  <label
+                    className="checkbox-label"
+                    style={{ fontSize: 11, cursor: 'pointer', marginLeft: 4 }}
+                    title="Incluir archivos de video, audio e imágenes dentro del archivo exportado (.cpr)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeMedia}
+                      onChange={(e) => setExportIncludeMedia(e.target.checked)}
+                    />
+                    <span>+ Medios</span>
+                  </label>
                 </div>
               </div>
             </>
@@ -1897,6 +2166,27 @@ export const OperatorApp: React.FC = () => {
                 </button>
               </div>
 
+              {/* Media Tag Filter Chips */}
+              {allMediaTags.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 4px', marginBottom: 6 }}>
+                  <button
+                    className={`media-tag-chip ${selectedMediaTag === 'all' ? 'active' : ''}`}
+                    onClick={() => setSelectedMediaTag('all')}
+                  >
+                    Todas las etiquetas
+                  </button>
+                  {allMediaTags.map((tag) => (
+                    <button
+                      key={tag}
+                      className={`media-tag-chip ${selectedMediaTag === tag ? 'active' : ''}`}
+                      onClick={() => setSelectedMediaTag(tag)}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Media Search Input */}
               <div className="search-box">
                 <Search size={14} className="search-icon" />
@@ -2001,6 +2291,24 @@ export const OperatorApp: React.FC = () => {
 
                 <button
                   className="secondary-action-btn"
+                  onClick={() => setIsFolderImportModalOpen(true)}
+                  title="Importar una carpeta completa con imágenes"
+                >
+                  <FolderPlus size={13} />
+                  <span>+ Carpeta</span>
+                </button>
+
+                <button
+                  className="secondary-action-btn"
+                  onClick={() => setIsPptImportModalOpen(true)}
+                  title="Importar presentación PowerPoint (.pptx)"
+                >
+                  <Film size={13} />
+                  <span>+ PowerPoint</span>
+                </button>
+
+                <button
+                  className="secondary-action-btn"
                   onClick={async () => {
                     const res = await window.churchPresenterApi.checkMediaIntegrity()
                     if (res.missingCount === 0) {
@@ -2013,7 +2321,7 @@ export const OperatorApp: React.FC = () => {
                   title="Verificar si los archivos físicos existen en disco"
                 >
                   <ShieldCheck size={13} />
-                  <span>Comprobar Integridad</span>
+                  <span>Integridad</span>
                 </button>
               </div>
             </div>
@@ -2132,6 +2440,14 @@ export const OperatorApp: React.FC = () => {
                           <Music size={13} className="song-icon" />
                         ) : item.type === 'presentation' ? (
                           <FileText size={13} className="pres-icon" />
+                        ) : item.type === 'powerpoint' ? (
+                          <Film size={13} style={{ color: '#eab308' }} />
+                        ) : item.type === 'video' ? (
+                          <Video size={13} className="video-icon" />
+                        ) : item.type === 'pdf' ? (
+                          <FileText size={13} style={{ color: '#f43f5e' }} />
+                        ) : item.type === 'image_presentation' ? (
+                          <ImageIcon size={13} className="image-icon" />
                         ) : item.type === 'scripture' ? (
                           <BookOpen size={13} className="scripture-icon" />
                         ) : item.type === 'header' ? (
@@ -2439,6 +2755,34 @@ export const OperatorApp: React.FC = () => {
                     <option value="lobby">Vestíbulo / Lobby</option>
                   </select>
                 </div>
+
+                <div className="video-option-item">
+                  <label>Fundido Entrada:</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.5}
+                    value={videoFadeInSec}
+                    onChange={(e) => setVideoFadeInSec(parseFloat(e.target.value) || 0)}
+                    className="mini-num-input"
+                  />
+                  <span>seg</span>
+                </div>
+
+                <div className="video-option-item">
+                  <label>Fundido Salida:</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.5}
+                    value={videoFadeOutSec}
+                    onChange={(e) => setVideoFadeOutSec(parseFloat(e.target.value) || 0)}
+                    className="mini-num-input"
+                  />
+                  <span>seg</span>
+                </div>
               </div>
             </div>
           )}
@@ -2473,6 +2817,68 @@ export const OperatorApp: React.FC = () => {
             </div>
           )}
 
+          {/* Phase 5B: PowerPoint Toolbar Bar */}
+          {currentServiceItem?.type === 'powerpoint' && (
+            <div className="pdf-toolbar-bar" style={{ background: '#1e1e38', borderColor: '#4338ca' }}>
+              <span className="pdf-info-label" style={{ color: '#a5b4fc' }}>
+                Presentación PowerPoint: {activeSlides.length} diapositivas
+              </span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="secondary-action-btn mini-btn"
+                  onClick={() => {
+                    if (currentServiceItem.powerpointConfig?.originalPath) {
+                      window.churchPresenterApi.editInPowerPoint(currentServiceItem.powerpointConfig.originalPath)
+                    }
+                  }}
+                  title="Abrir en Microsoft PowerPoint para editar"
+                >
+                  <ExternalLink size={12} />
+                  <span>Editar en PowerPoint</span>
+                </button>
+
+                <button
+                  className="secondary-action-btn mini-btn"
+                  onClick={async () => {
+                    if (currentServiceItem.powerpointConfig) {
+                      try {
+                        const modified = await window.churchPresenterApi.checkPowerPointModified(
+                          currentServiceItem.powerpointConfig.originalPath,
+                          currentServiceItem.powerpointConfig.hash
+                        )
+                        if (modified) {
+                          if (
+                            confirm(
+                              'Se detectaron cambios en el archivo PowerPoint original.\n¿Desea reimportar las diapositivas actualizadas?'
+                            )
+                          ) {
+                            const manifest = await window.churchPresenterApi.importPowerPoint(
+                              currentServiceItem.powerpointConfig.originalPath
+                            )
+                            setPptManifests((prev) => ({
+                              ...prev,
+                              [manifest.hash]: manifest,
+                              [manifest.originalPath]: manifest
+                            }))
+                            alert('Diapositivas de PowerPoint actualizadas con éxito.')
+                          }
+                        } else {
+                          alert('El archivo PowerPoint no ha sido modificado externamente.')
+                        }
+                      } catch (err: any) {
+                        alert(`Error al verificar: ${err.message}`)
+                      }
+                    }
+                  }}
+                  title="Comprobar si el archivo fue modificado"
+                >
+                  <RefreshCw size={12} />
+                  <span>Comprobar Cambios</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Slide Cards Grid */}
           <div className="slides-grid-container">
             {activeSlides.length > 0 ? (
@@ -2492,7 +2898,29 @@ export const OperatorApp: React.FC = () => {
                       {isLive && <span className="live-badge">EN VIVO</span>}
                     </div>
 
-                    <div className="slide-card-body">{slide.body || '(Diapositiva en blanco)'}</div>
+                    <div className="slide-card-body">
+                      {slide.sourceType === 'powerpoint' && slide.mediaUrl ? (
+                        <div style={{ textAlign: 'center' }}>
+                          <img
+                            src={slide.mediaUrl}
+                            alt={slide.title}
+                            style={{ width: '100%', maxHeight: 90, objectFit: 'contain', borderRadius: 4, marginBottom: 4 }}
+                          />
+                          {slide.warnings && slide.warnings.length > 0 && (
+                            <div className="ppt-warning-pill" title={slide.warnings.join(' • ')}>
+                              ⚠ {slide.warnings.length} advertencia(s)
+                            </div>
+                          )}
+                          {slide.speakerNotes && (
+                            <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 4, textAlign: 'left' }} title={slide.speakerNotes}>
+                              📝 {slide.speakerNotes.slice(0, 45)}...
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        slide.body || '(Diapositiva en blanco)'
+                      )}
+                    </div>
 
                     <div className="slide-card-footer">
                       <span>#{idx + 1}</span>
@@ -3364,24 +3792,123 @@ export const OperatorApp: React.FC = () => {
                 </div>
               </div>
 
-              {/* Requirement B.4: Salida de Audio Designada */}
+              {/* Requirement B.4 & A.2: Salidas y Dispositivos de Audio Físicos */}
               <div className="settings-section">
-                <h3>Salida de Audio para Videos y Medios</h3>
+                <h3>Salida y Dispositivos de Audio</h3>
                 <p className="section-note">
-                  El sonido de los videos solo sonará por una salida física designada (mesa de sonido o HDMI de la sala). Las demás pantallas irán en silencio.
+                  Configure la pantalla que reproducirá el audio del video, y asigne los dispositivos físicos de audio para medios y música ambiental.
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <label>Salida de Audio activa:</label>
-                  <select
-                    value={audioOutputRole}
-                    onChange={(e) => setAudioOutputRole(e.target.value)}
-                    className="bible-select"
-                  >
-                    <option value="main">Sala Principal (main) - HDMI / Mesa de Sonido</option>
-                    <option value="stage">Escenario (stage)</option>
-                    <option value="lobby">Vestíbulo / Lobby</option>
-                  </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <label style={{ minWidth: 200 }}>Pantalla con audio activo:</label>
+                    <select
+                      value={audioOutputRole}
+                      onChange={(e) => setAudioOutputRole(e.target.value)}
+                      className="bible-select"
+                    >
+                      <option value="main">Sala Principal (main) - HDMI / Mesa de Sonido</option>
+                      <option value="stage">Escenario (stage)</option>
+                      <option value="lobby">Vestíbulo / Lobby</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <label style={{ minWidth: 200 }}>Dispositivo de Audio (Video):</label>
+                    <select
+                      value={audioDeviceVideo}
+                      onChange={(e) => {
+                        setAudioDeviceVideo(e.target.value)
+                        localStorage.setItem('cp_audio_device_video', e.target.value)
+                      }}
+                      className="bible-select"
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">Predeterminado del Sistema</option>
+                      {audioDevices.map((d) => (
+                        <option key={d.deviceId} value={d.deviceId}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="sound-test-btn"
+                      onClick={() => playTestAudioChime(audioDeviceVideo)}
+                      title="Probar sonido en este dispositivo"
+                    >
+                      <Volume2 size={13} />
+                      <span>Probar Sonido</span>
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <label style={{ minWidth: 200 }}>Dispositivo Música Ambiental:</label>
+                    <select
+                      value={audioDeviceAmbient}
+                      onChange={(e) => {
+                        setAudioDeviceAmbient(e.target.value)
+                        localStorage.setItem('cp_audio_device_ambient', e.target.value)
+                      }}
+                      className="bible-select"
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">Predeterminado del Sistema</option>
+                      {audioDevices.map((d) => (
+                        <option key={d.deviceId} value={d.deviceId}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="sound-test-btn"
+                      onClick={() => playTestAudioChime(audioDeviceAmbient)}
+                      title="Probar sonido en este dispositivo"
+                    >
+                      <Volume2 size={13} />
+                      <span>Probar Sonido</span>
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              {/* Requirement A.6: Información del Entorno y Copia de Biblioteca */}
+              <div className="settings-section">
+                <h3>Información de Entorno y Datos</h3>
+                <p className="section-note">
+                  Versión instalada: <strong>v{appVersion}</strong> {isDev ? '(Modo Desarrollo Activo)' : '(Producción)'}
+                  <br />
+                  Carpeta de datos: <code>{userDataPath || 'Predeterminada'}</code>
+                </p>
+                {isDev && (
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      className="secondary-action-btn"
+                      id="copy-prod-btn"
+                      onClick={async () => {
+                        if (
+                          confirm(
+                            '¿Copiar la biblioteca real de producción a este entorno de desarrollo?\n\n' +
+                            'Esta acción reemplazará la base de datos y archivos de prueba locales con los datos reales para depuración segura. Los datos reales nunca serán modificados.'
+                          )
+                        ) {
+                          try {
+                            const res = await window.churchPresenterApi.copyProdLibraryToDev()
+                            if (res.success) {
+                              alert(res.message)
+                              loadAllData()
+                            } else {
+                              alert(`No se pudo copiar: ${res.message}`)
+                            }
+                          } catch (err: any) {
+                            alert(`Error: ${err.message}`)
+                          }
+                        }
+                      }}
+                    >
+                      <Copy size={13} />
+                      <span>Copiar Biblioteca Real a Desarrollo</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3443,6 +3970,25 @@ export const OperatorApp: React.FC = () => {
                   onChange={(e) => setImportMediaTags(e.target.value)}
                 />
               </div>
+
+              <div style={{ marginTop: 12, padding: 8, background: '#1e293b', borderRadius: 4 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+                  ¿Tiene un video en formato no compatible (MKV, AVI, MOV, HEVC)?
+                </div>
+                <button
+                  type="button"
+                  className="secondary-action-btn"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => {
+                    setIsMediaImportModalOpen(false)
+                    setFfmpegInputPath(importMediaFilePath)
+                    setIsFfmpegModalOpen(true)
+                  }}
+                >
+                  <Film size={13} />
+                  <span>Convertir a MP4 (H.264/AAC) con FFmpeg</span>
+                </button>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="secondary-action-btn" onClick={() => setIsMediaImportModalOpen(false)}>
@@ -3470,6 +4016,320 @@ export const OperatorApp: React.FC = () => {
               >
                 Importar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          FOLDER IMPORT MODAL (Requirement A.3)
+          ========================================================= */}
+      {isFolderImportModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <div className="modal-title">Importar Carpeta de Imágenes</div>
+              <button className="modal-close-btn" onClick={() => setIsFolderImportModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="section-note">
+                Seleccione o ingrese la ruta de una carpeta que contenga imágenes (JPG, PNG, WebP). Todas las imágenes serán importadas automáticamente a la biblioteca de medios.
+              </p>
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Ruta de la carpeta en este equipo *</label>
+                <input
+                  type="text"
+                  placeholder="ej. C:\Imagenes\FondosCulto"
+                  value={importFolderPath}
+                  onChange={(e) => setImportFolderPath(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="secondary-action-btn" onClick={() => setIsFolderImportModalOpen(false)}>
+                Cancelar
+              </button>
+              <button
+                className="primary-action-btn"
+                onClick={async () => {
+                  if (!importFolderPath.trim()) {
+                    alert('Ingrese la ruta de la carpeta')
+                    return
+                  }
+                  try {
+                    const imported = await window.churchPresenterApi.importImageFolder(importFolderPath.trim())
+                    alert(`Se importaron ${imported.length} imágenes exitosamente.`)
+                    setIsFolderImportModalOpen(false)
+                    setImportFolderPath('')
+                    loadAllData()
+                  } catch (err: any) {
+                    alert(`Error al importar carpeta: ${err.message}`)
+                  }
+                }}
+              >
+                Importar Carpeta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          POWERPOINT IMPORT MODAL (Phase 5B)
+          ========================================================= */}
+      {isPptImportModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <div className="modal-title">Importar Presentación PowerPoint (.pptx)</div>
+              <button
+                className="modal-close-btn"
+                onClick={() => {
+                  if (!isPptConverting) setIsPptImportModalOpen(false)
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="section-note">
+                Convierte presentaciones PowerPoint a diapositivas en alta resolución (1080p/4K) extrayendo notas del orador para el monitor de escenario y analizando fidelidad (animaciones, transiciones, fuentes).
+              </p>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Ruta completa del archivo .pptx *</label>
+                <input
+                  type="text"
+                  placeholder="ej. C:\Sermones\Mensaje_Domingo.pptx"
+                  value={importPptPath}
+                  disabled={isPptConverting}
+                  onChange={(e) => setImportPptPath(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Motor de Conversión:</label>
+                <select
+                  value={preferredPptConverter}
+                  disabled={isPptConverting}
+                  onChange={(e) => setPreferredPptConverter(e.target.value as any)}
+                  className="bible-select"
+                >
+                  {pptConverters.map((c) => (
+                    <option key={c.type} value={c.type}>
+                      {c.name} {c.isAvailable ? '(Disponible)' : '(No instalado)'}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                  {pptConverters.find((c) => c.type === preferredPptConverter)?.description}
+                </div>
+              </div>
+
+              {isPptConverting && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#38bdf8' }}>
+                    <span>{pptConvertStep || 'Procesando presentación...'}</span>
+                  </div>
+                  <div className="progress-bar-box">
+                    <div className="progress-bar-fill" style={{ width: '80%' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {isPptConverting ? (
+                <button
+                  className="secondary-action-btn"
+                  onClick={async () => {
+                    if (pptJobId) {
+                      await window.churchPresenterApi.cancelPowerPointJob(pptJobId)
+                    }
+                    setIsPptConverting(false)
+                  }}
+                >
+                  Cancelar Conversión
+                </button>
+              ) : (
+                <>
+                  <button className="secondary-action-btn" onClick={() => setIsPptImportModalOpen(false)}>
+                    Cancelar
+                  </button>
+                  <button
+                    className="primary-action-btn"
+                    onClick={async () => {
+                      if (!importPptPath.trim()) {
+                        alert('Por favor ingrese la ruta del archivo PowerPoint')
+                        return
+                      }
+                      try {
+                        const jobId = `ppt_job_${Date.now()}`
+                        setPptJobId(jobId)
+                        setIsPptConverting(true)
+                        setPptConvertStep('Iniciando conversión de diapositivas...')
+                        const manifest = await window.churchPresenterApi.importPowerPoint(importPptPath.trim())
+                        setPptManifests((prev) => ({
+                          ...prev,
+                          [manifest.hash]: manifest,
+                          [manifest.originalPath]: manifest
+                        }))
+
+                        // Add to current service if active
+                        if (currentService) {
+                          const pptItem: ServiceItem = {
+                            id: `ppt_item_${Date.now()}`,
+                            type: 'powerpoint',
+                            name: manifest.originalName.replace(/\.pptx?$/i, ''),
+                            powerpointConfig: {
+                              originalPath: manifest.originalPath,
+                              hash: manifest.hash
+                            }
+                          }
+                          const updatedService: ServicePlan = {
+                            ...currentService,
+                            items: [...currentService.items, pptItem],
+                            updatedAt: new Date().toISOString()
+                          }
+                          const saved = await window.churchPresenterApi.saveService(updatedService)
+                          setCurrentService(saved)
+                          setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
+                        }
+
+                        alert(`PowerPoint importado con éxito: ${manifest.slideCount} diapositivas listas para proyectar.`)
+                        setIsPptImportModalOpen(false)
+                        setImportPptPath('')
+                      } catch (err: any) {
+                        alert(`Error al importar PowerPoint: ${err.message}`)
+                      } finally {
+                        setIsPptConverting(false)
+                        setPptConvertStep('')
+                      }
+                    }}
+                  >
+                    Importar y Convertir
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          FFMPEG CONVERSION MODAL (Requirement A.5)
+          ========================================================= */}
+      {isFfmpegModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <div className="modal-title">Conversión de Video con FFmpeg</div>
+              <button
+                className="modal-close-btn"
+                onClick={() => {
+                  if (!isConvertingFfmpeg) setIsFfmpegModalOpen(false)
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="section-note">
+                Convierte contenedores y códecs incompatibles (MKV, AVI, MOV, HEVC, WMV) a MP4 estándar (H.264 / AAC) con aceleración rápida, garantizando reproducción fluida y libre de saltos en las 3 salidas de video.
+              </p>
+
+              {ffmpegStatus.available ? (
+                <div style={{ marginTop: 10, padding: 8, background: '#064e3b', borderRadius: 4, fontSize: 12, color: '#a7f3d0' }}>
+                  ✓ FFmpeg detectado en el sistema: <code>{ffmpegStatus.version || ffmpegStatus.path}</code>
+                </div>
+              ) : (
+                <div style={{ marginTop: 10, padding: 8, background: '#7f1d1d', borderRadius: 4, fontSize: 12, color: '#fecaca' }}>
+                  ⚠ FFmpeg no está instalado en el sistema.
+                  <br />
+                  Para habilitar la conversión automática, instálelo abriendo PowerShell como Administrador:
+                  <div style={{ margin: '6px 0', padding: 4, background: '#450a0a', borderRadius: 3, fontFamily: 'monospace' }}>
+                    winget install Gyan.FFmpeg
+                  </div>
+                  o descargue los binarios desde ffmpeg.org y agréguelos al PATH de Windows.
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Archivo de Video a convertir *</label>
+                <input
+                  type="text"
+                  placeholder="ej. C:\Videos\incompatible.mkv"
+                  value={ffmpegInputPath}
+                  disabled={isConvertingFfmpeg}
+                  onChange={(e) => setFfmpegInputPath(e.target.value)}
+                />
+              </div>
+
+              {isConvertingFfmpeg && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span>Convirtiendo a MP4 (H.264/AAC)...</span>
+                    <span>{ffmpegProgress}%</span>
+                  </div>
+                  <div className="progress-bar-box">
+                    <div className="progress-bar-fill" style={{ width: `${ffmpegProgress}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {isConvertingFfmpeg ? (
+                <button
+                  className="secondary-action-btn"
+                  onClick={async () => {
+                    await window.churchPresenterApi.cancelFfmpegJob('current_ffmpeg_job')
+                    setIsConvertingFfmpeg(false)
+                    setFfmpegProgress(0)
+                  }}
+                >
+                  Cancelar Conversión
+                </button>
+              ) : (
+                <>
+                  <button className="secondary-action-btn" onClick={() => setIsFfmpegModalOpen(false)}>
+                    Cerrar
+                  </button>
+                  <button
+                    className="primary-action-btn"
+                    disabled={!ffmpegStatus.available}
+                    onClick={async () => {
+                      if (!ffmpegInputPath.trim()) {
+                        alert('Ingrese la ruta del video a convertir')
+                        return
+                      }
+                      try {
+                        setIsConvertingFfmpeg(true)
+                        setFfmpegProgress(10)
+                        const outPath = ffmpegInputPath.trim().replace(/\.[^/.]+$/, '') + '_convertido.mp4'
+                        const res = await window.churchPresenterApi.convertVideoFfmpeg(
+                          'current_ffmpeg_job',
+                          ffmpegInputPath.trim(),
+                          outPath
+                        )
+                        setFfmpegProgress(100)
+                        alert(`Conversión completada con éxito:\n${res.outputPath}`)
+                        setIsFfmpegModalOpen(false)
+                        setFfmpegInputPath('')
+                        await window.churchPresenterApi.importMediaFile(res.outputPath, ['convertido'])
+                        loadAllData()
+                      } catch (err: any) {
+                        alert(`Error en conversión: ${err.message}`)
+                      } finally {
+                        setIsConvertingFfmpeg(false)
+                        setFfmpegProgress(0)
+                      }
+                    }}
+                  >
+                    Iniciar Conversión
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

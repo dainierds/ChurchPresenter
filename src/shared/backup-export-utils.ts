@@ -21,6 +21,7 @@ export function parseAndValidateLibraryJson(jsonString: string): LibraryExportDa
     songs: parsed.songs,
     presentations: Array.isArray(parsed.presentations) ? parsed.presentations : [],
     themes: Array.isArray(parsed.themes) ? parsed.themes : [],
-    services: Array.isArray(parsed.services) ? parsed.services : []
+    services: Array.isArray(parsed.services) ? parsed.services : [],
+    media: Array.isArray(parsed.media) ? parsed.media : undefined
   }
 }

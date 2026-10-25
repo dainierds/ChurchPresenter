@@ -222,14 +222,17 @@ export class DatabaseService {
   private db: Database | null = null
   private dbPath: string = ''
   private backupsDir: string = ''
+  private customPath?: string
   private saveTimeout: NodeJS.Timeout | null = null
   private periodicBackupTimer: NodeJS.Timeout | null = null
   private restoredFromBackup: boolean = false
   private SQL: SqlJsStatic | null = null
   private isDirty: boolean = false
   private lastBackupTimestamp: number = 0
+  public migrationFailureAlert: { fromVersion: number; failedVersion: number; error: string } | null = null
 
   constructor(customPath?: string) {
+    this.customPath = customPath
     if (customPath) {
       this.dbPath = customPath
       this.backupsDir = path.join(path.dirname(customPath), 'backups')
@@ -263,6 +266,17 @@ export class DatabaseService {
 
   public async initialize(): Promise<void> {
     try {
+      if (!this.customPath) {
+        try {
+          const userData = app.getPath('userData')
+          this.dbPath = path.join(userData, 'church_presenter.sqlite')
+          this.backupsDir = path.join(userData, 'backups')
+        } catch {
+          this.dbPath = path.resolve(process.cwd(), 'church_presenter.sqlite')
+          this.backupsDir = path.resolve(process.cwd(), 'backups')
+        }
+      }
+
       // Locate sql-wasm.wasm
       let wasmPath = path.resolve(__dirname, 'sql-wasm.wasm')
       if (!fs.existsSync(wasmPath)) {
@@ -526,8 +540,8 @@ export class DatabaseService {
     }
   }
 
-  private runMigrations(): void {
-    if (!this.db) return
+  public runMigrations(customMigrations?: Migration[]): void {
+    if (!this.db || !this.SQL) return
 
     this.db.run(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -537,23 +551,123 @@ export class DatabaseService {
       );
     `)
 
-    const result = this.db.exec('SELECT version FROM schema_migrations;')
+    const result = this.db.exec('SELECT version FROM schema_migrations ORDER BY version ASC;')
     const appliedVersions = new Set<number>()
+    let currentVersion = 0
     if (result.length > 0 && result[0].values) {
       for (const row of result[0].values) {
-        appliedVersions.add(row[0] as number)
+        const v = row[0] as number
+        appliedVersions.add(v)
+        if (v > currentVersion) currentVersion = v
       }
     }
 
-    for (const migration of MIGRATIONS) {
-      if (!appliedVersions.has(migration.version)) {
+    const migrationList = customMigrations || MIGRATIONS
+    const pending = migrationList.filter((m) => !appliedVersions.has(m.version))
+    if (pending.length === 0) return
+
+    // Requirement A.7: Pre-migration backup with previous version in filename
+    if (!fs.existsSync(this.backupsDir)) {
+      fs.mkdirSync(this.backupsDir, { recursive: true })
+    }
+    const preBackupName = `backup_pre_migration_v${currentVersion}_${Date.now()}.sqlite`
+    const preBackupPath = path.join(this.backupsDir, preBackupName)
+    const preMigrationData = this.db.export()
+    fs.writeFileSync(preBackupPath, Buffer.from(preMigrationData))
+    logger.info(`Created pre-migration backup (v${currentVersion}): ${preBackupPath}`)
+
+    for (const migration of pending) {
+      try {
         logger.info(`Running database migration ${migration.version}: ${migration.name}`)
         migration.up(this.db)
         this.db.run('INSERT INTO schema_migrations (version, name) VALUES (?, ?);', [
           migration.version,
           migration.name
         ])
+      } catch (migErr) {
+        logger.error(
+          `Migration ${migration.version} (${migration.name}) FAILED! Rolling back to pre-migration state v${currentVersion}...`,
+          migErr
+        )
+        // Rollback to preMigrationData and persist
+        this.db = new this.SQL.Database(preMigrationData)
+        this.persist()
+        this.restoredFromBackup = true
+        this.migrationFailureAlert = {
+          fromVersion: currentVersion,
+          failedVersion: migration.version,
+          error: String(migErr)
+        }
+        logger.warn(
+          `Rollback completed. Database booted safely with previous schema v${currentVersion}.`
+        )
+        break
       }
+    }
+  }
+
+  public copyFromProduction(): { success: boolean; message: string } {
+    try {
+      if (app.isPackaged) {
+        return {
+          success: false,
+          message: 'La copia de biblioteca solo está permitida en entorno de desarrollo.'
+        }
+      }
+
+      const devUserData = app.getPath('userData')
+      if (!devUserData.endsWith('-dev')) {
+        return {
+          success: false,
+          message: 'La carpeta actual no termina en -dev. Operación cancelada por seguridad.'
+        }
+      }
+
+      const prodUserData = devUserData.replace(/-dev$/, '')
+      if (!fs.existsSync(prodUserData)) {
+        return {
+          success: false,
+          message: `La carpeta de datos de producción no existe: ${prodUserData}`
+        }
+      }
+
+      const prodDb = path.join(prodUserData, 'church_presenter.sqlite')
+      if (!fs.existsSync(prodDb)) {
+        return {
+          success: false,
+          message: `No se encontró la base de datos de producción en: ${prodDb}`
+        }
+      }
+
+      // Close current DB, copy files, reinitialize
+      this.close()
+
+      const devDb = path.join(devUserData, 'church_presenter.sqlite')
+      if (fs.existsSync(devDb)) {
+        fs.copyFileSync(
+          devDb,
+          path.join(devUserData, `dev_backup_before_sync_${Date.now()}.sqlite`)
+        )
+      }
+      fs.copyFileSync(prodDb, devDb)
+
+      const prodMedia = path.join(prodUserData, 'media')
+      const devMedia = path.join(devUserData, 'media')
+      if (fs.existsSync(prodMedia)) {
+        fs.cpSync(prodMedia, devMedia, { recursive: true })
+      }
+
+      const prodBibles = path.join(prodUserData, 'bibles')
+      const devBibles = path.join(devUserData, 'bibles')
+      if (fs.existsSync(prodBibles)) {
+        fs.cpSync(prodBibles, devBibles, { recursive: true })
+      }
+
+      logger.info('Copied production database and media to development environment.')
+      return { success: true, message: 'Biblioteca de producción copiada a desarrollo con éxito.' }
+    } catch (err: any) {
+      logger.error('Error copying from production:', err)
+      return { success: false, message: err?.message || String(err) }
     }
   }
 

@@ -22,6 +22,10 @@ import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
 import { masterMediaSyncService } from './media/master-media-sync-service'
 import { pdfService } from './pdf/pdf-service'
+import { powerpointService } from './powerpoint/powerpoint-service'
+import { ffmpegService } from './media/ffmpeg-service'
+import fs from 'fs'
+import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
 import { buildBibleSlides } from '../shared/bible-slide-generator'
 import { logger } from './logger'
@@ -187,8 +191,8 @@ export function registerIpcHandlers(): void {
   })
 
   // Phase 3: Export & Import
-  ipcMain.handle(IPC_CHANNELS.LIBRARY_EXPORT, () => {
-    return libraryService.exportLibrary()
+  ipcMain.handle(IPC_CHANNELS.LIBRARY_EXPORT, (_event, includeMedia?: boolean) => {
+    return libraryService.exportLibrary(includeMedia)
   })
 
   ipcMain.handle(IPC_CHANNELS.LIBRARY_IMPORT, (_event, jsonData: string) => {
@@ -352,6 +356,75 @@ export function registerIpcHandlers(): void {
     return pdfService.getPdfPageCount(filePath)
   })
 
+  // Phase 5B: PowerPoint
+  ipcMain.handle(IPC_CHANNELS.POWERPOINT_DETECT_CONVERTERS, () => {
+    return powerpointService.detectConverters()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.POWERPOINT_IMPORT, (_event, filePath: string) => {
+    return powerpointService.importPresentation(filePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.POWERPOINT_EDIT, (_event, filePath: string) => {
+    return powerpointService.editInPowerPoint(filePath)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.POWERPOINT_CHECK_MODIFIED,
+    (_event, originalPath: string, recordedHash: string) => {
+      return powerpointService.checkIfModified(originalPath, recordedHash)
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.POWERPOINT_CANCEL, (_event, jobId: string) => {
+    return powerpointService.cancelJob(jobId)
+  })
+
+  // Phase 5B: Video Conversion (FFmpeg)
+  ipcMain.handle(IPC_CHANNELS.FFMPEG_DETECT, () => {
+    return ffmpegService.detectFfmpeg()
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.FFMPEG_CONVERT,
+    (_event, jobId: string, inputPath: string, outputPath: string) => {
+      return ffmpegService.convertVideo(jobId, inputPath, outputPath)
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.FFMPEG_CANCEL, (_event, jobId: string) => {
+    return ffmpegService.cancelConversion(jobId)
+  })
+
+  // Folder Import (Images)
+  ipcMain.handle(IPC_CHANNELS.MEDIA_IMPORT_FOLDER, async (_event, folderPath: string) => {
+    if (!fs.existsSync(folderPath)) {
+      throw new Error(`La carpeta no existe: ${folderPath}`)
+    }
+    const stat = fs.statSync(folderPath)
+    if (!stat.isDirectory()) {
+      throw new Error('La ruta especificada no es una carpeta.')
+    }
+
+    const files = fs.readdirSync(folderPath)
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+    const importedItems = []
+
+    for (const f of files) {
+      const ext = path.extname(f).toLowerCase()
+      if (validExtensions.includes(ext)) {
+        const fullPath = path.join(folderPath, f)
+        try {
+          const item = await mediaService.importMediaFile(fullPath, [path.basename(folderPath)])
+          importedItems.push(item)
+        } catch (err) {
+          logger.warn(`Could not import image ${fullPath}:`, err)
+        }
+      }
+    }
+    return importedItems
+  })
+
   // Connect master media sync events to broadcast to all windows
   masterMediaSyncService.on('sync-tick', (tick) => {
     windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
@@ -397,6 +470,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.APP_GET_VERSION, () => {
     return app.getVersion()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.APP_GET_ENV_INFO, () => {
+    return {
+      isDev: !app.isPackaged,
+      version: app.getVersion(),
+      userDataPath: app.getPath('userData')
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DEV_COPY_PROD_LIBRARY, () => {
+    return databaseService.copyFromProduction()
   })
 
   // Hook DisplayManager events

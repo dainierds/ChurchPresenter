@@ -280,3 +280,51 @@ graph TD
 5. **Renderizado Vectorial de PDF**: Integración de `pdfjs-dist` con escalado DPR dinámico, soporte para encajar completo (`contain`), rellenar (`cover`) o centrar (`center`), y precarga en segundo plano de páginas adyacentes para una navegación sin pausas.
 6. **Música Independiente de Entrada/Fondo**: Reproductor de pista de audio de fondo en la barra superior con controles de pausa, reanudación y botón de fundido de salida suave de 3 segundos (`fade-out`).
 7. **Fondos de Video en Bucle**: Soporte para temas con fondos de video animados en bucle continuo y silenciado.
+
+---
+
+## 10. Arquitectura de Integración de PowerPoint y Conversión de Medios (Fase 5B)
+
+```mermaid
+graph TD
+    subgraph PPTInput ["Entrada de Archivo PowerPoint (.pptx, .ppsx, .pptm)"]
+        File[".pptx en disco"]
+    end
+
+    subgraph PowerPointEngine ["PowerPointService (Main Process)"]
+        Detector["Detector de Motores\n(PowerPoint COM / LibreOffice / Manual)"]
+        Parser["PowerPointParser (OpenXML)\n(Extracción de notas, animaciones, fuentes)"]
+        Cache["Caché de Diapositivas\n(userData/media/powerpoint_cache/{hash}_{res})"]
+        Runner["export-powerpoint.ps1\n(COM Automation en proceso aislado)"]
+    end
+
+    subgraph AudioEngine ["Enrutamiento de Dispositivos de Audio"]
+        DevEnum["navigator.mediaDevices.enumerateDevices"]
+        SinkVideo["setSinkId (Dispositivo Video)"]
+        SinkAmbient["setSinkId (Dispositivo Música Fondo)"]
+        Chime["Web Audio Oscillator Test Chime"]
+    end
+
+    subgraph OutputLayer ["Renderizado en Salidas"]
+        Audience["Salida Sala / Lobby\n(Diapositiva PNG HD/4K)"]
+        Stage["Salida Escenario\n(Diapositiva + Notas del Orador en tiempo real)"]
+    end
+
+    File --> Parser
+    File --> Detector
+    Detector -->|Motor COM disponible| Runner
+    Runner --> Cache
+    Parser --> Cache
+    Cache --> Audience
+    Cache --> Stage
+    DevEnum --> SinkVideo
+    DevEnum --> SinkAmbient
+```
+
+### Características Principales de PowerPoint
+1. **Automatización COM Aislada**: El script `export-powerpoint.ps1` se ejecuta mediante PowerShell con políticas seguras (`-ExecutionPolicy Bypass`, `-NoProfile`, `-NonInteractive`), sin macros (`AutomationSecurity = 3`), sin ventana visible (`WithWindow: false`) y sin interferir con instancias existentes de PowerPoint abiertas por el usuario.
+2. **Extracción Directa de Notas del Orador**: `PowerPointParser` lee directamente los archivos XML (`ppt/notesSlides/notesSlide*.xml`) del paquete comprimido `.pptx` y asocia cada nota a su diapositiva respectiva, proyectándola con tipografía clara en el monitor de escenario.
+3. **Análisis de Fidelidad**: Avisa preventivamente al operador si una diapositiva contiene animaciones (que se proyectarán estáticas), transiciones o fuentes tipográficas ausentes en Windows.
+4. **Caché Determinista por Resolución y Hash**: Evita re-exportaciones redundantes de presentaciones ya procesadas.
+5. **Detección de Modificaciones y Apertura Externa**: Permite abrir la presentación en PowerPoint nativo para edición y detectar cambios externos por hash para reimportar en caliente con un clic.
+

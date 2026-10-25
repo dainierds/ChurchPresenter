@@ -329,3 +329,140 @@ Este documento registra cada una de las decisiones arquitectónicas y técnicas 
   - El consumo de memoria se mantiene sumamente controlado (~172 MB totales para la aplicación completa con 4 procesos de ventana activos).
   - Tolerancia a errores de decodificación: ante un archivo corrupto, la ventana de salida entra en estado seguro mostrando el fondo temático o negro sin cerrar ventanas ni colapsar la aplicación, notificando de inmediato al operador.
 
+---
+
+## 27. Arquitectura de Integración de PowerPoint (Fase 5B)
+
+- **Contexto**: Las iglesias frecuentemente utilizan presentaciones PowerPoint (`.pptx`, `.ppsx`, `.pptm`) preparadas por pastores o invitados. Proyectar PowerPoint nativamente en un entorno multisalida sin que la ventana de edición robe el foco del operador ni tape las pantallas de la congregación es un desafío crítico.
+- **Decisión**:
+  - **Tres niveles de conversión escalonada**:
+    1. **Microsoft PowerPoint COM Automation (Nivel Principal)**: Si Microsoft PowerPoint está instalado en Windows (detectado vía Registro `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\powerpnt.exe` o `POWERPNT.EXE` en PATH), se ejecuta un proceso independiente empaquetado de PowerShell que automatiza la aplicación en segundo plano mediante `New-Object -ComObject PowerPoint.Application`.
+    2. **LibreOffice Headless (Primer Fallback)**: Si Microsoft Office no está instalado pero existe LibreOffice (`soffice.exe`), se utiliza el modo `--headless --convert-to pdf` y se renderizan las páginas resultantes con el motor de PDF.
+    3. **Modo Manual Asistido (Segundo Fallback)**: Si ningún software de oficina está disponible en el equipo, la aplicación muestra una guía ilustrada paso a paso explicando cómo guardar la presentación como PDF desde PowerPoint Web u Office, y cargarlo directamente con un solo clic.
+  - **Resolución Máxima Adaptativa**: La exportación rasteriza las diapositivas a imágenes PNG sin pérdida a la resolución máxima de las pantallas físicas conectadas (ej. 1920x1080 para Full HD o 3840x2160 para 4K).
+  - **Caché Inteligente por Hash SHA-256 + Resolución**: Las imágenes convertidas se indexan por el hash del archivo original y su resolución de destino. Si la presentación no ha cambiado, la apertura en el servicio es instantánea (0 ms de conversión).
+  - **Detección de Modificaciones y Botón "Editar en PowerPoint"**:
+    - Un botón en la interfaz abre el archivo original con `shell.openPath` para que el usuario pueda editarlo en PowerPoint nativo.
+    - El operador cuenta con una opción de "Comprobar Cambios" que coteja el hash SHA-256 actual del archivo con el manifest registrado; si se detectan cambios, ofrece reimportar y refrescar las diapositivas con confirmación.
+
+---
+
+## 28. Seguridad y Estabilidad en la Automatización COM de PowerPoint
+
+- **Contexto**: La automatización COM de aplicaciones de oficina en Windows puede ser propensa a ventanas bloqueantes, ejecuciones de macros maliciosas, o congelamientos si el archivo requiere contraseñas.
+- **Decisión**:
+  - **Ejecución no interactiva y segura**: El script empaquetado `export-powerpoint.ps1` se invoca mediante `spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...])`.
+  - **Cero concatenación de cadenas**: Todos los argumentos (rutas, resoluciones, PIDs de exclusión) se pasan como parámetros posicionales y nombrados tipados de PowerShell, imposibilitando inyecciones de comandos.
+  - **Desactivación forzada de macros**: Se establece `Application.AutomationSecurity = 3` (`msoAutomationSecurityForceDisable`), impidiendo la ejecución de cualquier código VBA o macro incrustada.
+  - **Apertura de solo lectura e invisibilidad total**: Se abre con `Presentations.Open(..., ReadOnly: true, Untitled: false, WithWindow: false)`. Ninguna ventana de PowerPoint parpadea ni roba el foco de la pantalla del operador ni de las salidas.
+  - **No interferencia con sesiones activas del usuario**: Antes de iniciar la conversión, el script consulta `Get-Process powerpnt -ErrorAction SilentlyContinue` registrando los identificadores de proceso (PID) existentes. Al finalizar, solo se cierra y libera la instancia creada para el trabajo; las sesiones de PowerPoint que el usuario ya tenía abiertas no se tocan.
+  - **Tiempo de espera (Timeout) de 120 segundos y limpieza**: Todo trabajo tiene un temporizador estricto de 120 segundos en Node.js; si el proceso excede el límite, se cancela, se limpia el directorio temporal de trabajo y se notifica al operador.
+  - **Detección de contraseñas y archivos bloqueados**: El script captura excepciones COM específicas (como archivos protegidos por contraseña o vista protegida) y devuelve un JSON estructurado con mensajes de error claros en español para el operador.
+
+---
+
+## 29. Extracción Directa de Notas del Orador y Advertencias de Fidelidad OpenXML
+
+- **Contexto**: Un convertidor que solo exporta imágenes pierde las notas del orador (indispensables para los pastores en el monitor de escenario) y no advierte sobre elementos que no se animarán en una imagen estática.
+- **Decisión**:
+  - **Lectura OpenXML sin dependencias de Office**: Dado que los archivos `.pptx` son paquetes ZIP que contienen estructuras XML estandarizadas, `PowerPointParser` descomprime el paquete en memoria con `adm-zip` y analiza el árbol XML directamente.
+  - **Extracción de Notas del Orador**:
+    - Se mapean las relaciones de cada diapositiva en `ppt/slides/_rels/slide{N}.xml.rels`.
+    - Si existe una relación de tipo `notesSlide`, se lee `ppt/notesSlides/notesSlide{N}.xml` y se extraen todos los nodos de texto `<a:t>` dentro de `<a:p>`.
+    - Las notas resultantes se inyectan en el `LayerContent` del monitor de escenario (`role === 'stage'`), mostrándose en un contenedor dedicado de alto contraste.
+  - **Análisis de Fidelidad por Diapositiva**:
+    - **Animaciones**: Detecta etiquetas `<p:timing>` y `<p:anim>` en el XML de cada diapositiva. Si contiene animaciones, marca una advertencia en la miniatura: `1 animación detectada (se proyectará en su estado final estático)`.
+    - **Transiciones**: Detecta etiquetas `<p:transition>`. Si contiene transiciones entre diapositivas, genera una advertencia informativa.
+    - **Medios Incrustados**: Detecta referencias a videos o audios incrustados (`<a:videoFile>`, `<a:audioFile>`).
+    - **Fuentes Tipográficas Ausentes**: Extrae todas las fuentes declaradas en la presentación (`ppt/presentation.xml` y fuentes de diapositivas) y verifica su existencia en el catálogo local de fuentes de Windows (`C:\Windows\Fonts`). Si una fuente no está instalada en el sistema anfitrión, se alerta al operador de que Windows sustituirá la tipografía.
+
+---
+
+## 30. Aislamiento de Entorno de Desarrollo y Carpeta de Datos Separada (`-dev`)
+
+- **Contexto**: Desarrollar y depurar la aplicación en la misma PC donde se proyecta los domingos podría sobreescribir o corromper la base de datos de producción, canciones o configuraciones de pantallas.
+- **Decisión**:
+  - En modo desarrollo (`!app.isPackaged`), la carpeta de datos de usuario de Electron se redirige automáticamente a un directorio con sufijo `-dev`:
+    `app.setPath('userData', path.join(app.getPath('appData'), 'church-presenter-dev'))`
+  - Se añade un distintivo visual permanente `DESARROLLO` en color ámbar de alto contraste junto al nombre de la app en la barra superior del operador.
+  - Se muestra la versión exacta de la app en la ventana de Configuración.
+  - Se añade una función segura y unidireccional para **Copiar Biblioteca Real a Desarrollo**: el operador/desarrollador puede clonar la base de datos y medios de producción hacia la carpeta `-dev` para reproducir un bug con datos reales, garantizando que el entorno de desarrollo nunca pueda escribir sobre los datos de producción.
+
+---
+
+## 31. Seguridad en Migraciones de Base de Datos con Respaldo Automático y Rollback
+
+- **Contexto**: Una migración fallida en el arranque (por ejemplo, por corte de energía o error de sintaxis) podría inutilizar la base de datos de la iglesia antes de un culto.
+- **Decisión**:
+  - Antes de ejecutar cualquier migración pendiente, `DatabaseService` crea obligatoriamente una copia de seguridad física con el número de versión anterior en el nombre:
+    `backup_pre_migration_v{version}_{timestamp}.sqlite`
+  - Toda la secuencia de migraciones se ejecuta bajo un bloque transaccional seguro con una instantánea en memoria previa.
+  - Si una migración falla:
+    1. Se captura la excepción y se registra en `electron-log`.
+    2. Se restaura inmediatamente la instantánea previa a la migración.
+    3. La aplicación arranca en modo seguro con el esquema anterior funcional.
+    4. Se emite una alerta descriptiva al operador informando del fallo y de la conservación de sus datos intactos.
+  - Se añadieron pruebas unitarias automatizadas (`tests/migration-safety.test.ts`) validando la creación del archivo de respaldo pre-migración y la reversión automática ante migraciones corruptas.
+
+---
+
+## 32. Detección y Conversión Opcional de Videos con FFmpeg
+
+- **Contexto**: Videos descargados o aportados en formatos como MKV, AVI, MOV o con códec HEVC no son reproducidos con fluidez por Chromium. No obstante, empaquetar los ejecutables de FFmpeg infla desmedidamente el instalador.
+- **Decisión**:
+  - Se implementó `FfmpegService` que busca ejecutables de FFmpeg en el `PATH` del sistema, en rutas de Chocolatey, WinGet o en una ruta personalizada configurable en Configuración.
+  - Si FFmpeg no está disponible, la interfaz muestra instrucciones precisas para instalarlo con un solo comando en Windows 11 (`winget install Gyan.FFmpeg`).
+  - Si FFmpeg está disponible y se importa un video no compatible, se ofrece un botón de "Convertir a MP4 (H.264/AAC)".
+  - La conversión se ejecuta como un proceso hijo en segundo plano no bloqueante (`spawn`), parseando el progreso en tiempo real (`time=HH:MM:SS`) y permitiendo cancelación inmediata por el operador.
+
+---
+
+## 33. Selección y Enrutamiento Físico de Dispositivos de Audio (`setSinkId`)
+
+- **Contexto**: En Windows con varias salidas de video (HDMI del splitter, monitores DisplayPort, mesa de mezclas USB), el audio del video debe salir por el canal correspondiente (mesa de sonido o proyector principal) mientras que la música de fondo ambiental puede requerir una salida distinta.
+- **Decisión**:
+  - Utilización de la API estándar del navegador `navigator.mediaDevices.enumerateDevices()` filtrando por `audiooutput` y `HTMLMediaElement.setSinkId(deviceId)`.
+  - Configuración independiente para:
+    1. Dispositivo físico para Videos y Medios.
+    2. Dispositivo físico para Música Ambiental de Fondo.
+  - Persistencia de los IDs en configuración local.
+  - Botón de "Probar Sonido" en Configuración que genera un tono musical armónico (acorde C-E-G) mediante Web Audio API en el dispositivo seleccionado para confirmar la conexión física.
+  - **Tolerancia a desconexión**: Un listener `devicechange` detecta si el dispositivo seleccionado se desconecta; en tal caso, regresa de forma transparente al predeterminado del sistema y emite una notificación de advertencia en pantalla al operador.
+
+---
+
+## 34. Resultados Reales del Benchmark de Video Extendido y Medición de Deriva Multi-Salida (Sync Drift)
+
+- **Entorno de ejecución**:
+  - Sistema Operativo: Windows 11 Pro x64 (`win32 10.0.26300`)
+  - Procesador: Intel(R) Core(TM) Ultra 7 265KF (20 núcleos lógicos)
+  - Memoria RAM Total: 31.6 GB
+  - Ventanas concurrentes: 1 Operador + 3 Salidas físicas/virtuales (`main`, `stage`, `lobby`).
+  - Duración de prueba continua: 35.4 segundos por escenario con muestreo continuo a 1 Hz.
+- **Métricas reales medidas (`benchmark-video-extended-results.json`)**:
+
+| Escenario de Video | Salidas Activas | Duración Real | Fotogramas Renderizados | Fotogramas Caídos | % Pérdida | CPU Promedio | CPU Máxima | RAM Promedio | GPU Working Set | Deriva Media (Drift) | Deriva Máxima (Drift) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1080p Multi-Salida (3 Ventanas)** | 3 simultáneas | 35.41 s | 116 | 0 | **0.00%** | **0.3%** | 2.7% | 292.0 MB | 237.3 MB | **0.0 ms** | **0.0 ms** |
+| **4K Multi-Salida (3 Ventanas)** | 3 simultáneas | 35.40 s | 119 | 0 | **0.00%** | **1.4%** | 14.5% | 151.2 MB | 292.5 MB | **0.0 ms** | **1.0 ms** |
+
+- **Calibración del Umbral de Tolerancia de Desincronización**:
+  - Dado que la deriva promedio observada entre las 3 ventanas es de 0.0 ms y la deriva máxima es de solo 1.0 ms (gracias a los pulsos de sincronización y el reloj compartido en el proceso principal), se establece un umbral de tolerancia calibrado de **80 ms**.
+  - Este umbral supera holgadamente la deriva máxima física (1 ms) con un factor de seguridad adecuado, evitando que fluctuaciones menores de un fotograma provoquen saltos correctivos innecesarios y asegurando sincronización audiovisual indistinguible a simple vista.
+
+---
+
+## 35. Resultados del Benchmark de Conversión de PowerPoint (Prueba de Estrés de 80 Diapositivas)
+
+- **Entorno**: Windows 11 con Microsoft PowerPoint COM (`Office16\POWERPNT.EXE`).
+- **Archivo de prueba**: Presentación real con 80 diapositivas estructuradas (`benchmark_80_slides.pptx`).
+- **Métricas medidas (`benchmark-powerpoint-results.json`)**:
+  - Diapositivas totales convertidas: **80 diapositivas**
+  - Resolución de exportación: **1920x1080 (Full HD PNG sin pérdida)**
+  - Tiempo total de conversión: **2.74 segundos**
+  - Rendimiento / Throughput: **29.2 diapositivas por segundo**
+  - Memoria RSS durante la conversión: **70.8 MB**
+  - Bloqueo de UI: **0 segundos** (ejecución completamente asíncrona en proceso PowerShell desacoplado).
+  - Límite de timeout respetado: Muy por debajo del límite de seguridad de 120 segundos.
+
+

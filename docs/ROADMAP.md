@@ -69,8 +69,23 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Banco de pruebas de rendimiento de video 1080p y 4K con 3 salidas activas y mediciones reales (`0.00%` caídas de fotogramas registradas con `getVideoPlaybackQuality()`).
 - Suite de pruebas automatizadas E2E Playwright de 17 escenarios con captura exhaustiva de pantalla del operador y de cada una de las 3 salidas secundarias guardadas en `docs/evidence/`.
 
-### Fase 5B: PowerPoint y YouTube (Próxima)
-- Integración y renderizado de presentaciones externas de PowerPoint.
+### Fase 5B: PowerPoint y Endurecimiento de Medios (Completada)
+- Motor de conversión escalonada de PowerPoint (.pptx, .ppsx, .pptm): Microsoft PowerPoint COM Automation como motor principal, LibreOffice Headless como fallback secundario y Modo Manual asistido como fallback terciario.
+- Automatización segura con PowerShell (`export-powerpoint.ps1`): ejecución no interactiva con parámetros tipados sin concatenación de cadenas, bypass de política de ejecución, desactivación forzada de macros (`AutomationSecurity = 3`), apertura en solo lectura sin ventana (`WithWindow = false`) y respeto estricto de PIDs para no cerrar sesiones previas de PowerPoint abiertas por el usuario.
+- Extracción directa de notas del orador mediante parseo OpenXML (`ppt/notesSlides/notesSlide*.xml`) proyectadas en tiempo real en el monitor de escenario.
+- Análisis de fidelidad visual por diapositiva: detección de animaciones, transiciones, medios incrustados y verificación de fuentes contra el catálogo de Windows (`C:\Windows\Fonts`) con insignias de advertencia.
+- Caché inteligente por hash SHA-256 y resolución máxima de las salidas activas (1080p / 4K).
+- Botón "Editar en PowerPoint" (`shell.openPath`) y verificación de cambios externos por hash para reimportar con un solo clic.
+- Banco de pruebas de PowerPoint con 80 diapositivas convertido en 2.74s (29.2 diapositivas/segundo) sin bloqueo de interfaz.
+- Benchmark honesto de reproducción de video extendido (35.4s continuos por resolución en 3 salidas simultáneas): 0% fotogramas caídos, CPU promedio 0.3% (1080p) / 1.4% (4K), RAM controlada (151 - 292 MB).
+- Medición real de deriva temporal (drift) entre salidas: promedio 0.0 ms, máximo 1.0 ms. Calibración del umbral de tolerancia a 80 ms con justificación en mediciones reales.
+- Enrutamiento físico de dispositivos de audio con `enumerateDevices()` y `setSinkId` (video y música ambiental de fondo) con prueba de tono armónico (chime) y alerta por desconexión física.
+- Detección y conversión opcional de videos incompatibles (MKV, AVI, MOV, HEVC) mediante FFmpeg desacoplado (sin inflar el instalador con binarios).
+- Aislamiento estricto de entorno de desarrollo (`%APPDATA%\church-presenter-dev`), distintivo visual `DESARROLLO` y botón de clonación unidireccional segura desde producción.
+- Seguridad en migraciones SQLite: copia de seguridad automática pre-migración (`backup_pre_migration_v*`) y rollback automático seguro con notificación ante errores de migración.
+- Suite de pruebas E2E ampliada a 20 escenarios completos con captura fotográfica de todas las ventanas en `docs/evidence/`.
+
+### Fase 5C: YouTube y Transmisiones Web (Próxima)
 - Reproductor embebido o integración de videos y transmisiones en línea de YouTube.
 
 ### Fase 6: Escenario/temporizadores/control remoto

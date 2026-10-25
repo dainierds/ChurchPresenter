@@ -1,0 +1,63 @@
+{
+  "benchmarkTimestamp": "2026-10-25T04:12:54.697Z",
+  "platform": "win32 10.0.26300 (x64)",
+  "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
+  "cpuLogicalCores": 20,
+  "totalSystemRamGb": 31.6,
+  "calibratedToleranceThresholdMs": 80,
+  "toleranceCalibrationJustification": "Based on actual measured inter-window drift (Avg: 0ms - 0ms, Max: 0ms - 1ms), the calibrated tolerance threshold is set to 80ms (exceeding maximum measured drift with a safety factor to prevent false-positive seeks while maintaining imperceptible visual sync across screens).",
+  "scenarios": [
+    {
+      "testLabel": "1080p Multi-Output Video Playback (3 Outputs)",
+      "targetDurationSeconds": 35,
+      "actualDurationSeconds": 35.41,
+      "actualDurationMinutes": 0.59,
+      "activeOutputs": 3,
+      "totalRenderedFrames": 116,
+      "totalDroppedFrames": 0,
+      "droppedFramesPercent": "0%",
+      "cpuUsage": {
+        "averagePercent": 0.3,
+        "maxPercent": 2.7
+      },
+      "ramMemoryMb": {
+        "average": 292,
+        "max": 1137.5
+      },
+      "gpuWorkingSetMb": {
+        "average": 237.3
+      },
+      "syncDriftMilliseconds": {
+        "averageDriftMs": 0,
+        "maxDriftMs": 0,
+        "sampleCount": 35
+      }
+    },
+    {
+      "testLabel": "4K Multi-Output Video Playback (3 Outputs)",
+      "targetDurationSeconds": 35,
+      "actualDurationSeconds": 35.4,
+      "actualDurationMinutes": 0.59,
+      "activeOutputs": 3,
+      "totalRenderedFrames": 119,
+      "totalDroppedFrames": 0,
+      "droppedFramesPercent": "0%",
+      "cpuUsage": {
+        "averagePercent": 1.4,
+        "maxPercent": 14.5
+      },
+      "ramMemoryMb": {
+        "average": 151.2,
+        "max": 151.6
+      },
+      "gpuWorkingSetMb": {
+        "average": 292.5
+      },
+      "syncDriftMilliseconds": {
+        "averageDriftMs": 0,
+        "maxDriftMs": 1,
+        "sampleCount": 35
+      }
+    }
+  ]
+}

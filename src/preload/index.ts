@@ -186,8 +186,8 @@ const api: ChurchPresenterApi = {
   },
 
   // Phase 3: Export & Import
-  exportLibrary: (): Promise<string> => {
-    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_EXPORT)
+  exportLibrary: (includeMedia?: boolean): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_EXPORT, includeMedia)
   },
 
   importLibrary: (jsonData: string): Promise<{ importedSongs: number; importedPresentations: number }> => {
@@ -317,6 +317,43 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.PDF_GET_PAGE_COUNT, mediaId)
   },
 
+  // Phase 5B: PowerPoint & Video Conversion
+  detectPptConverters: (): Promise<any[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_DETECT_CONVERTERS)
+  },
+
+  importPowerPoint: (filePath: string): Promise<any> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_IMPORT, filePath)
+  },
+
+  editInPowerPoint: (filePath: string): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_EDIT, filePath)
+  },
+
+  checkPowerPointModified: (originalPath: string, recordedHash: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_CHECK_MODIFIED, originalPath, recordedHash)
+  },
+
+  cancelPowerPointJob: (jobId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_CANCEL, jobId)
+  },
+
+  detectFfmpeg: (): Promise<any> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FFMPEG_DETECT)
+  },
+
+  convertVideoFfmpeg: (jobId: string, inputPath: string, outputPath: string): Promise<any> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FFMPEG_CONVERT, jobId, inputPath, outputPath)
+  },
+
+  cancelFfmpegJob: (jobId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FFMPEG_CANCEL, jobId)
+  },
+
+  importImageFolder: (folderPath: string): Promise<any[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_IMPORT_FOLDER, folderPath)
+  },
+
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number): void => {
     ipcRenderer.send(IPC_CHANNELS.LOG_FPS_DROP, role, fps, displayId)
@@ -336,6 +373,14 @@ const api: ChurchPresenterApi = {
 
   getAppVersion: (): Promise<string> => {
     return ipcRenderer.invoke(IPC_CHANNELS.APP_GET_VERSION)
+  },
+
+  getEnvInfo: (): Promise<{ isDev: boolean; version: string; userDataPath: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.APP_GET_ENV_INFO)
+  },
+
+  copyProdLibraryToDev: (): Promise<{ success: boolean; message: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DEV_COPY_PROD_LIBRARY)
   }
 }
 

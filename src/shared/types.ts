@@ -69,10 +69,12 @@ export interface LayerContent {
   nextSlideBody?: string // For Stage Monitor (Escenario)
   nextSlideTitle?: string
   mediaUrl?: string
-  mediaType?: 'video' | 'image' | 'pdf'
+  mediaType?: 'video' | 'image' | 'pdf' | 'powerpoint'
   pdfPage?: number
   pdfPageCount?: number
   fitMode?: 'contain' | 'cover' | 'center'
+  speakerNotes?: string
+  warnings?: string[]
   videoPlaying?: boolean
   videoTime?: number
   videoDuration?: number
@@ -271,6 +273,7 @@ export type ServiceItemType =
   | 'audio'
   | 'pdf'
   | 'image_presentation'
+  | 'powerpoint'
 
 export interface ServiceItem {
   id: string
@@ -285,6 +288,7 @@ export interface ServiceItem {
   videoConfig?: VideoItemConfig
   pdfConfig?: PdfItemConfig
   imageConfig?: ImagePresentationConfig
+  powerpointConfig?: { manifestPath?: string; originalPath: string; hash: string }
   notes?: string
 }
 
@@ -313,6 +317,45 @@ export interface ImagePresentationConfig {
   images: { mediaId: string; filePath: string; name: string }[]
   currentIndex: number
   fitMode: 'contain' | 'cover' | 'center'
+}
+
+export type PptConverterType = 'powerpoint_com' | 'libreoffice' | 'manual'
+
+export interface PptConverterInfo {
+  type: PptConverterType
+  name: string
+  isAvailable: boolean
+  description: string
+  version?: string
+}
+
+export interface PptConversionSlide {
+  index: number
+  imagePath: string
+  speakerNotes?: string
+  warnings?: string[]
+}
+
+export interface PptPresentationManifest {
+  id: string
+  hash: string
+  originalPath: string
+  originalName: string
+  fileSize: number
+  slideCount: number
+  targetWidth: number
+  targetHeight: number
+  converterUsed: PptConverterType
+  convertedAt: string
+  slides: PptConversionSlide[]
+  analysis?: any
+  isModifiedExternally?: boolean
+}
+
+export interface FfmpegStatus {
+  available: boolean
+  path: string | null
+  version: string | null
 }
 
 export type MediaType = 'video' | 'audio' | 'image'
@@ -379,7 +422,7 @@ export interface ServicePlan {
 export interface SlideItem {
   id: string
   sourceId: string
-  sourceType: 'song' | 'presentation' | 'blank' | 'scripture' | 'video' | 'pdf' | 'image'
+  sourceType: 'song' | 'presentation' | 'blank' | 'scripture' | 'video' | 'pdf' | 'image' | 'powerpoint'
   groupLabel?: string
   slideIndex: number
   totalSlidesInGroup: number
@@ -391,6 +434,8 @@ export interface SlideItem {
   pdfPage?: number
   pdfPageCount?: number
   fitMode?: 'contain' | 'cover' | 'center'
+  speakerNotes?: string
+  warnings?: string[]
   scripturePayload?: {
     reference: string
     bookNumber: number
@@ -409,6 +454,7 @@ export interface LibraryExportData {
   presentations: GenericPresentation[]
   themes: ThemeConfig[]
   services?: ServicePlan[]
+  media?: MediaItem[]
 }
 
 /**
@@ -563,7 +609,7 @@ export interface ChurchPresenterApi {
   getTemplates: () => Promise<ServicePlan[]>
 
   // Phase 3: Export & Import
-  exportLibrary: () => Promise<string> // Returns JSON string or file path
+  exportLibrary: (includeMedia?: boolean) => Promise<string> // Returns JSON string or file path
   importLibrary: (jsonData: string) => Promise<{ importedSongs: number; importedPresentations: number }>
 
   // Demo Data Management
@@ -614,12 +660,25 @@ export interface ChurchPresenterApi {
   renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number) => Promise<string>
   getPdfPageCount: (mediaId: string) => Promise<number>
 
+  // Phase 5B: PowerPoint & Video Conversion
+  detectPptConverters: () => Promise<PptConverterInfo[]>
+  importPowerPoint: (filePath: string) => Promise<PptPresentationManifest>
+  editInPowerPoint: (filePath: string) => Promise<string>
+  checkPowerPointModified: (originalPath: string, recordedHash: string) => Promise<boolean>
+  cancelPowerPointJob: (jobId: string) => Promise<boolean>
+  detectFfmpeg: () => Promise<FfmpegStatus>
+  convertVideoFfmpeg: (jobId: string, inputPath: string, outputPath: string) => Promise<{ success: boolean; outputPath: string }>
+  cancelFfmpegJob: (jobId: string) => Promise<boolean>
+  importImageFolder: (folderPath: string) => Promise<MediaItem[]>
+
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void
   logMediaError: (role: string, url: string, message: string) => void
   captureOutputWindow: (role: string) => Promise<Buffer | null>
   openPreviewOutputWindow: (role: string) => Promise<boolean>
   getAppVersion: () => Promise<string>
+  getEnvInfo: () => Promise<{ isDev: boolean; version: string; userDataPath: string }>
+  copyProdLibraryToDev: () => Promise<{ success: boolean; message: string }>
 }
 
 declare global {

@@ -423,6 +423,27 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                 </div>
               </div>
             )}
+
+            {/* Phase 5B: Speaker Notes for Stage Monitor */}
+            {isStage && visibility.showContent && content?.speakerNotes && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: '12px 20px',
+                  backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                  border: '2px solid #f59e0b',
+                  borderRadius: 10,
+                  maxWidth: '92%'
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#fbbf24', letterSpacing: '0.08em', marginBottom: 4 }}>
+                  NOTAS DEL ORADOR:
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 600, color: '#f8fafc', lineHeight: 1.4 }}>
+                  {content.speakerNotes}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* STANDARD AUDIENCE VIEW (Main / Lobby) */
@@ -457,10 +478,10 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                   pageNumber={content.pdfPage || 1}
                   fitMode={content.fitMode || 'contain'}
                 />
-              ) : content.mediaType === 'image' && content.mediaUrl ? (
+              ) : (content.mediaType === 'image' || content.mediaType === 'powerpoint') && content.mediaUrl ? (
                 <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <img
-                    src={content.mediaUrl}
+                    src={toMediaUrl(content.mediaUrl)}
                     alt={content.title || ''}
                     style={{
                       width: '100%',

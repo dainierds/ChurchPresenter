@@ -2,6 +2,18 @@ import { app } from 'electron'
 
 app.name = 'church-presenter'
 
+// Separate dev and production user data folders (Requirement A.6)
+if (!app.isPackaged) {
+  try {
+    const defaultUserData = app.getPath('userData')
+    if (!defaultUserData.endsWith('-dev')) {
+      app.setPath('userData', `${defaultUserData}-dev`)
+    }
+  } catch {
+    // Fallback if userData cannot be read yet
+  }
+}
+
 import { setupLogger, logger } from './logger'
 import { databaseService } from './db/database-service'
 import { displayManager } from './display-manager'

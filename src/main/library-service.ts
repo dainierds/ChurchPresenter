@@ -394,14 +394,15 @@ export class LibraryService {
 
   // --- EXPORT & IMPORT ---
 
-  public exportLibrary(): string {
+  public exportLibrary(includeMedia: boolean = false): string {
     const data: LibraryExportData = {
       version: 1,
       exportedAt: new Date().toISOString(),
       songs: this.getSongs(),
       presentations: this.getPresentations(),
       themes: this.getThemes(),
-      services: this.getServices()
+      services: this.getServices(),
+      media: includeMedia ? databaseService.getMediaItems() : undefined
     }
     return serializeLibraryToJson(data)
   }
@@ -434,6 +435,16 @@ export class LibraryService {
     if (data.services) {
       for (const serv of data.services) {
         this.saveService(serv)
+      }
+    }
+
+    if (data.media) {
+      for (const m of data.media) {
+        try {
+          databaseService.insertMediaItem(m)
+        } catch {
+          // ignore duplicate
+        }
       }
     }
 
