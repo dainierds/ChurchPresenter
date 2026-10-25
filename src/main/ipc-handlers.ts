@@ -8,7 +8,9 @@ import {
   Song,
   GenericPresentation,
   ThemeConfig,
-  ServicePlan
+  ServicePlan,
+  RoleBibleConfig,
+  VideoItemConfig
 } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
@@ -17,6 +19,9 @@ import { windowManager } from './window-manager'
 import { shortcutsManager } from './shortcuts-manager'
 import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
+import { mediaService } from './media/media-service'
+import { masterMediaSyncService } from './media/master-media-sync-service'
+import { pdfService } from './pdf/pdf-service'
 import { parseBibleReference } from '../shared/bible-reference-parser'
 import { buildBibleSlides } from '../shared/bible-slide-generator'
 import { logger } from './logger'
@@ -267,6 +272,95 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  // Role Bible Configs
+  ipcMain.handle(IPC_CHANNELS.BIBLE_GET_ROLE_CONFIGS, () => {
+    return databaseService.getRoleBibleConfigs()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_SAVE_ROLE_CONFIG, (_event, config: RoleBibleConfig) => {
+    databaseService.saveRoleBibleConfig(config)
+    const allConfigs = databaseService.getRoleBibleConfigs()
+    stateManager.updateRoleBibleConfigs(allConfigs)
+    return true
+  })
+
+  // Phase 5A: Media Items
+  ipcMain.handle(IPC_CHANNELS.MEDIA_GET, (_event, type?: any) => {
+    return mediaService.getMediaItems(type)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MEDIA_IMPORT, (_event, sourcePath: string, tags?: string[]) => {
+    return mediaService.importMediaFile(sourcePath, tags)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MEDIA_DELETE, (_event, id: string) => {
+    return mediaService.deleteMediaItem(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MEDIA_CHECK_INTEGRITY, () => {
+    return mediaService.checkIntegrity()
+  })
+
+  // Phase 5A: Video & Media Sync
+  ipcMain.handle(IPC_CHANNELS.VIDEO_PLAY, (_event, config: VideoItemConfig) => {
+    masterMediaSyncService.playVideo(config)
+    const videoSlide: any = {
+      id: `vid_${config.mediaId}_${Date.now()}`,
+      title: 'Video',
+      body: '',
+      subtitle: '',
+      mediaUrl: config.mediaPath || (config as any).filePath || '',
+      mediaType: 'video',
+      videoPlaying: true,
+      fitMode: 'contain'
+    }
+    return stateManager.sendSlide(videoSlide)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.VIDEO_CONTROL,
+    (_event, action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => {
+      const tick = masterMediaSyncService.controlVideo(action, time)
+      if (tick) {
+        windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
+      }
+      return true
+    }
+  )
+
+  // Phase 5A: Independent Audio
+  ipcMain.handle(
+    IPC_CHANNELS.AUDIO_PLAY_INDEPENDENT,
+    (_event, mediaId: string, filePath: string, title?: string) => {
+      const audioState = masterMediaSyncService.playIndependentAudio(mediaId, filePath, title)
+      stateManager.updateIndependentAudio(audioState)
+      return true
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.AUDIO_CONTROL_INDEPENDENT,
+    (_event, action: 'play' | 'pause' | 'stop' | 'fade-out' | 'volume', value?: number) => {
+      const audioState = masterMediaSyncService.controlIndependentAudio(action, value)
+      stateManager.updateIndependentAudio(audioState)
+      return true
+    }
+  )
+
+  // Phase 5A: PDF
+  ipcMain.handle(IPC_CHANNELS.PDF_GET_PAGE_COUNT, (_event, filePath: string) => {
+    return pdfService.getPdfPageCount(filePath)
+  })
+
+  // Connect master media sync events to broadcast to all windows
+  masterMediaSyncService.on('sync-tick', (tick) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
+  })
+
+  masterMediaSyncService.on('audio-updated', (audioState) => {
+    stateManager.updateIndependentAudio(audioState)
+  })
+
   // Diagnostics & Logging
   ipcMain.on(
     IPC_CHANNELS.LOG_FPS_DROP,
@@ -276,6 +370,30 @@ export function registerIpcHandlers(): void {
       )
     }
   )
+
+  ipcMain.on(
+    IPC_CHANNELS.LOG_MEDIA_ERROR,
+    (_event, role: string, url: string, message: string) => {
+      logger.error(`[Media Decode Error] Role '${role}' error for URL '${url}': ${message}`)
+      windowManager.emitNotification({
+        id: `media_err_${Date.now()}`,
+        title: 'Error de Reproducción de Video',
+        message: `No se pudo reproducir el medio en la salida '${role}'. La salida continuará mostrando el fondo.`,
+        type: 'error',
+        timestamp: Date.now()
+      })
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.OUTPUT_CAPTURE_ROLE, async (_event, role: string) => {
+    return windowManager.captureOutputWindow(role)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OUTPUT_OPEN_PREVIEW, async (_event, role: string) => {
+    const primary = displayManager.getPrimaryDisplay()
+    const win = windowManager.createOutputWindow(role, primary)
+    return !!win
+  })
 
   ipcMain.handle(IPC_CHANNELS.APP_GET_VERSION, () => {
     return app.getVersion()

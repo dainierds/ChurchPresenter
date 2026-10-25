@@ -228,3 +228,55 @@ graph TD
 3. **Búsqueda Eficiente de Palabras**: Motor híbrido que aprovecha FTS4 para palabras completas y consultas sobre la columna pre-normalizada sin acentos (`normalized_text`), logrando tiempos de respuesta de menos de 1 ms sobre toda la Biblia.
 4. **Doble Traducción Simultánea**: Permite proyectar dos versiones a la vez (por ejemplo RVR1909 y KJV) en modo apilado o lado a lado, con tamaños de letra adaptativos (auto-fit).
 5. **Persistencia en el Culto**: Los pasajes bíblicos se pueden enviar a vivo directamente desde la pestaña de Biblia o guardarse en la lista del servicio activo como elementos de tipo `'scripture'`.
+
+---
+
+## 9. Arquitectura del Módulo de Medios y Presentaciones PDF (Fase 5A)
+
+```mermaid
+graph TD
+    subgraph Storage ["Almacenamiento Gestionado (userData/media)"]
+        VIDS["videos/ (MP4, WebM)"]
+        AUDS["audios/ (MP3, WAV, AAC)"]
+        PDFS["pdfs/ (Documentos PDF)"]
+        THUMBS["thumbnails/"]
+        HASH["Deduplicación SHA-256 en media_items"]
+    end
+
+    subgraph MainProcess ["Proceso Principal (Main)"]
+        MediaSvc["MediaService\n(Validación códecs, copias, integridad)"]
+        SyncClock["MasterMediaSyncService\n(Reloj maestro 200ms, transport deck, fade-out)"]
+        PdfSvc["PdfService\n(Extracción metadatos y conteo de páginas)"]
+    end
+
+    subgraph OperatorRenderer ["Renderer Operador"]
+        Deck["Deck de Transporte (Play/Pause/Scrubber/Trim/Audio-Role)"]
+        IndAudio["Reproductor de Audio Independiente en barra superior"]
+        PdfNav["Selector de Ajuste PDF (contain/cover/center) y páginas"]
+        MediaLibTab["Pestaña Biblioteca de Medios"]
+    end
+
+    subgraph OutputRenderers ["Renderers de Salida"]
+        OutMain["Salida Sala (main)\n(Video renderizado + Audio ACTIVO)"]
+        OutLobby["Salida Lobby (lobby)\n(Video sincronizado + Audio MUTED)"]
+        OutStage["Salida Escenario (stage)\n(Monitor con cronómetros: Transcurrido / Restante)"]
+    end
+
+    Deck -->|IPC: video:control| SyncClock
+    IndAudio -->|IPC: audio:control-independent| SyncClock
+    SyncClock -->|IPC broadcast: media:sync-tick| OutMain
+    SyncClock -->|IPC broadcast: media:sync-tick| OutLobby
+    SyncClock -->|IPC broadcast: media:sync-tick| OutStage
+    MediaLibTab -->|IPC: media:import| MediaSvc
+    MediaSvc --> HASH
+    PdfNav --> OutMain
+```
+
+### Características Principales de Medios y PDF
+1. **Deduplicación SHA-256**: Ningún archivo multimedia se almacena dos veces; si se detecta un hash repetido, se reutiliza el identificador existente.
+2. **Reloj Maestro de Sincronización**: El proceso principal transmite pulsos de tiempo (`mediaSyncTick`) cada 200 ms. Las salidas ajustan automáticamente el tiempo solo si la deriva supera los 150 ms, evitando microtirones de audio y video.
+3. **Enrutamiento Inteligente de Audio**: Solo la salida designada (`audioOutputRole`, por defecto `main`) reproduce audio por hardware; las salidas secundarias reproducen en silencio para evitar eco acústico.
+4. **Pantalla de Escenario Especializada**: Durante la reproducción de video, el monitor de escenario presenta números gigantes de alto contraste indicando el tiempo transcurrido (`01:23`) y el tiempo restante (`-02:15`).
+5. **Renderizado Vectorial de PDF**: Integración de `pdfjs-dist` con escalado DPR dinámico, soporte para encajar completo (`contain`), rellenar (`cover`) o centrar (`center`), y precarga en segundo plano de páginas adyacentes para una navegación sin pausas.
+6. **Música Independiente de Entrada/Fondo**: Reproductor de pista de audio de fondo en la barra superior con controles de pausa, reanudación y botón de fundido de salida suave de 3 segundos (`fade-out`).
+7. **Fondos de Video en Bucle**: Soporte para temas con fondos de video animados en bucle continuo y silenciado.

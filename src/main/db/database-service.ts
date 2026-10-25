@@ -3,6 +3,13 @@ import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
 import { logger } from '../logger'
+import {
+  DEFAULT_ROLE_BIBLE_CONFIGS,
+  MediaItem,
+  MediaType,
+  RoleBibleConfig,
+  RoleBibleConfigsMap
+} from '../../shared/types'
 
 export interface Migration {
   version: number
@@ -160,6 +167,47 @@ const MIGRATIONS: Migration[] = [
           reference TEXT NOT NULL,
           created_at TEXT DEFAULT (datetime('now'))
         );
+      `)
+    }
+  },
+  {
+    version: 5,
+    name: 'role_bible_configs_and_media_items',
+    up: (db: Database) => {
+      // Role Bible configs per output (main, stage, lobby)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS role_bible_configs (
+          role TEXT PRIMARY KEY,
+          mode TEXT NOT NULL DEFAULT 'single',
+          primary_translation TEXT NOT NULL DEFAULT 'RVR1909',
+          secondary_translation TEXT
+        );
+        INSERT OR IGNORE INTO role_bible_configs (role, mode, primary_translation, secondary_translation)
+        VALUES ('main', 'single', 'RVR1909', NULL);
+        INSERT OR IGNORE INTO role_bible_configs (role, mode, primary_translation, secondary_translation)
+        VALUES ('lobby', 'single', 'RVR1909', NULL);
+        INSERT OR IGNORE INTO role_bible_configs (role, mode, primary_translation, secondary_translation)
+        VALUES ('stage', 'stacked', 'RVR1909', 'KJV');
+
+        CREATE TABLE IF NOT EXISTS media_items (
+          id TEXT PRIMARY KEY,
+          hash TEXT NOT NULL,
+          file_name TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          media_type TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          duration REAL DEFAULT 0,
+          width INTEGER DEFAULT 0,
+          height INTEGER DEFAULT 0,
+          codec TEXT,
+          container TEXT,
+          tags TEXT,
+          thumbnail_path TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_hash ON media_items(hash);
+        CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type);
       `)
     }
   }
@@ -608,6 +656,147 @@ export class DatabaseService {
   public queryOne<T = any>(sql: string, params: any[] = []): T | null {
     const rows = this.query<T>(sql, params)
     return rows.length > 0 ? rows[0] : null
+  }
+
+  // --- Phase 4 / Phase 5A: Role Bible Configurations ---
+
+  public getRoleBibleConfigs(): RoleBibleConfigsMap {
+    const rows = this.query<{
+      role: string
+      mode: string
+      primary_translation: string
+      secondary_translation: string | null
+    }>('SELECT role, mode, primary_translation, secondary_translation FROM role_bible_configs;')
+
+    if (!rows || rows.length === 0) {
+      return { ...DEFAULT_ROLE_BIBLE_CONFIGS }
+    }
+
+    const map: RoleBibleConfigsMap = { ...DEFAULT_ROLE_BIBLE_CONFIGS }
+    for (const r of rows) {
+      map[r.role] = {
+        role: r.role,
+        mode: (r.mode as any) || 'single',
+        primaryTranslation: r.primary_translation || 'RVR1909',
+        secondaryTranslation: r.secondary_translation || undefined
+      }
+    }
+    return map
+  }
+
+  public saveRoleBibleConfig(config: RoleBibleConfig): void {
+    const primary = config.primaryTranslation || (config as any).primaryTranslationId || 'RVR1909'
+    const secondary = config.secondaryTranslation || (config as any).secondaryTranslationId || null
+    this.run(
+      `INSERT OR REPLACE INTO role_bible_configs (role, mode, primary_translation, secondary_translation)
+       VALUES (?, ?, ?, ?);`,
+      [config.role, config.mode || 'single', primary, secondary]
+    )
+  }
+
+  // --- Phase 5A: Media Items Database Helpers ---
+
+  public getMediaItems(type?: MediaType): MediaItem[] {
+    let sql = 'SELECT * FROM media_items'
+    const params: any[] = []
+    if (type) {
+      sql += ' WHERE media_type = ?'
+      params.push(type)
+    }
+    sql += ' ORDER BY created_at DESC;'
+
+    const rows = this.query<any>(sql, params)
+    return rows.map((r) => ({
+      id: r.id,
+      hash: r.hash,
+      fileName: r.file_name,
+      originalName: r.original_name,
+      filePath: r.file_path,
+      mediaType: r.media_type,
+      fileSize: r.file_size,
+      duration: r.duration || 0,
+      width: r.width || 0,
+      height: r.height || 0,
+      codec: r.codec || undefined,
+      container: r.container || undefined,
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      thumbnailPath: r.thumbnail_path || undefined,
+      createdAt: r.created_at
+    }))
+  }
+
+  public getMediaItemByHash(hash: string): MediaItem | null {
+    const r = this.queryOne<any>('SELECT * FROM media_items WHERE hash = ? LIMIT 1;', [hash])
+    if (!r) return null
+    return {
+      id: r.id,
+      hash: r.hash,
+      fileName: r.file_name,
+      originalName: r.original_name,
+      filePath: r.file_path,
+      mediaType: r.media_type,
+      fileSize: r.file_size,
+      duration: r.duration || 0,
+      width: r.width || 0,
+      height: r.height || 0,
+      codec: r.codec || undefined,
+      container: r.container || undefined,
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      thumbnailPath: r.thumbnail_path || undefined,
+      createdAt: r.created_at
+    }
+  }
+
+  public getMediaItemById(id: string): MediaItem | null {
+    const r = this.queryOne<any>('SELECT * FROM media_items WHERE id = ? LIMIT 1;', [id])
+    if (!r) return null
+    return {
+      id: r.id,
+      hash: r.hash,
+      fileName: r.file_name,
+      originalName: r.original_name,
+      filePath: r.file_path,
+      mediaType: r.media_type,
+      fileSize: r.file_size,
+      duration: r.duration || 0,
+      width: r.width || 0,
+      height: r.height || 0,
+      codec: r.codec || undefined,
+      container: r.container || undefined,
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      thumbnailPath: r.thumbnail_path || undefined,
+      createdAt: r.created_at
+    }
+  }
+
+  public insertMediaItem(item: MediaItem): void {
+    this.run(
+      `INSERT OR REPLACE INTO media_items (
+        id, hash, file_name, original_name, file_path, media_type,
+        file_size, duration, width, height, codec, container, tags, thumbnail_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        item.id,
+        item.hash,
+        item.fileName,
+        item.originalName,
+        item.filePath,
+        item.mediaType,
+        item.fileSize,
+        item.duration,
+        item.width,
+        item.height,
+        item.codec || null,
+        item.container || null,
+        JSON.stringify(item.tags || []),
+        item.thumbnailPath || null,
+        item.createdAt
+      ]
+    )
+  }
+
+  public deleteMediaItem(id: string): void {
+    this.run('DELETE FROM media_items WHERE id = ?;', [id])
   }
 
   private schedulePersist(): void {

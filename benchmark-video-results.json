@@ -1,0 +1,29 @@
+{
+  "benchmarkDate": "2026-10-25T03:20:19.339Z",
+  "platform": "win32 10.0.26300 (x64)",
+  "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
+  "cpuCores": 20,
+  "totalRamGb": "31.6",
+  "results": [
+    {
+      "scenario": "1080p WebM VP9 (3 outputs)",
+      "totalRenderedFrames": 145,
+      "totalDroppedFrames": 0,
+      "dropPercentage": "0.00%",
+      "avgCpuPercent": "2.5%",
+      "maxCpuPercent": "3.3%",
+      "avgMemoryMb": "171.8 MB",
+      "outputWindowsActive": 3
+    },
+    {
+      "scenario": "4K WebM VP9 (3 outputs)",
+      "totalRenderedFrames": 149,
+      "totalDroppedFrames": 0,
+      "dropPercentage": "0.00%",
+      "avgCpuPercent": "12.4%",
+      "maxCpuPercent": "13.6%",
+      "avgMemoryMb": "172.2 MB",
+      "outputWindowsActive": 3
+    }
+  ]
+}

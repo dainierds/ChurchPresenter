@@ -6,7 +6,11 @@ import {
   TestSlide,
   ThemeConfig,
   DEFAULT_THEME,
-  OutputLayersState
+  OutputLayersState,
+  DEFAULT_ROLE_BIBLE_CONFIGS,
+  IndependentAudioState,
+  MediaSyncTick,
+  RoleBibleConfigsMap
 } from '../shared/types'
 import {
   createInitialPresenterState,
@@ -21,7 +25,19 @@ export class StateManager extends EventEmitter {
     super()
     this.state = {
       ...createInitialPresenterState(),
-      currentTheme: DEFAULT_THEME
+      currentTheme: DEFAULT_THEME,
+      roleBibleConfigs: { ...DEFAULT_ROLE_BIBLE_CONFIGS },
+      mediaSyncTick: null,
+      independentAudio: {
+        isPlaying: false,
+        mediaId: null,
+        filePath: null,
+        title: null,
+        currentTime: 0,
+        duration: 0,
+        volume: 0.8,
+        isFadingOut: false
+      }
     }
   }
 
@@ -67,6 +83,36 @@ export class StateManager extends EventEmitter {
         theme: this.state.currentTheme
       }
 
+      // Bible content tailored by each role's configured Bible settings
+      let roleBody = slide.body
+      const sItem = slide as SlideItem
+      if (sItem.scripturePayload && this.state.roleBibleConfigs?.[role]) {
+        const rConfig = this.state.roleBibleConfigs[role]
+        if (rConfig.mode === 'single') {
+          roleBody = sItem.scripturePayload.primaryText
+        } else if (rConfig.mode === 'stacked') {
+          roleBody = sItem.scripturePayload.secondaryText
+            ? `${sItem.scripturePayload.primaryText}\n\n${sItem.scripturePayload.secondaryText}`
+            : sItem.scripturePayload.primaryText
+        } else if (rConfig.mode === 'sideBySide') {
+          roleBody = sItem.scripturePayload.secondaryText
+            ? `${sItem.scripturePayload.primaryText} ||| ${sItem.scripturePayload.secondaryText}`
+            : sItem.scripturePayload.primaryText
+        }
+      }
+
+      const mediaUrl = (slide as any).mediaUrl
+      const mediaType =
+        (slide as any).mediaType ||
+        ((slide as any).sourceType === 'video'
+          ? 'video'
+          : (slide as any).sourceType === 'pdf'
+            ? 'pdf'
+            : undefined)
+      const pdfPage = (slide as any).pdfPage
+      const pdfPageCount = (slide as any).pdfPageCount
+      const fitMode = (slide as any).fitMode || 'contain'
+
       // Special handling for stage (confidence monitor): pass current + next
       if (role === 'stage') {
         newActiveLayers[role] = {
@@ -75,10 +121,15 @@ export class StateManager extends EventEmitter {
           content: {
             id: slide.id,
             title: slide.title,
-            body: slide.body,
+            body: roleBody,
             subtitle: slide.subtitle,
             nextSlideTitle: nextSlide?.title || nextSlide?.subtitle,
-            nextSlideBody: nextSlide?.body
+            nextSlideBody: nextSlide?.body,
+            mediaUrl,
+            mediaType,
+            pdfPage,
+            pdfPageCount,
+            fitMode
           },
           theme: this.state.currentTheme
         }
@@ -89,8 +140,13 @@ export class StateManager extends EventEmitter {
           content: {
             id: slide.id,
             title: slide.title,
-            body: slide.body,
-            subtitle: slide.subtitle
+            body: roleBody,
+            subtitle: slide.subtitle,
+            mediaUrl,
+            mediaType,
+            pdfPage,
+            pdfPageCount,
+            fitMode
           },
           theme: this.state.currentTheme
         }
@@ -105,7 +161,12 @@ export class StateManager extends EventEmitter {
         body: slide.body,
         subtitle: slide.subtitle,
         nextSlideTitle: nextSlide?.title || nextSlide?.subtitle,
-        nextSlideBody: nextSlide?.body
+        nextSlideBody: nextSlide?.body,
+        mediaUrl: (slide as any).mediaUrl,
+        mediaType: (slide as any).mediaType,
+        pdfPage: (slide as any).pdfPage,
+        pdfPageCount: (slide as any).pdfPageCount,
+        fitMode: (slide as any).fitMode
       },
       activeLayers: newActiveLayers,
       controls: {
@@ -116,6 +177,36 @@ export class StateManager extends EventEmitter {
     }
 
     logger.info(`Projected slide '${slide.title || slide.id}' to roles: ${targetRoles.join(', ')}`)
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public updateRoleBibleConfigs(configs: RoleBibleConfigsMap): PresenterState {
+    this.state = {
+      ...this.state,
+      roleBibleConfigs: { ...configs },
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public updateIndependentAudio(audio: IndependentAudioState): PresenterState {
+    this.state = {
+      ...this.state,
+      independentAudio: { ...audio },
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public updateMediaSyncTick(tick: MediaSyncTick | null): PresenterState {
+    this.state = {
+      ...this.state,
+      mediaSyncTick: tick,
+      updatedAt: Date.now()
+    }
     this.emit('state-updated', this.state)
     return this.state
   }

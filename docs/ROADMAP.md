@@ -54,10 +54,24 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Banco de pruebas de guardado real con 5.000 canciones documentado en `DECISIONS.md`.
 - Pruebas unitarias completas (Vitest) y pruebas E2E automatizadas con Playwright y Electron con capturas en `docs/evidence/`.
 
-### Fase 5: PowerPoint/PDF/video/YouTube
-- Integración y renderizado de presentaciones externas.
-- Reproductor acelerado por hardware para fondos dinámicos y clips de video.
-- Integración de streams o videos en línea.
+### Fase 5A: Medios y PDF (Completada)
+- Biblioteca de medios gestionada en `userData/media/` con deduplicación criptográfica determinista SHA-256 (videos, audios, imágenes, PDFs).
+- Detección de formatos nativos (MP4 con H.264/AAC, WebM con VP8/VP9, MP3, WAV) y advertencias preventivas de incompatibilidad de códecs.
+- Reproducción de video en el servicio con deck de transporte completo (reproducir, pausar, detener, -10s, +10s, volumen, silencio, bucle, puntos de corte de entrada/salida y fundidos).
+- Acciones configurables al finalizar el video (congelar en último fotograma, retornar al fondo o avanzar al siguiente elemento).
+- Reloj maestro de sincronización multisalida en el proceso principal (`MasterMediaSyncService`, pulsos cada 200 ms) con compensación de deriva superior a 150 ms para reproducción ultra fluida a 60 FPS sin saltos acústicos.
+- Enrutamiento de audio selectivo por rol de salida: salida de audio exclusiva por hardware en la pantalla designada (por defecto `main` / Sala), silenciando automáticamente las pantallas secundarias para evitar eco.
+- Monitor de escenario inteligente durante videos: despliegue de temporizadores de alto contraste en tiempo real (tiempo transcurrido `MM:SS` y tiempo restante `-MM:SS`).
+- Pista de audio ambiental independiente en la barra superior con controles de operador y botón de fundido gradual de 3 segundos (`fade-out`).
+- Fondos de video en bucle continuo para temas y canciones.
+- Motor de presentaciones PDF vectoriales basado en `pdfjs-dist` (licencia Apache 2.0), con soporte de DPR nativo para textos 4K nítidos, selector de modos de ajuste (`contain`, `cover`, `center`), precarga en segundo plano y navegación por diapositivas sin congelar la interfaz.
+- Configuración independiente de Doble Traducción bíblica por rol de salida (ej. Sala: 1 versión; Escenario: 2 versiones apiladas).
+- Banco de pruebas de rendimiento de video 1080p y 4K con 3 salidas activas y mediciones reales (`0.00%` caídas de fotogramas registradas con `getVideoPlaybackQuality()`).
+- Suite de pruebas automatizadas E2E Playwright de 17 escenarios con captura exhaustiva de pantalla del operador y de cada una de las 3 salidas secundarias guardadas en `docs/evidence/`.
+
+### Fase 5B: PowerPoint y YouTube (Próxima)
+- Integración y renderizado de presentaciones externas de PowerPoint.
+- Reproductor embebido o integración de videos y transmisiones en línea de YouTube.
 
 ### Fase 6: Escenario/temporizadores/control remoto
 - Vista de monitor de escenario (Stage Display / Confidence Monitor) personalizada con reloj, temporizador regresivo y diapositiva siguiente.

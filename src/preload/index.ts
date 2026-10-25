@@ -18,7 +18,12 @@ import {
   BibleTranslationMeta,
   BibleReferenceParsed,
   BibleVerse,
-  BibleSearchResult
+  BibleSearchResult,
+  RoleBibleConfig,
+  RoleBibleConfigsMap,
+  MediaType,
+  MediaItem,
+  VideoItemConfig
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -263,9 +268,70 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GENERATE_SLIDES, verses, secondaryVerses, dualLayout)
   },
 
+  getRoleBibleConfigs: (): Promise<RoleBibleConfigsMap> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GET_ROLE_CONFIGS)
+  },
+
+  saveRoleBibleConfig: (config: RoleBibleConfig): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_SAVE_ROLE_CONFIG, config)
+  },
+
+  // Phase 5A: Media & PDF
+  getMediaItems: (type?: MediaType): Promise<MediaItem[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_GET, type)
+  },
+
+  importMediaFile: (sourcePath: string, tags?: string[]): Promise<MediaItem> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_IMPORT, sourcePath, tags)
+  },
+
+  deleteMediaItem: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_DELETE, id)
+  },
+
+  checkMediaIntegrity: (): Promise<{ missingCount: number; missingIds: string[] }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MEDIA_CHECK_INTEGRITY)
+  },
+
+  playVideo: (config: VideoItemConfig): Promise<PresenterState> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.VIDEO_PLAY, config)
+  },
+
+  controlVideo: (action: 'play' | 'pause' | 'stop' | 'seek', time?: number): Promise<void> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.VIDEO_CONTROL, action, time)
+  },
+
+  playIndependentAudio: (mediaId: string, filePath: string, title?: string): Promise<void> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_PLAY_INDEPENDENT, mediaId, filePath, title)
+  },
+
+  controlIndependentAudio: (action: 'play' | 'pause' | 'stop' | 'fade-out' | 'volume', value?: number): Promise<void> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_CONTROL_INDEPENDENT, action, value)
+  },
+
+  renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PDF_RENDER_PAGE, mediaId, pageNumber, targetWidth)
+  },
+
+  getPdfPageCount: (mediaId: string): Promise<number> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PDF_GET_PAGE_COUNT, mediaId)
+  },
+
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number): void => {
     ipcRenderer.send(IPC_CHANNELS.LOG_FPS_DROP, role, fps, displayId)
+  },
+
+  logMediaError: (role: string, url: string, message: string): void => {
+    ipcRenderer.send(IPC_CHANNELS.LOG_MEDIA_ERROR, role, url, message)
+  },
+
+  captureOutputWindow: (role: string): Promise<Buffer | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.OUTPUT_CAPTURE_ROLE, role)
+  },
+
+  openPreviewOutputWindow: (role: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.OUTPUT_OPEN_PREVIEW, role)
   },
 
   getAppVersion: (): Promise<string> => {

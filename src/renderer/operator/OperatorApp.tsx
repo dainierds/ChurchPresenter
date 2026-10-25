@@ -17,7 +17,12 @@ import {
   SongGroup,
   DEFAULT_THEME,
   BibleTranslationMeta,
-  BibleSearchResult
+  BibleSearchResult,
+  MediaItem,
+  MediaType,
+  RoleBibleConfigsMap,
+  DEFAULT_ROLE_BIBLE_CONFIGS,
+  IndependentAudioState
 } from '../../shared/types'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -61,9 +66,22 @@ import {
   BookOpen,
   Star,
   History,
-  Book
+  Book,
+  Video,
+  Volume2,
+  VolumeX,
+  Square,
+  Pause,
+  RotateCcw
 } from 'lucide-react'
 import './operator.css'
+
+function formatSeconds(sec: number): string {
+  if (isNaN(sec) || sec < 0) return '00:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
 
 export const OperatorApp: React.FC = () => {
   // Screens & Assignments
@@ -112,9 +130,46 @@ export const OperatorApp: React.FC = () => {
   const [stageMessageText, setStageMessageText] = useState<string>('')
   const [isStageMessageActive, setIsStageMessageActive] = useState<boolean>(false)
 
-  // Zone 1 Library State ('songs' | 'presentations' | 'bible')
-  const [libraryTab, setLibraryTab] = useState<'songs' | 'presentations' | 'bible'>('songs')
+  // Zone 1 Library State ('songs' | 'presentations' | 'bible' | 'media')
+  const [libraryTab, setLibraryTab] = useState<'songs' | 'presentations' | 'bible' | 'media'>('songs')
   const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Phase 5A: Media Library State
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+  const [mediaFilterType, setMediaFilterType] = useState<MediaType | 'all'>('all')
+  const [isMediaImportModalOpen, setIsMediaImportModalOpen] = useState<boolean>(false)
+  const [importMediaFilePath, setImportMediaFilePath] = useState<string>('')
+  const [importMediaTags, setImportMediaTags] = useState<string>('')
+
+  // Role Bible Configs (Doble traducción por rol de salida)
+  const [roleBibleConfigs, setRoleBibleConfigs] = useState<RoleBibleConfigsMap>({ ...DEFAULT_ROLE_BIBLE_CONFIGS })
+  const [audioOutputRole, setAudioOutputRole] = useState<string>('main')
+
+  // Video Transport State
+  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false)
+  const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0)
+  const [videoDuration, setVideoDuration] = useState<number>(0)
+  const [videoVolume, setVideoVolume] = useState<number>(1.0)
+  const [videoLoop, setVideoLoop] = useState<boolean>(false)
+  const [videoInPoint, setVideoInPoint] = useState<number>(0)
+  const [videoOutPoint, setVideoOutPoint] = useState<number>(0)
+  const [videoEndAction, setVideoEndAction] = useState<'freeze' | 'background' | 'next'>('freeze')
+
+  // Independent Background Audio State
+  const [independentAudio, setIndependentAudio] = useState<IndependentAudioState>({
+    isPlaying: false,
+    mediaId: null,
+    filePath: null,
+    title: null,
+    currentTime: 0,
+    duration: 0,
+    volume: 0.8,
+    isFadingOut: false
+  })
+
+  // PDF Page Navigation State
+  const [pdfPageCount, setPdfPageCount] = useState<number>(1)
+  const [pdfFitMode, setPdfFitMode] = useState<'contain' | 'cover' | 'center'>('contain')
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
@@ -164,7 +219,9 @@ export const OperatorApp: React.FC = () => {
         bgList,
         bTranslations,
         bFavs,
-        bRecents
+        bRecents,
+        mediaList,
+        rbConfigs
       ] = await Promise.all([
         window.churchPresenterApi.getDisplays(),
         window.churchPresenterApi.getRoleAssignments(),
@@ -179,7 +236,9 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.getBackgroundImages(),
         window.churchPresenterApi.getBibleTranslations(),
         window.churchPresenterApi.getBibleFavorites(),
-        window.churchPresenterApi.getBibleRecentHistory()
+        window.churchPresenterApi.getBibleRecentHistory(),
+        window.churchPresenterApi.getMediaItems(),
+        window.churchPresenterApi.getRoleBibleConfigs()
       ])
 
       setDisplays(disp)
@@ -197,6 +256,8 @@ export const OperatorApp: React.FC = () => {
       setBibleTranslations(bTranslations)
       setBibleFavorites(bFavs)
       setBibleRecentHistory(bRecents)
+      setMediaItems(mediaList)
+      if (rbConfigs) setRoleBibleConfigs(rbConfigs)
 
       if (servList.length > 0 && !currentService) {
         setCurrentService(servList[0])
@@ -224,6 +285,17 @@ export const OperatorApp: React.FC = () => {
       setState(newState)
       if (newState.currentSlide?.id) {
         setLiveSlideId(newState.currentSlide.id)
+      }
+      if (newState.mediaSyncTick) {
+        setVideoCurrentTime(newState.mediaSyncTick.currentTime)
+        setVideoDuration(newState.mediaSyncTick.duration)
+        setIsVideoPlaying(newState.mediaSyncTick.isPlaying)
+      }
+      if (newState.independentAudio) {
+        setIndependentAudio(newState.independentAudio)
+      }
+      if (newState.roleBibleConfigs) {
+        setRoleBibleConfigs(newState.roleBibleConfigs)
       }
     })
 
@@ -379,6 +451,86 @@ export const OperatorApp: React.FC = () => {
       }))
     }
 
+    if (currentServiceItem.type === 'video') {
+      const mItem = mediaItems.find(
+        (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+      )
+      return [
+        {
+          id: `vid_slide_${currentServiceItem.id}`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'video',
+          groupLabel: 'Video',
+          slideIndex: 1,
+          totalSlidesInGroup: 1,
+          title: currentServiceItem.name,
+          body: mItem
+            ? `${mItem.container} (${mItem.codec || 'Video'}) • ${(mItem.fileSize / (1024 * 1024)).toFixed(1)} MB`
+            : 'Reproducción de Video',
+          subtitle: 'Clip de Video',
+          mediaUrl: mItem?.filePath
+        }
+      ]
+    }
+
+    if (currentServiceItem.type === 'pdf') {
+      const mItem = mediaItems.find(
+        (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+      )
+      const pages = Math.max(1, pdfPageCount || 1)
+      return Array.from({ length: pages }).map((_, pIdx) => ({
+        id: `pdf_${currentServiceItem.id}_p${pIdx + 1}`,
+        sourceId: currentServiceItem.id,
+        sourceType: 'pdf',
+        groupLabel: `Página ${pIdx + 1}`,
+        slideIndex: pIdx + 1,
+        totalSlidesInGroup: pages,
+        title: currentServiceItem.name,
+        subtitle: `Página ${pIdx + 1} de ${pages}`,
+        body: `Página ${pIdx + 1}`,
+        mediaUrl: mItem?.filePath,
+        pdfPage: pIdx + 1,
+        pdfPageCount: pages,
+        fitMode: pdfFitMode
+      }))
+    }
+
+    if (currentServiceItem.type === 'image_presentation') {
+      const mItem = mediaItems.find(
+        (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+      )
+      return [
+        {
+          id: `img_slide_${currentServiceItem.id}`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'image',
+          groupLabel: 'Imagen',
+          slideIndex: 1,
+          totalSlidesInGroup: 1,
+          title: currentServiceItem.name,
+          body: '',
+          subtitle: 'Presentación de Imagen',
+          mediaUrl: mItem?.filePath
+        }
+      ]
+    }
+
+    if (currentServiceItem.type === 'audio') {
+      return [
+        {
+          id: `aud_slide_${currentServiceItem.id}`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'blank',
+          groupLabel: 'Audio',
+          slideIndex: 1,
+          totalSlidesInGroup: 1,
+          title: currentServiceItem.name,
+          body: 'Pista de Audio Independiente',
+          subtitle: 'Audio'
+        }
+      ]
+    }
+
     return []
   }, [
     libraryTab,
@@ -386,7 +538,10 @@ export const OperatorApp: React.FC = () => {
     currentServiceItem,
     currentSong,
     selectedArrangementId,
-    currentPresentation
+    currentPresentation,
+    mediaItems,
+    pdfPageCount,
+    pdfFitMode
   ])
 
   // Clamp preview slide index when activeSlides change
@@ -403,15 +558,49 @@ export const OperatorApp: React.FC = () => {
     }
   }, [currentServiceItem, loadBiblePassage])
 
+  // When a service item of type 'pdf' is selected in Zone 2, fetch total page count
+  useEffect(() => {
+    if (currentServiceItem?.type === 'pdf') {
+      const mItem = mediaItems.find(
+        (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+      )
+      if (mItem?.filePath) {
+        window.churchPresenterApi
+          .getPdfPageCount(mItem.filePath)
+          .then((cnt) => setPdfPageCount(cnt))
+          .catch(() => {})
+      }
+    }
+  }, [currentServiceItem, mediaItems])
+
   // Project a slide live to main, lobby and stage
   const handleGoLive = useCallback(
     (slide: SlideItem, nextSlide?: SlideItem) => {
+      // If video slide, start video master playback
+      if (slide.sourceType === 'video' && currentServiceItem?.type === 'video') {
+        const mItem = mediaItems.find(
+          (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+        )
+        if (mItem) {
+          window.churchPresenterApi.playVideo({
+            mediaId: mItem.id,
+            mediaPath: mItem.filePath,
+            loop: videoLoop,
+            volume: videoVolume,
+            inPoint: videoInPoint > 0 ? videoInPoint : undefined,
+            outPoint: videoOutPoint > 0 ? videoOutPoint : undefined,
+            endAction: videoEndAction,
+            audioOutputRole: audioOutputRole || 'main'
+          })
+        }
+      }
+
       window.churchPresenterApi.sendSlide(slide, ['main', 'lobby', 'stage'], nextSlide)
       setLiveSlideId(slide.id)
       setLiveSourceId(slide.sourceId)
       setIsLiveDirty(false)
     },
-    []
+    [currentServiceItem, mediaItems, videoLoop, videoVolume, videoInPoint, videoOutPoint, videoEndAction, audioOutputRole]
   )
 
   // Send current preview slide to live
@@ -576,6 +765,28 @@ export const OperatorApp: React.FC = () => {
     ])
   }, [presentations, searchQuery])
 
+  const filteredMediaItems = useMemo(() => {
+    return mediaItems.filter((item) => {
+      if (mediaFilterType !== 'all') {
+        if (mediaFilterType === 'image') {
+          if (item.mediaType !== 'image' && !item.originalName.toLowerCase().endsWith('.pdf')) {
+            return false
+          }
+        } else if (item.mediaType !== mediaFilterType) {
+          return false
+        }
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        return (
+          item.originalName.toLowerCase().includes(q) ||
+          item.tags?.some((t) => t.toLowerCase().includes(q))
+        )
+      }
+      return true
+    })
+  }, [mediaItems, mediaFilterType, searchQuery])
+
   // Bible Text Search Runner
   const handleRunBibleTextSearch = async () => {
     if (!bibleTextQuery.trim()) return
@@ -614,7 +825,7 @@ export const OperatorApp: React.FC = () => {
 
   // Playlist Actions
   const handleAddItemToService = (
-    type: 'song' | 'presentation' | 'scripture',
+    type: any,
     id: string,
     name: string,
     scriptureRef?: string
@@ -628,7 +839,8 @@ export const OperatorApp: React.FC = () => {
       songId: type === 'song' ? id : undefined,
       presentationId: type === 'presentation' ? id : undefined,
       scriptureRef: type === 'scripture' ? scriptureRef || name : undefined,
-      bibleTranslation: type === 'scripture' ? primaryBibleAbbrev : undefined
+      bibleTranslation: type === 'scripture' ? primaryBibleAbbrev : undefined,
+      mediaId: ['video', 'audio', 'pdf', 'image_presentation'].includes(type) ? id : undefined
     }
 
     const updatedService: ServicePlan = {
@@ -1142,6 +1354,44 @@ export const OperatorApp: React.FC = () => {
           )}
         </div>
 
+        {/* Phase 5A: Independent Background Audio Player */}
+        {independentAudio.mediaId && (
+          <div className="independent-audio-bar">
+            <Music size={13} className="audio-live-icon" />
+            <span className="audio-track-title">{independentAudio.title}</span>
+            <span className="audio-time-pill">{formatSeconds(independentAudio.currentTime)}</span>
+            <button
+              className="mini-audio-btn"
+              onClick={() => {
+                window.churchPresenterApi.controlIndependentAudio(
+                  independentAudio.isPlaying ? 'pause' : 'play'
+                )
+              }}
+              title={independentAudio.isPlaying ? 'Pausar' : 'Reanudar'}
+            >
+              {independentAudio.isPlaying ? <Pause size={12} /> : <Play size={12} />}
+            </button>
+            <button
+              className="mini-audio-btn fade"
+              onClick={() => {
+                window.churchPresenterApi.controlIndependentAudio('fade-out')
+              }}
+              title="Fundido suave de salida (Fade Out de 3s)"
+            >
+              Fundido
+            </button>
+            <button
+              className="mini-audio-btn stop"
+              onClick={() => {
+                window.churchPresenterApi.controlIndependentAudio('stop')
+              }}
+              title="Detener audio ambiental"
+            >
+              <Square size={11} fill="currentColor" />
+            </button>
+          </div>
+        )}
+
         {/* Utility Buttons */}
         <div className="topbar-actions">
           <button
@@ -1211,11 +1461,17 @@ export const OperatorApp: React.FC = () => {
               >
                 Biblia
               </button>
+              <button
+                className={`tab-btn ${libraryTab === 'media' ? 'active' : ''}`}
+                onClick={() => setLibraryTab('media')}
+              >
+                Medios ({mediaItems.length})
+              </button>
             </div>
           </div>
 
           {/* TAB 1 & 2: Songs and Presentations */}
-          {libraryTab !== 'bible' ? (
+          {libraryTab === 'songs' || libraryTab === 'presentations' ? (
             <>
               {/* Real-time search input */}
               <div className="search-box">
@@ -1347,7 +1603,7 @@ export const OperatorApp: React.FC = () => {
                 </div>
               </div>
             </>
-          ) : (
+          ) : libraryTab === 'bible' ? (
             /* TAB 3: BIBLE CONTROLS & BROWSER */
             <div className="bible-tab-container">
               {/* Translation Selection Bar */}
@@ -1610,6 +1866,157 @@ export const OperatorApp: React.FC = () => {
                 </div>
               </div>
             </div>
+          ) : (
+            /* TAB 4: MEDIA LIBRARY (Videos, Audios, Images, PDFs) */
+            <div className="media-tab-container">
+              {/* Media Filter Pills */}
+              <div className="media-filters-bar">
+                <button
+                  className={`filter-pill ${mediaFilterType === 'all' ? 'active' : ''}`}
+                  onClick={() => setMediaFilterType('all')}
+                >
+                  Todos ({mediaItems.length})
+                </button>
+                <button
+                  className={`filter-pill ${mediaFilterType === 'video' ? 'active' : ''}`}
+                  onClick={() => setMediaFilterType('video')}
+                >
+                  Videos
+                </button>
+                <button
+                  className={`filter-pill ${mediaFilterType === 'audio' ? 'active' : ''}`}
+                  onClick={() => setMediaFilterType('audio')}
+                >
+                  Audios
+                </button>
+                <button
+                  className={`filter-pill ${mediaFilterType === 'image' ? 'active' : ''}`}
+                  onClick={() => setMediaFilterType('image')}
+                >
+                  Imágenes / PDF
+                </button>
+              </div>
+
+              {/* Media Search Input */}
+              <div className="search-box">
+                <Search size={14} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Buscar medios por nombre o etiqueta..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input"
+                />
+              </div>
+
+              {/* Media Items List */}
+              <div className="zone-content-list media-list">
+                {filteredMediaItems.length > 0 ? (
+                  filteredMediaItems.map((item) => (
+                    <div key={item.id} className="library-item-card media-card">
+                      <div className="item-info">
+                        <div className="item-title-row">
+                          {item.mediaType === 'video' ? (
+                            <Video size={14} className="item-icon video-icon" />
+                          ) : item.mediaType === 'audio' ? (
+                            <Music size={14} className="item-icon audio-icon" />
+                          ) : (
+                            <ImageIcon size={14} className="item-icon image-icon" />
+                          )}
+                          <span className="item-title">{item.originalName}</span>
+                          {item.isMissing && <span className="missing-badge">FALTANTE</span>}
+                        </div>
+                        <div className="item-meta">
+                          {item.container} {item.codec ? `(${item.codec})` : ''} • {(item.fileSize / (1024 * 1024)).toFixed(1)} MB
+                          {item.duration > 0 && ` • ${formatSeconds(item.duration)}`}
+                        </div>
+                      </div>
+
+                      <div className="item-actions">
+                        <button
+                          className="item-action-btn add-btn"
+                          title="Añadir a la lista del servicio"
+                          onClick={() => {
+                            if (item.mediaType === 'video') {
+                              handleAddItemToService('video', item.id, item.originalName)
+                            } else if (item.mediaType === 'audio') {
+                              handleAddItemToService('audio', item.id, item.originalName)
+                            } else if (item.originalName.toLowerCase().endsWith('.pdf')) {
+                              handleAddItemToService('pdf', item.id, item.originalName)
+                            } else {
+                              handleAddItemToService('image_presentation', item.id, item.originalName)
+                            }
+                          }}
+                        >
+                          <Plus size={14} />
+                        </button>
+
+                        {item.mediaType === 'audio' && (
+                          <button
+                            className="item-action-btn play-audio-btn"
+                            title="Reproducir música ambiental de fondo"
+                            onClick={() => {
+                              window.churchPresenterApi.playIndependentAudio(
+                                item.id,
+                                item.filePath,
+                                item.originalName
+                              )
+                            }}
+                          >
+                            <Play size={13} />
+                          </button>
+                        )}
+
+                        <button
+                          className="item-action-btn delete-btn"
+                          title="Eliminar medio"
+                          onClick={async () => {
+                            if (confirm(`¿Eliminar definitivamente el medio "${item.originalName}"?`)) {
+                              await window.churchPresenterApi.deleteMediaItem(item.id)
+                              loadAllData()
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-list-notice">
+                    No se encontraron archivos de medios. Haga clic en "+ Importar Medio".
+                  </div>
+                )}
+              </div>
+
+              {/* Media Footer Actions */}
+              <div className="zone-footer-actions">
+                <button
+                  className="primary-action-btn"
+                  onClick={() => setIsMediaImportModalOpen(true)}
+                >
+                  <Plus size={14} />
+                  <span>Importar Medio</span>
+                </button>
+
+                <button
+                  className="secondary-action-btn"
+                  onClick={async () => {
+                    const res = await window.churchPresenterApi.checkMediaIntegrity()
+                    if (res.missingCount === 0) {
+                      alert('Todos los archivos de medios están íntegros y presentes en disco.')
+                    } else {
+                      alert(`Atención: Se detectaron ${res.missingCount} archivo(s) faltantes o dañados en disco.`)
+                    }
+                    loadAllData()
+                  }}
+                  title="Verificar si los archivos físicos existen en disco"
+                >
+                  <ShieldCheck size={13} />
+                  <span>Comprobar Integridad</span>
+                </button>
+              </div>
+            </div>
           )}
         </section>
 
@@ -1839,7 +2246,15 @@ export const OperatorApp: React.FC = () => {
                 <span className="monitor-label">Salida Principal</span>
               </div>
               <div className="monitor-screen">
-                {state?.currentSlide?.body ? (
+                {state?.currentSlide?.mediaType === 'video' ? (
+                  <div className="monitor-text" style={{ color: '#38bdf8' }}>
+                    ▶ REPRODUCIENDO VIDEO: {state.currentSlide.title}
+                  </div>
+                ) : state?.currentSlide?.mediaType === 'pdf' ? (
+                  <div className="monitor-text" style={{ color: '#fbbf24' }}>
+                    📄 PDF: {state.currentSlide.title} (Pág {state.currentSlide.pdfPage})
+                  </div>
+                ) : state?.currentSlide?.body ? (
                   <div className="monitor-text">{state.currentSlide.body}</div>
                 ) : (
                   <div className="monitor-empty">(Pantalla en blanco)</div>
@@ -1857,7 +2272,15 @@ export const OperatorApp: React.FC = () => {
                 </button>
               </div>
               <div className="monitor-screen">
-                {activeSlides[previewSlideIndex]?.body ? (
+                {activeSlides[previewSlideIndex]?.sourceType === 'video' ? (
+                  <div className="monitor-text" style={{ color: '#38bdf8' }}>
+                    VIDEO: {activeSlides[previewSlideIndex].title}
+                  </div>
+                ) : activeSlides[previewSlideIndex]?.sourceType === 'pdf' ? (
+                  <div className="monitor-text" style={{ color: '#fbbf24' }}>
+                    PDF: {activeSlides[previewSlideIndex].title} ({activeSlides[previewSlideIndex].subtitle})
+                  </div>
+                ) : activeSlides[previewSlideIndex]?.body ? (
                   <div className="monitor-text">{activeSlides[previewSlideIndex].body}</div>
                 ) : (
                   <div className="monitor-empty">(Sin selección)</div>
@@ -1865,6 +2288,190 @@ export const OperatorApp: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Phase 5A: Video Control Deck (shown when video item is active) */}
+          {currentServiceItem?.type === 'video' && (
+            <div className="video-control-deck">
+              <div className="video-transport-bar">
+                <button
+                  className="transport-main-btn"
+                  onClick={() => {
+                    const action = isVideoPlaying ? 'pause' : 'play'
+                    window.churchPresenterApi.controlVideo(action)
+                    setIsVideoPlaying(!isVideoPlaying)
+                  }}
+                  title="Reproducir / Pausar (Espacio)"
+                >
+                  {isVideoPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+                  <span>{isVideoPlaying ? 'Pausar' : 'Reproducir'}</span>
+                </button>
+
+                <button
+                  className="transport-sec-btn"
+                  onClick={() => {
+                    window.churchPresenterApi.controlVideo('stop')
+                    setIsVideoPlaying(false)
+                  }}
+                  title="Detener video y volver al inicio"
+                >
+                  <Square size={13} fill="currentColor" />
+                  <span>Detener</span>
+                </button>
+
+                <button
+                  className="transport-sec-btn"
+                  onClick={() => {
+                    window.churchPresenterApi.controlVideo('seek', Math.max(0, videoCurrentTime - 10))
+                  }}
+                  title="Retroceder 10 segundos"
+                >
+                  <RotateCcw size={12} />
+                  <span>-10s</span>
+                </button>
+
+                <button
+                  className="transport-sec-btn"
+                  onClick={() => {
+                    window.churchPresenterApi.controlVideo('seek', videoCurrentTime + 10)
+                  }}
+                  title="Avanzar 10 segundos"
+                >
+                  <span>+10s</span>
+                </button>
+
+                {/* Scrubber time slider */}
+                <div className="scrubber-container">
+                  <span className="time-label">{formatSeconds(videoCurrentTime)}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={videoDuration || 100}
+                    step={0.5}
+                    value={videoCurrentTime}
+                    onChange={(e) => {
+                      const t = parseFloat(e.target.value)
+                      setVideoCurrentTime(t)
+                      window.churchPresenterApi.controlVideo('seek', t)
+                    }}
+                    className="time-slider"
+                  />
+                  <span className="time-label">{formatSeconds(videoDuration)}</span>
+                </div>
+
+                {/* Volume slider */}
+                <div className="volume-slider-box">
+                  {videoVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={videoVolume}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      setVideoVolume(v)
+                      window.churchPresenterApi.controlIndependentAudio('volume', v)
+                    }}
+                    className="volume-slider"
+                  />
+                </div>
+              </div>
+
+              {/* Video Options & Routing */}
+              <div className="video-options-grid">
+                <div className="video-option-item">
+                  <label>Punto Entrada (in):</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={videoInPoint}
+                    onChange={(e) => setVideoInPoint(parseFloat(e.target.value) || 0)}
+                    className="mini-num-input"
+                  />
+                  <span>seg</span>
+                </div>
+
+                <div className="video-option-item">
+                  <label>Punto Salida (out):</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={videoOutPoint}
+                    onChange={(e) => setVideoOutPoint(parseFloat(e.target.value) || 0)}
+                    className="mini-num-input"
+                  />
+                  <span>seg</span>
+                </div>
+
+                <div className="video-option-item">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={videoLoop}
+                      onChange={(e) => setVideoLoop(e.target.checked)}
+                    />
+                    <span>Bucle</span>
+                  </label>
+                </div>
+
+                <div className="video-option-item">
+                  <label>Fin del video:</label>
+                  <select
+                    value={videoEndAction}
+                    onChange={(e) => setVideoEndAction(e.target.value as any)}
+                    className="mini-select"
+                  >
+                    <option value="freeze">Congelar último fotograma</option>
+                    <option value="background">Volver al fondo</option>
+                    <option value="next">Avanzar al siguiente</option>
+                  </select>
+                </div>
+
+                <div className="video-option-item">
+                  <label>Audio por:</label>
+                  <select
+                    value={audioOutputRole}
+                    onChange={(e) => setAudioOutputRole(e.target.value)}
+                    className="mini-select"
+                  >
+                    <option value="main">Sala Principal (main)</option>
+                    <option value="stage">Escenario (stage)</option>
+                    <option value="lobby">Vestíbulo / Lobby</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Phase 5A: PDF Fit Mode Switcher (shown when PDF item is active) */}
+          {currentServiceItem?.type === 'pdf' && (
+            <div className="pdf-toolbar-bar">
+              <span className="pdf-info-label">
+                Documento PDF: {pdfPageCount} páginas detectadas
+              </span>
+              <div className="pdf-fit-mode-group">
+                <label>Ajuste de página:</label>
+                <button
+                  className={`filter-pill ${pdfFitMode === 'contain' ? 'active' : ''}`}
+                  onClick={() => setPdfFitMode('contain')}
+                >
+                  Encajar completo
+                </button>
+                <button
+                  className={`filter-pill ${pdfFitMode === 'cover' ? 'active' : ''}`}
+                  onClick={() => setPdfFitMode('cover')}
+                >
+                  Rellenar
+                </button>
+                <button
+                  className={`filter-pill ${pdfFitMode === 'center' ? 'active' : ''}`}
+                  onClick={() => setPdfFitMode('center')}
+                >
+                  Centrado
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Slide Cards Grid */}
           <div className="slides-grid-container">
@@ -2685,6 +3292,97 @@ export const OperatorApp: React.FC = () => {
                   <span>Abrir Carpeta de Copias de Seguridad</span>
                 </button>
               </div>
+
+              {/* Requirement A.1: Doble traducción por rol de salida */}
+              <div className="settings-section">
+                <h3>Doble Traducción por Pantalla de Salida</h3>
+                <p className="section-note">
+                  Configure de manera independiente para cada pantalla física (Sala Principal, Escenario, Lobby) qué versión o versiones bíblicas proyectará y si se mostrarán en una sola traducción, apiladas o lado a lado.
+                </p>
+
+                <div className="role-bible-configs-table">
+                  {STANDARD_OUTPUT_ROLES.map((r) => {
+                    const config = roleBibleConfigs[r.id] || { role: r.id, mode: 'single', primaryTranslation: 'RVR1909' }
+                    return (
+                      <div key={r.id} className="role-bible-config-row">
+                        <div className="role-meta">
+                          <strong>{r.label} ({r.id})</strong>
+                          <span className="role-desc">{r.description}</span>
+                        </div>
+
+                        <div className="role-fields">
+                          <label>Modo:</label>
+                          <select
+                            value={config.mode}
+                            onChange={(e) => {
+                              const updated = { ...config, mode: e.target.value as any }
+                              setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                            }}
+                          >
+                            <option value="single">Una traducción</option>
+                            <option value="stacked">Doble traducción apilada</option>
+                            <option value="sideBySide">Doble traducción lado a lado</option>
+                          </select>
+
+                          <label>Principal:</label>
+                          <select
+                            value={config.primaryTranslation}
+                            onChange={(e) => {
+                              const updated = { ...config, primaryTranslation: e.target.value }
+                              setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                            }}
+                          >
+                            {bibleTranslations.map((t) => (
+                              <option key={t.id} value={t.abbrev}>
+                                {t.name} ({t.abbrev})
+                              </option>
+                            ))}
+                          </select>
+
+                          {config.mode !== 'single' && (
+                            <>
+                              <label>Secundaria:</label>
+                              <select
+                                value={config.secondaryTranslation || 'KJV'}
+                                onChange={(e) => {
+                                  const updated = { ...config, secondaryTranslation: e.target.value }
+                                  setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                                }}
+                              >
+                                {bibleTranslations.map((t) => (
+                                  <option key={t.id} value={t.abbrev}>
+                                    {t.name} ({t.abbrev})
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Requirement B.4: Salida de Audio Designada */}
+              <div className="settings-section">
+                <h3>Salida de Audio para Videos y Medios</h3>
+                <p className="section-note">
+                  El sonido de los videos solo sonará por una salida física designada (mesa de sonido o HDMI de la sala). Las demás pantallas irán en silencio.
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <label>Salida de Audio activa:</label>
+                  <select
+                    value={audioOutputRole}
+                    onChange={(e) => setAudioOutputRole(e.target.value)}
+                    className="bible-select"
+                  >
+                    <option value="main">Sala Principal (main) - HDMI / Mesa de Sonido</option>
+                    <option value="stage">Escenario (stage)</option>
+                    <option value="lobby">Vestíbulo / Lobby</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -2696,10 +3394,81 @@ export const OperatorApp: React.FC = () => {
                 onClick={async () => {
                   await window.churchPresenterApi.saveShortcuts(tempShortcuts)
                   setShortcuts(tempShortcuts)
+                  for (const rId of Object.keys(roleBibleConfigs)) {
+                    await window.churchPresenterApi.saveRoleBibleConfig(roleBibleConfigs[rId])
+                  }
                   setIsSettingsOpen(false)
                 }}
               >
                 Guardar Configuración
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MEDIA IMPORT MODAL
+          ========================================================= */}
+      {isMediaImportModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <div className="modal-title">Importar Archivo de Medio</div>
+              <button className="modal-close-btn" onClick={() => setIsMediaImportModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="section-note">
+                Soporta videos MP4 (H.264/AAC), WebM (VP8/VP9), audios MP3/WAV/AAC/OGG, imágenes y documentos PDF. Los archivos se copian a la carpeta de medios de la app (detectando duplicados por hash SHA-256).
+              </p>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Ruta completa del archivo en este equipo *</label>
+                <input
+                  type="text"
+                  placeholder="ej. C:\Videos\intro.mp4 o D:\Avisos.pdf"
+                  value={importMediaFilePath}
+                  onChange={(e) => setImportMediaFilePath(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Etiquetas (opcionales, separadas por coma):</label>
+                <input
+                  type="text"
+                  placeholder="ej. intro, culto, fondo, navidad"
+                  value={importMediaTags}
+                  onChange={(e) => setImportMediaTags(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="secondary-action-btn" onClick={() => setIsMediaImportModalOpen(false)}>
+                Cancelar
+              </button>
+              <button
+                className="primary-action-btn"
+                onClick={async () => {
+                  if (!importMediaFilePath.trim()) {
+                    alert('Ingrese la ruta del archivo')
+                    return
+                  }
+                  try {
+                    const tags = importMediaTags.split(',').map((t) => t.trim()).filter(Boolean)
+                    const imported = await window.churchPresenterApi.importMediaFile(importMediaFilePath.trim(), tags)
+                    alert(`Medio importado con éxito: ${imported.originalName} (${(imported.fileSize / (1024 * 1024)).toFixed(1)} MB)`)
+                    setIsMediaImportModalOpen(false)
+                    setImportMediaFilePath('')
+                    setImportMediaTags('')
+                    loadAllData()
+                  } catch (err: any) {
+                    alert(`Error al importar: ${err.message}`)
+                  }
+                }}
+              >
+                Importar
               </button>
             </div>
           </div>

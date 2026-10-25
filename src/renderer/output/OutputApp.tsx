@@ -1,7 +1,28 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react'
 import { PresenterState, DEFAULT_THEME, ThemeConfig, LayerBackground } from '../../shared/types'
 import { computeLayerVisibility } from '../../shared/state-utils'
+import { PdfPageView } from '../components/PdfPageView'
 import './output.css'
+
+const formatSeconds = (sec: number): string => {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+function toMediaUrl(raw?: string): string {
+  if (!raw) return ''
+  if (
+    raw.startsWith('file://') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('blob:') ||
+    raw.startsWith('http://') ||
+    raw.startsWith('https://')
+  ) {
+    return raw
+  }
+  return `file:///${raw.replace(/\\/g, '/')}`
+}
 
 interface OutputAppProps {
   role: string
@@ -9,7 +30,39 @@ interface OutputAppProps {
 
 export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   const [displayState, setDisplayState] = useState<PresenterState | null>(null)
+  const [hasMediaError, setHasMediaError] = useState<boolean>(false)
   const isFrozenRef = useRef<boolean>(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  // Master Clock Video Sync effect
+  useEffect(() => {
+    const tick = displayState?.mediaSyncTick
+    const video = videoRef.current
+    if (!tick || !video) return
+
+    // Dedicated audio role check: only unmuted on designated role!
+    const shouldPlayAudio = role === (tick.audioOutputRole || 'main')
+    video.muted = !shouldPlayAudio
+    if (shouldPlayAudio) {
+      video.volume = tick.volume ?? 1.0
+    }
+
+    if (tick.isPlaying && video.paused) {
+      video.play().catch(() => {})
+    } else if (!tick.isPlaying && !video.paused) {
+      video.pause()
+    }
+
+    const drift = Math.abs(video.currentTime - tick.currentTime)
+    if (drift > 0.15) {
+      video.currentTime = tick.currentTime
+    }
+  }, [displayState?.mediaSyncTick, role])
+
+  // Reset media error flag on url change
+  useEffect(() => {
+    setHasMediaError(false)
+  }, [displayState?.currentSlide?.mediaUrl])
 
   // Viewport 1920x1080 canvas scaling
   const [canvasScale, setCanvasScale] = useState<number>(1)
@@ -232,14 +285,32 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
       >
         {/* Layer 1: Fondo (Background) */}
         {visibility.showBackground && (
-          <div
-            className="layer-background"
-            style={
-              isStage
-                ? { backgroundColor: '#000000' }
-                : getBackgroundStyle(background)
-            }
-          />
+          background?.type === 'video' && !isStage ? (
+            <video
+              src={toMediaUrl(background.value)}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover'
+              }}
+            />
+          ) : (
+            <div
+              className="layer-background"
+              style={
+                isStage
+                  ? { backgroundColor: '#000000' }
+                  : getBackgroundStyle(background)
+              }
+            />
+          )
         )}
 
         {/* STAGE MONITOR VIEW */}
@@ -260,108 +331,214 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
               </div>
             )}
 
-            {/* Split View: Current Slide vs Next Slide */}
-            <div className="stage-split-panels">
-              {/* Left/Main Panel: Current Slide (En Pantalla) */}
-              <div className="stage-panel stage-panel-current">
-                <div className="stage-panel-label">EN PANTALLA</div>
-                <div className="stage-panel-body">
-                  {visibility.showContent && content?.body ? (
-                    <div className="stage-lyrics-current">{content.body}</div>
-                  ) : (
-                    <div className="stage-lyrics-empty">(Sin texto en vivo)</div>
-                  )}
+            {/* Requirement B.10: During video playback, show elapsed and remaining time */}
+            {content?.mediaType === 'video' ? (
+              <div
+                className="stage-video-panel"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 24,
+                  backgroundColor: '#0f172a',
+                  border: '2px solid #334155',
+                  borderRadius: 12,
+                  margin: 20,
+                  padding: 30
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      backgroundColor: displayState?.mediaSyncTick?.isPlaying ? '#10b981' : '#f59e0b',
+                      color: '#000000',
+                      padding: '4px 12px',
+                      borderRadius: 6
+                    }}
+                  >
+                    {displayState?.mediaSyncTick?.isPlaying ? '▶ EN REPRODUCCIÓN' : '⏸ EN PAUSA'}
+                  </span>
+                  <span style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc' }}>
+                    {content.title || 'Video en vivo'}
+                  </span>
                 </div>
-              </div>
 
-              {/* Right Panel: Next Slide Preview */}
-              <div className="stage-panel stage-panel-next">
-                <div className="stage-panel-label">
-                  SIGUIENTE
-                  {content?.nextSlideTitle && ` - ${content.nextSlideTitle}`}
-                </div>
-                <div className="stage-panel-body">
-                  {content?.nextSlideBody ? (
-                    <div className="stage-lyrics-next">{content.nextSlideBody}</div>
-                  ) : (
-                    <div className="stage-lyrics-empty">(Fin de la canción / diapositiva)</div>
-                  )}
+                <div style={{ display: 'flex', gap: 60, marginTop: 10 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, color: '#94a3b8', letterSpacing: '0.1em', marginBottom: 4 }}>
+                      TRANSCURRIDO
+                    </div>
+                    <div style={{ fontSize: 72, fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8' }}>
+                      {formatSeconds(displayState?.mediaSyncTick?.currentTime || 0)}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, color: '#94a3b8', letterSpacing: '0.1em', marginBottom: 4 }}>
+                      RESTANTE
+                    </div>
+                    <div style={{ fontSize: 72, fontWeight: 900, fontFamily: 'monospace', color: '#f43f5e' }}>
+                      -{formatSeconds(
+                        Math.max(
+                          0,
+                          (displayState?.mediaSyncTick?.duration || 0) - (displayState?.mediaSyncTick?.currentTime || 0)
+                        )
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Split View: Current Slide vs Next Slide */
+              <div className="stage-split-panels">
+                {/* Left/Main Panel: Current Slide (En Pantalla) */}
+                <div className="stage-panel stage-panel-current">
+                  <div className="stage-panel-label">EN PANTALLA</div>
+                  <div className="stage-panel-body">
+                    {visibility.showContent && content?.body ? (
+                      <div className="stage-lyrics-current">{content.body}</div>
+                    ) : (
+                      <div className="stage-lyrics-empty">(Sin texto en vivo)</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Panel: Next Slide Preview */}
+                <div className="stage-panel stage-panel-next">
+                  <div className="stage-panel-label">
+                    SIGUIENTE
+                    {content?.nextSlideTitle && ` - ${content.nextSlideTitle}`}
+                  </div>
+                  <div className="stage-panel-body">
+                    {content?.nextSlideBody ? (
+                      <div className="stage-lyrics-next">{content.nextSlideBody}</div>
+                    ) : (
+                      <div className="stage-lyrics-empty">(Fin de la canción / diapositiva)</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* STANDARD AUDIENCE VIEW (Main / Lobby) */
           <>
             {visibility.showContent && content && (
-              <div
-                className="layer-content"
-                ref={contentBoxRef}
-                style={{
-                  paddingTop: `${effectiveTheme.safeMarginsPercent.top * 10.8}px`,
-                  paddingBottom: `${effectiveTheme.safeMarginsPercent.bottom * 10.8}px`,
-                  paddingLeft: `${effectiveTheme.safeMarginsPercent.left * 19.2}px`,
-                  paddingRight: `${effectiveTheme.safeMarginsPercent.right * 19.2}px`,
-                  textAlign: effectiveTheme.alignment
-                }}
-              >
+              content.mediaType === 'video' && content.mediaUrl && !hasMediaError ? (
+                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', overflow: 'hidden' }}>
+                  <video
+                    ref={videoRef}
+                    src={toMediaUrl(content.mediaUrl)}
+                    autoPlay
+                    playsInline
+                    muted={role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: (content.fitMode as any) || 'contain'
+                    }}
+                    onError={() => {
+                      setHasMediaError(true)
+                      window.churchPresenterApi.logMediaError(
+                        role,
+                        content.mediaUrl || '',
+                        'Error al decodificar formato de video'
+                      )
+                    }}
+                  />
+                </div>
+              ) : content.mediaType === 'pdf' && content.mediaUrl ? (
+                <PdfPageView
+                  pdfUrl={content.mediaUrl}
+                  pageNumber={content.pdfPage || 1}
+                  fitMode={content.fitMode || 'contain'}
+                />
+              ) : content.mediaType === 'image' && content.mediaUrl ? (
+                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img
+                    src={content.mediaUrl}
+                    alt={content.title || ''}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: (content.fitMode as any) || 'contain'
+                    }}
+                  />
+                </div>
+              ) : (
                 <div
-                  ref={textBoxRef}
-                  className="content-inner-box"
+                  className="layer-content"
+                  ref={contentBoxRef}
                   style={{
-                    transform: autoScale < 1 ? `scale(${autoScale})` : 'none',
-                    transformOrigin:
-                      effectiveTheme.alignment === 'center'
-                        ? 'center center'
-                        : effectiveTheme.alignment === 'left'
-                          ? 'left center'
-                          : 'right center'
+                    paddingTop: `${effectiveTheme.safeMarginsPercent.top * 10.8}px`,
+                    paddingBottom: `${effectiveTheme.safeMarginsPercent.bottom * 10.8}px`,
+                    paddingLeft: `${effectiveTheme.safeMarginsPercent.left * 19.2}px`,
+                    paddingRight: `${effectiveTheme.safeMarginsPercent.right * 19.2}px`,
+                    textAlign: effectiveTheme.alignment
                   }}
                 >
-                  {content.title && (
-                    <div
-                      className="content-title"
-                      style={{
-                        fontFamily: effectiveTheme.fontFamily,
-                        color: effectiveTheme.color
-                      }}
-                    >
-                      {content.title}
-                    </div>
-                  )}
+                  <div
+                    ref={textBoxRef}
+                    className="content-inner-box"
+                    style={{
+                      transform: autoScale < 1 ? `scale(${autoScale})` : 'none',
+                      transformOrigin:
+                        effectiveTheme.alignment === 'center'
+                          ? 'center center'
+                          : effectiveTheme.alignment === 'left'
+                            ? 'left center'
+                            : 'right center'
+                    }}
+                  >
+                    {content.title && (
+                      <div
+                        className="content-title"
+                        style={{
+                          fontFamily: effectiveTheme.fontFamily,
+                          color: effectiveTheme.color
+                        }}
+                      >
+                        {content.title}
+                      </div>
+                    )}
 
-                  {content.body && (
-                    <div
-                      className="content-body"
-                      style={{
-                        fontFamily: effectiveTheme.fontFamily,
-                        color: effectiveTheme.color,
-                        WebkitTextStroke:
-                          effectiveTheme.outlineWidthPx > 0
-                            ? `${effectiveTheme.outlineWidthPx}px ${effectiveTheme.outlineColor}`
-                            : 'none',
-                        textShadow:
-                          effectiveTheme.shadowBlurPx > 0
-                            ? `0 4px ${effectiveTheme.shadowBlurPx}px ${effectiveTheme.shadowColor}`
-                            : 'none'
-                      }}
-                    >
-                      {content.body}
-                    </div>
-                  )}
+                    {content.body && (
+                      <div
+                        className="content-body"
+                        style={{
+                          fontFamily: effectiveTheme.fontFamily,
+                          color: effectiveTheme.color,
+                          WebkitTextStroke:
+                            effectiveTheme.outlineWidthPx > 0
+                              ? `${effectiveTheme.outlineWidthPx}px ${effectiveTheme.outlineColor}`
+                              : 'none',
+                          textShadow:
+                            effectiveTheme.shadowBlurPx > 0
+                              ? `0 4px ${effectiveTheme.shadowBlurPx}px ${effectiveTheme.shadowColor}`
+                              : 'none'
+                        }}
+                      >
+                        {content.body}
+                      </div>
+                    )}
 
-                  {content.subtitle && (
-                    <div
-                      className="content-subtitle"
-                      style={{
-                        fontFamily: effectiveTheme.fontFamily
-                      }}
-                    >
-                      {content.subtitle}
-                    </div>
-                  )}
+                    {content.subtitle && (
+                      <div
+                        className="content-subtitle"
+                        style={{
+                          fontFamily: effectiveTheme.fontFamily
+                        }}
+                      >
+                        {content.subtitle}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )
             )}
 
             {/* Layer 3: Overlay (Logo) */}

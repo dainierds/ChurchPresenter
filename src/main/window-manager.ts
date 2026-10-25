@@ -173,7 +173,7 @@ export class WindowManager {
       frame: false,
       show: false,
       skipTaskbar: true,
-      alwaysOnTop: true,
+      alwaysOnTop: process.env.NODE_ENV !== 'test',
       autoHideMenuBar: true,
       backgroundColor: '#000000',
       hasShadow: false,
@@ -383,6 +383,18 @@ export class WindowManager {
       if (!win.isDestroyed()) {
         win.webContents.send(channel, ...args)
       }
+    }
+  }
+
+  public async captureOutputWindow(role: string): Promise<Buffer | null> {
+    const win = this.outputWindows.get(role)
+    if (!win || win.isDestroyed()) return null
+    try {
+      const img = await win.capturePage()
+      return img.toPNG()
+    } catch (err) {
+      logger.error(`Failed to capture output window for role '${role}':`, err)
+      return null
     }
   }
 

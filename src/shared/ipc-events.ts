@@ -69,8 +69,26 @@ export const IPC_CHANNELS = {
   BIBLE_GET_RECENT: 'bible:get-recent',
   BIBLE_ADD_RECENT: 'bible:add-recent',
   BIBLE_GENERATE_SLIDES: 'bible:generate-slides',
+  BIBLE_GET_ROLE_CONFIGS: 'bible:get-role-configs',
+  BIBLE_SAVE_ROLE_CONFIG: 'bible:save-role-config',
+
+  // Phase 5A: Media & PDF
+  MEDIA_GET: 'media:get',
+  MEDIA_IMPORT: 'media:import',
+  MEDIA_DELETE: 'media:delete',
+  MEDIA_CHECK_INTEGRITY: 'media:check-integrity',
+  VIDEO_PLAY: 'video:play',
+  VIDEO_CONTROL: 'video:control',
+  MEDIA_SYNC_TICK: 'media:sync-tick',
+  AUDIO_PLAY_INDEPENDENT: 'audio:play-independent',
+  AUDIO_CONTROL_INDEPENDENT: 'audio:control-independent',
+  PDF_RENDER_PAGE: 'pdf:render-page',
+  PDF_GET_PAGE_COUNT: 'pdf:get-page-count',
 
   // Diagnostics & Logging
   LOG_FPS_DROP: 'log:fps-drop',
+  LOG_MEDIA_ERROR: 'log:media-error',
+  OUTPUT_CAPTURE_ROLE: 'output:capture-role',
+  OUTPUT_OPEN_PREVIEW: 'output:open-preview',
   APP_GET_VERSION: 'app:get-version'
 } as const

@@ -41,6 +41,24 @@ export interface DisplayInfo {
 export type RoleAssignment = Record<string, string | null>
 
 /**
+ * Bible translation and layout configuration per output role.
+ */
+export interface RoleBibleConfig {
+  role: OutputRole
+  mode: 'single' | 'stacked' | 'sideBySide'
+  primaryTranslation: string
+  secondaryTranslation?: string
+}
+
+export type RoleBibleConfigsMap = Record<string, RoleBibleConfig>
+
+export const DEFAULT_ROLE_BIBLE_CONFIGS: RoleBibleConfigsMap = {
+  main: { role: 'main', mode: 'single', primaryTranslation: 'RVR1909' },
+  lobby: { role: 'lobby', mode: 'single', primaryTranslation: 'RVR1909' },
+  stage: { role: 'stage', mode: 'stacked', primaryTranslation: 'RVR1909', secondaryTranslation: 'KJV' }
+}
+
+/**
  * Presentation layers for each output.
  */
 export interface LayerContent {
@@ -50,10 +68,18 @@ export interface LayerContent {
   subtitle?: string
   nextSlideBody?: string // For Stage Monitor (Escenario)
   nextSlideTitle?: string
+  mediaUrl?: string
+  mediaType?: 'video' | 'image' | 'pdf'
+  pdfPage?: number
+  pdfPageCount?: number
+  fitMode?: 'contain' | 'cover' | 'center'
+  videoPlaying?: boolean
+  videoTime?: number
+  videoDuration?: number
 }
 
 export interface LayerBackground {
-  type: 'color' | 'gradient' | 'image'
+  type: 'color' | 'gradient' | 'image' | 'video'
   value: string
 }
 
@@ -235,7 +261,16 @@ export interface BackgroundImageItem {
   createdAt: string
 }
 
-export type ServiceItemType = 'song' | 'presentation' | 'blank' | 'header' | 'scripture'
+export type ServiceItemType =
+  | 'song'
+  | 'presentation'
+  | 'blank'
+  | 'header'
+  | 'scripture'
+  | 'video'
+  | 'audio'
+  | 'pdf'
+  | 'image_presentation'
 
 export interface ServiceItem {
   id: string
@@ -246,7 +281,85 @@ export interface ServiceItem {
   presentationId?: string
   scriptureRef?: string
   bibleTranslation?: string
+  mediaId?: string
+  videoConfig?: VideoItemConfig
+  pdfConfig?: PdfItemConfig
+  imageConfig?: ImagePresentationConfig
   notes?: string
+}
+
+export interface VideoItemConfig {
+  mediaId: string
+  mediaPath: string
+  loop: boolean
+  volume: number // 0.0 to 1.0
+  inPoint?: number // seconds
+  outPoint?: number // seconds
+  fadeInSeconds?: number
+  fadeOutSeconds?: number
+  endAction: 'freeze' | 'background' | 'next'
+  audioOutputRole?: OutputRole // Role where audio will play unmuted (default: 'main')
+}
+
+export interface PdfItemConfig {
+  mediaId: string
+  mediaPath: string
+  pageCount: number
+  currentPage: number
+  fitMode: 'contain' | 'cover' | 'center'
+}
+
+export interface ImagePresentationConfig {
+  images: { mediaId: string; filePath: string; name: string }[]
+  currentIndex: number
+  fitMode: 'contain' | 'cover' | 'center'
+}
+
+export type MediaType = 'video' | 'audio' | 'image'
+
+export interface MediaItem {
+  id: string
+  hash: string
+  fileName: string
+  originalName: string
+  filePath: string
+  mediaType: MediaType
+  fileSize: number
+  duration: number
+  width: number
+  height: number
+  codec?: string
+  container?: string
+  tags: string[]
+  thumbnailPath?: string
+  isMissing?: boolean
+  createdAt: string
+}
+
+export interface MediaSyncTick {
+  mediaId: string
+  mediaType: 'video' | 'audio'
+  filePath: string
+  isPlaying: boolean
+  currentTime: number
+  duration: number
+  loop: boolean
+  volume: number
+  audioOutputRole: OutputRole
+  inPoint?: number
+  outPoint?: number
+  timestamp: number
+}
+
+export interface IndependentAudioState {
+  isPlaying: boolean
+  mediaId: string | null
+  filePath: string | null
+  title: string | null
+  currentTime: number
+  duration: number
+  volume: number
+  isFadingOut: boolean
 }
 
 export interface ServicePlan {
@@ -266,7 +379,7 @@ export interface ServicePlan {
 export interface SlideItem {
   id: string
   sourceId: string
-  sourceType: 'song' | 'presentation' | 'blank' | 'scripture'
+  sourceType: 'song' | 'presentation' | 'blank' | 'scripture' | 'video' | 'pdf' | 'image'
   groupLabel?: string
   slideIndex: number
   totalSlidesInGroup: number
@@ -274,6 +387,19 @@ export interface SlideItem {
   body: string
   subtitle?: string
   background?: LayerBackground
+  mediaUrl?: string
+  pdfPage?: number
+  pdfPageCount?: number
+  fitMode?: 'contain' | 'cover' | 'center'
+  scripturePayload?: {
+    reference: string
+    bookNumber: number
+    chapter: number
+    verseStart: number
+    verseEnd: number
+    primaryText: string
+    secondaryText?: string
+  }
 }
 
 export interface LibraryExportData {
@@ -358,6 +484,9 @@ export interface PresenterState {
   currentTheme: ThemeConfig
   stressTestMode: boolean
   liveEditingSlideId?: string
+  mediaSyncTick?: MediaSyncTick | null
+  independentAudio?: IndependentAudioState
+  roleBibleConfigs?: RoleBibleConfigsMap
   updatedAt: number
 }
 
@@ -376,7 +505,7 @@ export interface AppNotification {
   id: string
   title: string
   message: string
-  type: 'info' | 'warn' | 'success'
+  type: 'info' | 'warn' | 'success' | 'error'
   timestamp: number
 }
 
@@ -470,9 +599,26 @@ export interface ChurchPresenterApi {
     secondaryVerses?: BibleVerse[],
     dualLayout?: 'stacked' | 'sideBySide'
   ) => Promise<SlideItem[]>
+  getRoleBibleConfigs: () => Promise<RoleBibleConfigsMap>
+  saveRoleBibleConfig: (config: RoleBibleConfig) => Promise<boolean>
+
+  // Phase 5A: Media & PDF
+  getMediaItems: (type?: MediaType) => Promise<MediaItem[]>
+  importMediaFile: (sourcePath: string, tags?: string[]) => Promise<MediaItem>
+  deleteMediaItem: (id: string) => Promise<boolean>
+  checkMediaIntegrity: () => Promise<{ missingCount: number; missingIds: string[] }>
+  playVideo: (config: VideoItemConfig) => Promise<PresenterState>
+  controlVideo: (action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => Promise<void>
+  playIndependentAudio: (mediaId: string, filePath: string, title?: string) => Promise<void>
+  controlIndependentAudio: (action: 'play' | 'pause' | 'stop' | 'fade-out' | 'volume', value?: number) => Promise<void>
+  renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number) => Promise<string>
+  getPdfPageCount: (mediaId: string) => Promise<number>
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void
+  logMediaError: (role: string, url: string, message: string) => void
+  captureOutputWindow: (role: string) => Promise<Buffer | null>
+  openPreviewOutputWindow: (role: string) => Promise<boolean>
   getAppVersion: () => Promise<string>
 }
 

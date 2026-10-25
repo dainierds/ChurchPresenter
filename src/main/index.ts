@@ -10,6 +10,7 @@ import { registerIpcHandlers } from './ipc-handlers'
 import { shortcutsManager } from './shortcuts-manager'
 import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
+import { mediaService } from './media/media-service'
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -59,6 +60,9 @@ async function initializeApp() {
 
     await bibleService.initialize()
     logger.info('BibleService initialized.')
+
+    mediaService.initialize()
+    logger.info('MediaService initialized.')
 
     displayManager.initialize()
     logger.info('DisplayManager initialized.')
