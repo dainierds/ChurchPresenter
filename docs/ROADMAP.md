@@ -112,6 +112,15 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Modal de advertencia legal y de conectividad en el primer uso.
 - Soporte opcional para descarga y extracción local a la biblioteca de medios mediante `yt-dlp` desacoplado.
 - Suite de pruebas unitarias (`tests/youtube-utils.test.ts`, `tests/youtube-service.test.ts`) y prueba automatizada E2E con Playwright/Electron y capturas de evidencia en `docs/evidence/`.
+- **Correcciones de Maquetación y Rediseño Visual de la Ventana del Operador (v1.1)**:
+  - Reconstrucción del contenedor de tres columnas con Flexbox (`min-width: 0`, `overflow: hidden`, sin anchos fijos que desborden ni colisiones visuales).
+  - Títulos largos truncados con elipsis al final y texto completo en tooltip accesible nativo.
+  - Divisores arrastrables interactivos (verticales y horizontales) con límites elásticos (columna derecha hasta el 50% de la ventana) y restauración de valores por defecto mediante doble clic o menú Ver ("Restablecer diseño").
+  - Previsualizador escalar 16:9 y ventana flotante independiente `/floating-preview` (con selector de salidas y toggle de siempre visible, aislada de la lista de pantallas de proyección).
+  - Estilización oscura integral para controles nativos (`select`, `input`, `button`, barras de desplazamiento delgadas, `checkbox`, `range`) eliminando controles blancos del sistema operativo.
+  - Fila ergonómica horizontal para temporizadores (nombre a la izquierda, dígitos monoespaciados, botones alineados, prevención de NaN y casillas de verificación ordenadas).
+  - Nueva paleta ProPresenter con variables CSS y sección de personalización en Configuración -> Apariencia con contraste WCAG AA.
+  - Verificación automatizada con Playwright comprobando cero colisiones de cajas delimitadoras en resoluciones 1366x768, 1920x1080, 2560x1440, escalados 125%/150% y extremos de divisores (`docs/evidence/ui-operator-*.png`).
 - **Pendiente para fases futuras**:
   - Buscador propio nativo con la API de datos de YouTube v3 (requiere clave de API y administración de cuotas en Google Cloud) para presentar cuadrículas de búsqueda personalizadas dentro del estilo de la app sin abrir youtube.com.
 

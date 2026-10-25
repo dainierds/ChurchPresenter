@@ -894,6 +894,11 @@ export interface ChurchPresenterApi {
   getAppVersion: () => Promise<string>
   getEnvInfo: () => Promise<{ isDev: boolean; version: string; userDataPath: string }>
   copyProdLibraryToDev: () => Promise<{ success: boolean; message: string }>
+
+  // Floating Output Preview Window (Requirement 3)
+  openFloatingPreview: (initialRole?: string) => Promise<boolean>
+  setFloatingPreviewAlwaysOnTop: (alwaysOnTop: boolean) => Promise<boolean>
+  closeFloatingPreview: () => Promise<boolean>
 }
 
 declare global {

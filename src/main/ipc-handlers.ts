@@ -772,6 +772,21 @@ export function registerIpcHandlers(): void {
     return result
   })
 
+  // Floating Output Preview Window (Requirement 3)
+  ipcMain.handle(IPC_CHANNELS.FLOATING_PREVIEW_OPEN, async (_event, initialRole: string) => {
+    windowManager.openFloatingPreviewWindow(initialRole || 'main')
+    return true
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FLOATING_PREVIEW_SET_ALWAYS_ON_TOP, async (_event, alwaysOnTop: boolean) => {
+    return windowManager.setFloatingPreviewAlwaysOnTop(alwaysOnTop)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FLOATING_PREVIEW_CLOSE, async () => {
+    windowManager.closeFloatingPreviewWindow()
+    return true
+  })
+
   // Hook DisplayManager events
   displayManager.on('displays-changed', (displays) => {
     logger.info(`Notifying windows of displays-changed (${displays.length} displays)`)

@@ -15,6 +15,10 @@ interface TopMenuBarProps {
   onZoomOut: () => void
   onToggleViewMode: () => void
   onOpenShortcutsHelp: () => void
+  onResetLayout?: () => void
+  onToggleLeftPanel?: () => void
+  onToggleRightPanel?: () => void
+  onOpenFloatingPreview?: () => void
 }
 
 export const TopMenuBar: React.FC<TopMenuBarProps> = ({
@@ -31,7 +35,11 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onZoomIn,
   onZoomOut,
   onToggleViewMode,
-  onOpenShortcutsHelp
+  onOpenShortcutsHelp,
+  onResetLayout,
+  onToggleLeftPanel,
+  onToggleRightPanel,
+  onOpenFloatingPreview
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -317,6 +325,34 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
               >
                 <span>Mostrar/Ocultar Panel de Medios</span>
               </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onResetLayout?.()
+                }}
+              >
+                <span><strong>Restablecer diseño</strong></span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onToggleLeftPanel?.()
+                }}
+              >
+                <span>Colapsar/Expandir panel izquierdo</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onToggleRightPanel?.()
+                }}
+              >
+                <span>Colapsar/Expandir panel derecho</span>
+              </button>
             </div>
           )}
         </div>
@@ -336,10 +372,20 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 className="pro-dropdown-item"
                 onClick={() => {
                   closeMenu()
+                  onOpenFloatingPreview?.()
+                }}
+              >
+                <span><strong>Abrir Vista Previa Flotante...</strong></span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
                   onOpenSettings()
                 }}
               >
-                <span>Previsualización de Salidas</span>
+                <span>Configurar Pantallas y Salidas...</span>
               </button>
             </div>
           )}

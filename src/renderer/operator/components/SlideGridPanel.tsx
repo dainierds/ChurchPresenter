@@ -70,8 +70,14 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
       {/* Slide Header Toolbar */}
       <div className="pro-slide-header-bar">
         <div className="pro-slide-title-area">
-          <h2 className="pro-slide-main-title">{title || 'Sin elemento seleccionado'}</h2>
-          {subtitle && <span className="pro-slide-subtitle">{subtitle}</span>}
+          <h2 className="pro-slide-main-title" title={title || 'Sin elemento seleccionado'}>
+            {title || 'Sin elemento seleccionado'}
+          </h2>
+          {subtitle && (
+            <span className="pro-slide-subtitle" title={subtitle}>
+              {subtitle}
+            </span>
+          )}
         </div>
 
         {/* Arrangements switcher if available */}
@@ -158,7 +164,10 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                 >
                   {/* Card Header (Group & Slide Number) */}
                   <div className="pro-slide-card-header">
-                    <span className={`pro-slide-badge ${badgeClass}`}>
+                    <span
+                      className={`pro-slide-badge ${badgeClass}`}
+                      title={slide.groupLabel || `Diapositiva ${idx + 1}`}
+                    >
                       {slide.groupLabel || `Diapositiva ${idx + 1}`}
                     </span>
                     <span className="pro-slide-index-number">{idx + 1}</span>
@@ -207,7 +216,10 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                   onDoubleClick={() => onGoLive(slide, slides[idx + 1])}
                 >
                   <span className="pro-list-idx">{idx + 1}</span>
-                  <span className={`pro-slide-badge ${badgeClass}`}>
+                  <span
+                    className={`pro-slide-badge ${badgeClass}`}
+                    title={slide.groupLabel || 'Diapositiva'}
+                  >
                     {slide.groupLabel || 'Diapositiva'}
                   </span>
                   <div className="pro-list-text">{slide.body}</div>

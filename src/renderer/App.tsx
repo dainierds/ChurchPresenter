@@ -2,6 +2,7 @@ import React from 'react'
 import { HashRouter, Routes, Route, useParams, Navigate } from 'react-router-dom'
 import { OperatorApp } from './operator/OperatorApp'
 import { OutputApp } from './output/OutputApp'
+import { FloatingPreviewApp } from './operator/components/FloatingPreviewApp'
 
 const OutputRouteWrapper: React.FC = () => {
   const { role } = useParams<{ role: string }>()
@@ -14,6 +15,7 @@ export const App: React.FC = () => {
       <Routes>
         <Route path="/operator" element={<OperatorApp />} />
         <Route path="/output/:role" element={<OutputRouteWrapper />} />
+        <Route path="/floating-preview" element={<FloatingPreviewApp />} />
         <Route path="*" element={<Navigate to="/operator" replace />} />
       </Routes>
     </HashRouter>

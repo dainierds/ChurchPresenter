@@ -145,5 +145,10 @@ export const IPC_CHANNELS = {
   OUTPUT_OPEN_PREVIEW: 'output:open-preview',
   APP_GET_VERSION: 'app:get-version',
   APP_GET_ENV_INFO: 'app:get-env-info',
-  DEV_COPY_PROD_LIBRARY: 'dev:copy-prod-library'
+  DEV_COPY_PROD_LIBRARY: 'dev:copy-prod-library',
+
+  // Floating Output Preview Window (Requirement 3)
+  FLOATING_PREVIEW_OPEN: 'floating-preview:open',
+  FLOATING_PREVIEW_SET_ALWAYS_ON_TOP: 'floating-preview:set-always-on-top',
+  FLOATING_PREVIEW_CLOSE: 'floating-preview:close'
 } as const

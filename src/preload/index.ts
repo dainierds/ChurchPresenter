@@ -566,6 +566,19 @@ const api: ChurchPresenterApi = {
 
   copyProdLibraryToDev: (): Promise<{ success: boolean; message: string }> => {
     return ipcRenderer.invoke(IPC_CHANNELS.DEV_COPY_PROD_LIBRARY)
+  },
+
+  // Floating Output Preview Window (Requirement 3)
+  openFloatingPreview: (initialRole?: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FLOATING_PREVIEW_OPEN, initialRole)
+  },
+
+  setFloatingPreviewAlwaysOnTop: (alwaysOnTop: boolean): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FLOATING_PREVIEW_SET_ALWAYS_ON_TOP, alwaysOnTop)
+  },
+
+  closeFloatingPreview: (): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FLOATING_PREVIEW_CLOSE)
   }
 }
 

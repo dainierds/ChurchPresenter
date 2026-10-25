@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Music,
   Film,
-  Snowflake
+  Snowflake,
+  Maximize2
 } from 'lucide-react'
 import {
   PresenterState,
@@ -37,6 +38,9 @@ interface RightSidePanelProps {
     audience: string
     stage: string
   }
+  previewHeight?: number
+  onResizePreview?: (e: React.MouseEvent) => void
+  onResetPreview?: () => void
 }
 
 export const RightSidePanel: React.FC<RightSidePanelProps> = ({
@@ -48,7 +52,10 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   onDeleteTimer,
   onClearLayer,
   onControlVideo,
-  panelLabels
+  panelLabels,
+  previewHeight,
+  onResizePreview,
+  onResetPreview
 }) => {
   const [activeOutputTab, setActiveOutputTab] = useState<'main' | 'stage' | 'lobby'>('main')
   const [activeBottomTab, setActiveBottomTab] = useState<'timers' | 'props' | 'macros'>('timers')
@@ -76,8 +83,9 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const isPlayingAudio = Boolean(state?.independentAudio?.isPlaying)
   const hasAudioActive = isPlayingMedia || isPlayingAudio
 
-  // Format timer seconds into digital display mm:ss or hh:mm:ss
-  const formatTimerDigits = (sec: number, isOverrun?: boolean) => {
+  // Format timer seconds into digital display mm:ss or hh:mm:ss (never NaN)
+  const formatTimerDigits = (rawSec: number, isOverrun?: boolean) => {
+    const sec = Number.isFinite(rawSec) ? rawSec : 0
     const abs = Math.abs(sec)
     const h = Math.floor(abs / 3600)
     const m = Math.floor((abs % 3600) / 60)
@@ -207,27 +215,48 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   }, [hasAudioActive, state?.mediaSyncTick?.isPlaying, state?.mediaSyncTick?.volume])
 
   return (
-    <div className="pro-right-panel">
+    <div className="pro-right-panel-content">
       {/* 1. Top: Output Preview Monitor Switcher */}
-      <div className="pro-preview-section">
+      <div
+        className="pro-preview-section"
+        style={{ height: previewHeight ? `${previewHeight}px` : undefined }}
+      >
         <div className="pro-output-tabs-bar">
+          <div className="pro-output-tabs-left">
+            <button
+              type="button"
+              className={`pro-out-tab ${activeOutputTab === 'main' ? 'active' : ''}`}
+              onClick={() => setActiveOutputTab('main')}
+            >
+              {panelLabels?.audience ? `${panelLabels.audience}` : 'Sala Principal'}
+            </button>
+            <button
+              type="button"
+              className={`pro-out-tab ${activeOutputTab === 'stage' ? 'active' : ''}`}
+              onClick={() => setActiveOutputTab('stage')}
+            >
+              {panelLabels?.stage || 'Escenario'}
+            </button>
+            <button
+              type="button"
+              className={`pro-out-tab ${activeOutputTab === 'lobby' ? 'active' : ''}`}
+              onClick={() => setActiveOutputTab('lobby')}
+            >
+              Lobby
+            </button>
+          </div>
           <button
-            className={`pro-out-tab ${activeOutputTab === 'main' ? 'active' : ''}`}
-            onClick={() => setActiveOutputTab('main')}
+            type="button"
+            className="pro-btn-expand-preview"
+            onClick={() => {
+              if (window.churchPresenterApi?.openFloatingPreview) {
+                window.churchPresenterApi.openFloatingPreview(activeOutputTab)
+              }
+            }}
+            title="Abrir vista previa en ventana flotante independiente (conserva 16:9 y no es salida de proyección)"
           >
-            {panelLabels?.audience ? `${panelLabels.audience}` : 'Sala Principal'}
-          </button>
-          <button
-            className={`pro-out-tab ${activeOutputTab === 'stage' ? 'active' : ''}`}
-            onClick={() => setActiveOutputTab('stage')}
-          >
-            {panelLabels?.stage || 'Escenario'}
-          </button>
-          <button
-            className={`pro-out-tab ${activeOutputTab === 'lobby' ? 'active' : ''}`}
-            onClick={() => setActiveOutputTab('lobby')}
-          >
-            Lobby
+            <Maximize2 size={12} />
+            <span>Ampliar</span>
           </button>
         </div>
 
@@ -558,6 +587,16 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
         </div>
       </div>
 
+      {/* Resizer H3: Preview vs Deck/Timers */}
+      {onResizePreview && (
+        <div
+          className="pro-resizer-horizontal"
+          onMouseDown={onResizePreview}
+          onDoubleClick={onResetPreview}
+          title="Arrastrar para redimensionar vista previa (Doble clic para restablecer)"
+        />
+      )}
+
       {/* 2. Center: Media Transport Deck Controls */}
       <div className="pro-media-transport-deck">
         <div className="pro-transport-buttons">
@@ -671,45 +710,70 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
           </form>
         )}
 
-        {/* Timers List */}
+        {/* Timers List (Requirement 5) */}
         <div className="pro-timers-list-scroll">
           {timers.map((t) => (
-            <div key={t.id} className={`pro-timer-row ${t.isRunning ? 'running' : ''}`}>
-              <div className="pro-timer-info">
-                <span className="pro-timer-name">{t.name}</span>
-                <span className={`pro-timer-display ${t.isOverrun ? 'overtime' : ''}`}>
+            <div key={t.id} className={`pro-timer-item-card ${t.isRunning ? 'running' : ''}`}>
+              <div className="pro-timer-row-top">
+                <span className="pro-timer-name" title={t.name}>
+                  {t.name}
+                </span>
+                <span className={`pro-timer-display-digits ${t.isOverrun ? 'overtime' : ''}`}>
                   {formatTimerDigits(t.currentSeconds, t.isOverrun)}
                 </span>
+                <div className="pro-timer-actions-inline">
+                  <button
+                    type="button"
+                    className="pro-timer-action-btn"
+                    onClick={() => onControlTimer(t.id, t.isRunning ? 'pause' : 'start')}
+                    title={t.isRunning ? 'Pausar' : 'Iniciar'}
+                  >
+                    {t.isRunning ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="pro-timer-action-btn"
+                    onClick={() => onControlTimer(t.id, 'reset')}
+                    title="Reiniciar a duración original"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="pro-timer-action-btn danger"
+                    onClick={() => onDeleteTimer(t.id)}
+                    title="Eliminar temporizador"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
-              <div className="pro-timer-actions">
-                <button
-                  className="pro-timer-action-btn"
-                  onClick={() => onControlTimer(t.id, t.isRunning ? 'pause' : 'start')}
-                  title={t.isRunning ? 'Pausar' : 'Iniciar'}
-                >
-                  {t.isRunning ? <Pause size={10} /> : <Play size={10} fill="currentColor" />}
-                </button>
-                <button
-                  className="pro-timer-action-btn"
-                  onClick={() => onControlTimer(t.id, 'reset')}
-                  title="Reiniciar a duración original"
-                >
-                  <RotateCcw size={10} />
-                </button>
-                <button
-                  className="pro-timer-action-btn danger"
-                  onClick={() => onDeleteTimer(t.id)}
-                  title="Eliminar temporizador"
-                >
-                  <Trash2 size={10} />
-                </button>
+
+              {/* Audience and Stage check pills aligned horizontally below */}
+              <div className="pro-timer-row-bottom">
+                <label className="pro-timer-checkbox-label" title="Mostrar en Audiencia (Sala Principal)">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(t.showOnAudience)}
+                    onChange={(e) => onSaveTimer({ ...t, showOnAudience: e.target.checked })}
+                  />
+                  <span>{panelLabels?.audience || 'Audiencia'}</span>
+                </label>
+                <label className="pro-timer-checkbox-label" title="Mostrar en Monitor de Escenario">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(t.showOnStage)}
+                    onChange={(e) => onSaveTimer({ ...t, showOnStage: e.target.checked })}
+                  />
+                  <span>{panelLabels?.stage || 'Escenario'}</span>
+                </label>
               </div>
             </div>
           ))}
 
           {timers.length === 0 && (
             <div className="pro-timers-empty">
-              <span>Sin temporizadores creados. Haga clic en +</span>
+              <span>Sin temporizadores creados. Haga clic en + para agregar uno.</span>
             </div>
           )}
         </div>

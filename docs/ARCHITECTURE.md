@@ -426,5 +426,49 @@ graph TD
 5. **Verificación Pre-Culto de la Lista**: El operador dispone del botón "Verificar playlist", que comprueba en lote el estado de disponibilidad e incrustabilidad de todos los videos de YouTube del servicio antes del inicio de la reunión.
 6. **Integración con Emergencias y Monitor de Escenario**: Los controles de Negro (F1), Limpiar (F2) y Congelar (F4) actúan directamente sobre la reproducción de YouTube, y el monitor de escenario presenta el título y los cronómetros de tiempo transcurrido y restante.
 
+---
+
+## 13. Arquitectura del Layout Flexible y Estilo Visual del Operador (v1.1)
+
+```mermaid
+graph LR
+    subgraph OperatorLayout ["Distribución Flexbox Sin Superposiciones"]
+        LeftCol["Columna Izquierda\n(width: 200px a 460px)\nLibraryPanel (H1) + PlaylistPanel"]
+        V1["Divisor V1\n(col-resize)"]
+        CenterCol["Columna Central (min-width: 0, flex: 1)\nSlideGridPanel (H2) + MediaDrawer"]
+        V2["Divisor V2\n(col-resize)"]
+        RightCol["Columna Derecha\n(width: 260px a 50% ventana)\nPreview 16:9 (H3) + Audio VU + Timers"]
+    end
+
+    subgraph FloatingPreviewWindow ["Ventana Flotante de Previsualización"]
+        FPView["Viewport 16:9 con Controles\n(Tabs: Audience / Stage / Lobby\nToggle: Siempre Visible)"]
+    end
+
+    LeftCol --- V1
+    V1 --- CenterCol
+    CenterCol --- V2
+    V2 --- RightCol
+    RightCol -.->|Botón Ampliar / Menú Ver| FPView
+```
+
+### Principios de Maquetación y Sistema de Paneles:
+1. **Contenedor Flexbox con Espacio Propio y `min-width: 0`**:
+   - Cada columna (`.pro-left-column`, `.pro-center-column`, `.pro-right-panel`) cuenta con `min-width: 0`, `min-height: 0` y overflow controlado.
+   - Se eliminaron posiciones absolutas o anchos fijos que antes provocaban que la columna izquierda se superpusiera sobre la zona central (evitando el corte visual "RELUDIO..." o "EPARADOR").
+   - Los títulos largos se truncan limpiamente con `text-overflow: ellipsis` al final y muestran el texto completo en tooltip mediante el atributo `title`.
+2. **Divisores Redimensionables y Persistencia**:
+   - Divisores verticales `V1` (entre Izquierda y Centro) y `V2` (entre Centro y Derecha, permitiendo extender la columna derecha hasta el 50% del ancho de la ventana).
+   - Divisores horizontales `H1` (entre Library y Playlist), `H2` (entre diapositivas y cajón de medios) y `H3` (entre previsualizador y temporizadores).
+   - Doble clic en cualquier divisor restaura su tamaño estándar.
+   - Las dimensiones se guardan en `localStorage` y se restauran al iniciar la aplicación. Opción en Menú Ver: "Restablecer diseño".
+3. **Previsualizador Escalar y Ventana Flotante Independiente**:
+   - La previsualización de la columna derecha escala de forma fluida conservando la relación de aspecto 16:9.
+   - Botón "Ampliar" que abre una ventana flotante redimensionable (`/floating-preview`) con selector de rol (`Audience`, `Stage`, `Lobby`) y botón "Siempre visible".
+   - **Aislamiento de Pantallas de Proyección**: La ventana flotante es estrictamente un monitor auxiliar para el operador y no se registra en `DisplayManager`, por lo que nunca aparece en la lista de pantallas ni compite por asignaciones de salida.
+4. **Paleta Oscura Profesional con Variables CSS y Contraste WCAG AA**:
+   - Reemplazo de tonos azul marino por fondos oscuros neutros (`--bg-base: #0A0A0A`, `--bg-surface: #121212`, `--bg-surface-raised: #181818`, `--border-color: #2A2A2A`).
+   - Colores de acento configurables en Configuración -> Apariencia: Primario (`#FF7A00`), En Vivo (`#22C55E`), Vista Previa (`#2D9CFF`), Peligro (`#EF4444`).
+   - Controles nativos (`select`, `input`, `button`, barras de desplazamiento delgadas, `checkbox`, `range`) estilizados bajo el tema oscuro sin fondos blancos del sistema.
+
 
 

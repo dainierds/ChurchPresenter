@@ -31,6 +31,7 @@ interface MediaDrawerProps {
     audience: string
     stage: string
   }
+  height?: number
 }
 
 export const MediaDrawer: React.FC<MediaDrawerProps> = ({
@@ -41,7 +42,8 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
   onImportFolder,
   onPlayMedia,
   onSetAsBackground,
-  panelLabels
+  panelLabels,
+  height
 }) => {
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
   const [filterType, setFilterType] = useState<MediaType | 'all' | 'pdf'>('all')
@@ -82,7 +84,10 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
   const thumbSize = Math.round(110 + (mediaZoom / 100) * 120)
 
   return (
-    <div className="pro-media-drawer-expanded">
+    <div
+      className="pro-media-drawer-expanded"
+      style={height ? { height: `${height}px` } : undefined}
+    >
       {/* Drawer Control Bar */}
       <div className="pro-media-bar-top">
         <div className="pro-media-left-ctrls">

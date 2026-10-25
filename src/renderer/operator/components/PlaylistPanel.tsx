@@ -23,12 +23,13 @@ import {
 import { ServicePlan, ServiceItem } from '../../../shared/types'
 
 const HEADER_PRESET_COLORS = [
-  '#3b82f6', // Blue
-  '#8b5cf6', // Purple
-  '#10b981', // Green
-  '#f59e0b', // Amber
-  '#ef4444', // Red
-  '#ec4899'  // Pink
+  '#FF7A00', // Orange (Primary)
+  '#22C55E', // Green (Live)
+  '#2D9CFF', // Light Vivid Blue (Preview)
+  '#A855F7', // Purple
+  '#EAB308', // Amber / Gold
+  '#EC4899', // Pink
+  '#94A3B8'  // Light Gray
 ]
 
 interface PlaylistPanelProps {
@@ -80,7 +81,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 }) => {
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [headerInput, setHeaderInput] = useState('')
-  const [headerColor, setHeaderColor] = useState('#3b82f6')
+  const [headerColor, setHeaderColor] = useState('#FF7A00')
   const [isAddingHeader, setIsAddingHeader] = useState(false)
   const [editingHeaderIndex, setEditingHeaderIndex] = useState<number | null>(null)
   const [editingHeaderName, setEditingHeaderName] = useState('')

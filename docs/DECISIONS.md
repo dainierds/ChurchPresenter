@@ -719,3 +719,27 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
     - **Pasaje Bíblico Siguiente / Anterior**: `C` / `X`
   - Todas las teclas son reasignables desde el panel interactivo de Configuración y se persisten en la base de datos local SQLite.
 
+---
+
+## 22. Maquetación Flexbox Sin Superposiciones y Ventana Flotante de Previsualización (v1.1)
+
+- **Contexto**:
+  - En resoluciones altas (como 2560x1440 o con escalado DPI de Windows al 125%/150%), la columna izquierda se superponía al área central de diapositivas debido a posicionamiento relativo rígido y anchos fijos que desbordaban. Esto cortaba títulos por el principio (mostrando p. ej. "RELUDIO..." en lugar de "PRELUDIO Y BIENVENIDA").
+  - El previsualizador de salida en el panel derecho tenía dimensiones estáticas (~260x146px) sin posibilidad de ampliarse.
+  - Varios controles conservaban estilos nativos en blanco (botones `Media`, `Audience`, `Stage`, selectores y campos de filtro).
+- **Decisión**:
+  1. **Contenedor Flexbox de Columnas con `min-width: 0`**:
+     - Cada columna principal posee su propio espacio reservado (`.pro-left-column`, `.pro-center-column`, `.pro-right-panel`) con `min-width: 0`, `min-height: 0` y `overflow: hidden`.
+     - Títulos largos usan `text-overflow: ellipsis` al final y muestran el texto completo en `title` (tooltip nativo accesible).
+  2. **Divisores Redimensionables (Drag & Drop)**:
+     - Divisores verticales `V1` y `V2` (permitiendo a la columna derecha expandirse hasta el 50% del ancho de la pantalla) y horizontales `H1`, `H2` y `H3`.
+     - Doble clic restaura los tamaños predeterminados. Los tamaños se persisten en `localStorage` con la opción de restaurar desde Menú Ver -> "Restablecer diseño".
+  3. **Ventana Flotante de Previsualización (`/floating-preview`)**:
+     - Botón "Ampliar" en el monitor de previsualización que abre una ventana independiente con relación 16:9 y opción de "Siempre visible".
+     - **Aislamiento Total**: Esta ventana no se registra en `DisplayManager`, garantizando que jamás aparezca en la lista de pantallas ni interfiera con las salidas físicas de proyección.
+  4. **Paleta Oscura Profesional y Contraste WCAG AA**:
+     - Sustitución de azules marinos dispersos por un esquema neutro ProPresenter (`#0A0A0A`, `#121212`, `#181818`, borde `#2A2A2A`).
+     - Acentos configurables en Configuración -> Apariencia con valores por defecto ProPresenter: Naranja Pro (`#FF7A00`), Verde En Vivo (`#22C55E`), Azul Vista Previa (`#2D9CFF`), Rojo Peligro (`#EF4444`).
+     - Todos los controles nativos (`input`, `select`, `checkbox`, `range`, `button`, barras de desplazamiento delgadas) recibieron estilos oscuros personalizados.
+
+

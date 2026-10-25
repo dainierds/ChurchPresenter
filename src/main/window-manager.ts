@@ -10,6 +10,7 @@ import { IPC_CHANNELS } from '../shared/ipc-events'
 
 export class WindowManager {
   private operatorWindow: BrowserWindow | null = null
+  private floatingPreviewWindow: BrowserWindow | null = null
   private outputWindows: Map<string, BrowserWindow> = new Map()
   private intentionallyClosedOutputs: Set<string> = new Set()
   private recreationTimeouts: Map<string, NodeJS.Timeout> = new Map()
@@ -383,10 +384,62 @@ export class WindowManager {
     if (this.operatorWindow && !this.operatorWindow.isDestroyed()) {
       this.operatorWindow.webContents.send(channel, ...args)
     }
+    if (this.floatingPreviewWindow && !this.floatingPreviewWindow.isDestroyed()) {
+      this.floatingPreviewWindow.webContents.send(channel, ...args)
+    }
     for (const win of this.outputWindows.values()) {
       if (!win.isDestroyed()) {
         win.webContents.send(channel, ...args)
       }
+    }
+  }
+
+  public openFloatingPreviewWindow(initialRole: string = 'main'): BrowserWindow {
+    if (this.floatingPreviewWindow && !this.floatingPreviewWindow.isDestroyed()) {
+      this.floatingPreviewWindow.focus()
+      return this.floatingPreviewWindow
+    }
+
+    this.floatingPreviewWindow = new BrowserWindow({
+      title: 'ChurchPresenter - Vista Previa Flotante',
+      width: 760,
+      height: 480,
+      minWidth: 400,
+      minHeight: 260,
+      backgroundColor: '#0a0a0a',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: this.getPreloadPath(),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        backgroundThrottling: false
+      }
+    })
+
+    const url = this.getRendererUrl(`/floating-preview?role=${encodeURIComponent(initialRole)}`)
+    logger.info(`Opening floating preview window from: ${url}`)
+    this.floatingPreviewWindow.loadURL(url)
+
+    this.floatingPreviewWindow.on('closed', () => {
+      this.floatingPreviewWindow = null
+    })
+
+    return this.floatingPreviewWindow
+  }
+
+  public setFloatingPreviewAlwaysOnTop(alwaysOnTop: boolean): boolean {
+    if (this.floatingPreviewWindow && !this.floatingPreviewWindow.isDestroyed()) {
+      this.floatingPreviewWindow.setAlwaysOnTop(alwaysOnTop)
+      return true
+    }
+    return false
+  }
+
+  public closeFloatingPreviewWindow(): void {
+    if (this.floatingPreviewWindow && !this.floatingPreviewWindow.isDestroyed()) {
+      this.floatingPreviewWindow.close()
+      this.floatingPreviewWindow = null
     }
   }
 
@@ -403,6 +456,7 @@ export class WindowManager {
   }
 
   public closeAllOutputWindows(): void {
+    this.closeFloatingPreviewWindow()
     for (const [role, win] of this.outputWindows.entries()) {
       this.intentionallyClosedOutputs.add(role)
       if (!win.isDestroyed()) {

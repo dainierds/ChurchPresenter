@@ -158,17 +158,19 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         </button>
       </div>
 
-      {/* Screen Status Pills & Media Drawer Button */}
+      {/* Screen Status Buttons & Media Drawer Button */}
       <div className="pro-screen-status-pills">
         <button
-          className={`pro-status-pill-btn ${isMediaDrawerOpen ? 'drawer-open' : ''} ${isMediaActive ? 'online' : 'idle'}`}
+          type="button"
+          className={`pro-status-pill-btn ${isMediaDrawerOpen ? 'active drawer-open' : ''}`}
           onClick={onToggleMediaDrawer}
           title="Abrir o cerrar el cajón inferior de medios"
         >
-          <span className={`pro-status-dot ${isMediaActive ? 'dot-active' : 'dot-idle'}`} />
+          <span className={`pro-status-dot ${isMediaActive ? 'dot-green' : 'dot-gray'}`} />
           <span>{panelLabels?.media || 'Media'}</span>
         </button>
         <button
+          type="button"
           className={`pro-status-pill-btn ${audienceStatusClass}`}
           onClick={() => onOpenOutputPreviewOrSettings?.('main')}
           title={
@@ -179,10 +181,19 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
               : 'Audiencia: Asignado pero desconectado (clic para configurar)'
           }
         >
-          <span className={`pro-status-dot dot-${audienceStatusClass}`} />
+          <span
+            className={`pro-status-dot ${
+              audienceStatusClass === 'connected'
+                ? 'dot-green'
+                : audienceStatusClass === 'disconnected'
+                ? 'dot-red'
+                : 'dot-gray'
+            }`}
+          />
           <span>{panelLabels?.audience || 'Audience'}</span>
         </button>
         <button
+          type="button"
           className={`pro-status-pill-btn ${stageStatusClass}`}
           onClick={() => onOpenOutputPreviewOrSettings?.('stage')}
           title={
@@ -193,7 +204,15 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
               : 'Escenario: Asignado pero desconectado (clic para configurar)'
           }
         >
-          <span className={`pro-status-dot dot-${stageStatusClass}`} />
+          <span
+            className={`pro-status-dot ${
+              stageStatusClass === 'connected'
+                ? 'dot-green'
+                : stageStatusClass === 'disconnected'
+                ? 'dot-red'
+                : 'dot-gray'
+            }`}
+          />
           <span>{panelLabels?.stage || 'Stage'}</span>
         </button>
       </div>

@@ -46,6 +46,7 @@ interface LibraryPanelProps {
     audience: string
     stage: string
   }
+  height?: number
 }
 
 export const LibraryPanel: React.FC<LibraryPanelProps> = ({
@@ -63,7 +64,8 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   youtubeItems,
   onItemSelect,
   onAddItemToPlaylist,
-  panelLabels
+  panelLabels,
+  height
 }) => {
   const [isCreating, setIsCreating] = useState(false)
   const [newLibName, setNewLibName] = useState('')
@@ -263,7 +265,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   }
 
   return (
-    <div className="pro-library-panel zone-library">
+    <div
+      className="pro-library-panel zone-library"
+      style={height ? { height: `${height}px`, flex: 'none' } : undefined}
+    >
       {/* Library Collections Header */}
       <div className="pro-panel-header">
         <div className="pro-header-title-box">

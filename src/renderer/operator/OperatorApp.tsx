@@ -98,7 +98,9 @@ import {
   FolderPlus,
   ExternalLink,
   Film,
-  RefreshCw
+  RefreshCw,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react'
 import './operator.css'
 
@@ -127,6 +129,173 @@ export const OperatorApp: React.FC = () => {
       ? { library: 'Biblioteca', playlist: 'Playlist', media: 'Medios', audience: 'Audiencia', stage: 'Escenario' }
       : { library: 'Library', playlist: 'Playlist', media: 'Media', audience: 'Audience', stage: 'Stage' }
   }, [panelNaming])
+
+  // Layout persistence & dimensions (Requirements 1, 2 & 5)
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_layout_left_width')
+    return saved ? parseInt(saved, 10) || 280 : 280
+  })
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_layout_right_width')
+    return saved ? parseInt(saved, 10) || 340 : 340
+  })
+  const [libHeight, setLibHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_layout_lib_height')
+    return saved ? parseInt(saved, 10) || 240 : 240
+  })
+  const [mediaDrawerHeight, setMediaDrawerHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_layout_media_drawer_height')
+    return saved ? parseInt(saved, 10) || 220 : 220
+  })
+  const [previewHeight, setPreviewHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_layout_preview_height')
+    return saved ? parseInt(saved, 10) || 260 : 260
+  })
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('cp_layout_left_collapsed') === 'true'
+  })
+  const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('cp_layout_right_collapsed') === 'true'
+  })
+
+  // Appearance theme colors (Requirement 6)
+  const [accentPrimary, setAccentPrimary] = useState<string>(() => {
+    return localStorage.getItem('cp_theme_accent_primary') || '#FF7A00'
+  })
+  const [accentLive, setAccentLive] = useState<string>(() => {
+    return localStorage.getItem('cp_theme_accent_live') || '#22C55E'
+  })
+  const [accentPreview, setAccentPreview] = useState<string>(() => {
+    return localStorage.getItem('cp_theme_accent_preview') || '#2D9CFF'
+  })
+  const [accentDanger, setAccentDanger] = useState<string>(() => {
+    return localStorage.getItem('cp_theme_accent_danger') || '#EF4444'
+  })
+
+  // Apply theme CSS variables to :root
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--accent-primary', accentPrimary)
+    root.style.setProperty('--accent-live', accentLive)
+    root.style.setProperty('--accent-preview', accentPreview)
+    root.style.setProperty('--accent-danger', accentDanger)
+    localStorage.setItem('cp_theme_accent_primary', accentPrimary)
+    localStorage.setItem('cp_theme_accent_live', accentLive)
+    localStorage.setItem('cp_theme_accent_preview', accentPreview)
+    localStorage.setItem('cp_theme_accent_danger', accentDanger)
+  }, [accentPrimary, accentLive, accentPreview, accentDanger])
+
+  // Save layout state to localStorage
+  useEffect(() => {
+    localStorage.setItem('cp_layout_left_width', leftWidth.toString())
+    localStorage.setItem('cp_layout_right_width', rightWidth.toString())
+    localStorage.setItem('cp_layout_lib_height', libHeight.toString())
+    localStorage.setItem('cp_layout_media_drawer_height', mediaDrawerHeight.toString())
+    localStorage.setItem('cp_layout_preview_height', previewHeight.toString())
+    localStorage.setItem('cp_layout_left_collapsed', isLeftCollapsed ? 'true' : 'false')
+    localStorage.setItem('cp_layout_right_collapsed', isRightCollapsed ? 'true' : 'false')
+  }, [leftWidth, rightWidth, libHeight, mediaDrawerHeight, previewHeight, isLeftCollapsed, isRightCollapsed])
+
+  // Reset layout handler (Ver -> Restablecer diseño)
+  const handleResetLayout = useCallback(() => {
+    setLeftWidth(280)
+    setRightWidth(340)
+    setLibHeight(240)
+    setMediaDrawerHeight(220)
+    setPreviewHeight(260)
+    setIsLeftCollapsed(false)
+    setIsRightCollapsed(false)
+  }, [])
+
+  // Draggable divider handlers
+  const handleMouseDownV1 = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = leftWidth
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX
+      const maxW = Math.max(300, Math.round(window.innerWidth * 0.4))
+      const newW = Math.min(Math.max(200, startW + delta), maxW)
+      setLeftWidth(newW)
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [leftWidth])
+
+  const handleMouseDownV2 = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = rightWidth
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX
+      const maxW = Math.max(400, Math.round(window.innerWidth * 0.5))
+      const newW = Math.min(Math.max(260, startW + delta), maxW)
+      setRightWidth(newW)
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [rightWidth])
+
+  const handleMouseDownH1 = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = libHeight
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientY - startY
+      const newH = Math.min(Math.max(120, startH + delta), 600)
+      setLibHeight(newH)
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [libHeight])
+
+  const handleMouseDownH2 = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = mediaDrawerHeight
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = startY - ev.clientY
+      const maxH = Math.max(300, Math.round(window.innerHeight * 0.6))
+      const newH = Math.min(Math.max(120, startH + delta), maxH)
+      setMediaDrawerHeight(newH)
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [mediaDrawerHeight])
+
+  const handleMouseDownH3 = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = previewHeight
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientY - startY
+      const maxH = Math.max(350, Math.round(window.innerHeight * 0.65))
+      const newH = Math.min(Math.max(160, startH + delta), maxH)
+      setPreviewHeight(newH)
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [previewHeight])
 
   // Phase 3 & 4 Data Collections
   const [songs, setSongs] = useState<Song[]>([])
@@ -2017,6 +2186,10 @@ export const OperatorApp: React.FC = () => {
         onZoomOut={() => setSlideZoom((z) => Math.max(0, z - 15))}
         onToggleViewMode={() => setSlideViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
         onOpenShortcutsHelp={() => setIsShortcutsHelpOpen(true)}
+        onResetLayout={handleResetLayout}
+        onToggleLeftPanel={() => setIsLeftCollapsed((c) => !c)}
+        onToggleRightPanel={() => setIsRightCollapsed((c) => !c)}
+        onOpenFloatingPreview={() => window.churchPresenterApi.openFloatingPreview('main')}
       />
 
       {/* 2. ProPresenter Toolbar */}
@@ -2051,142 +2224,172 @@ export const OperatorApp: React.FC = () => {
       {/* 3. Main Workspace: 3 Columns Layout */}
       <div className="pro-main-columns-layout">
         {/* Left Column: Library Collections (Top) + Service Playlist (Bottom) */}
-        <aside className="pro-left-column">
-          <LibraryPanel
-            libraries={userLibraries}
-            activeLibraryId={activeUserLibraryId}
-            onSelectLibrary={setActiveUserLibraryId}
-            onCreateLibrary={handleCreateUserLibrary}
-            onRenameLibrary={handleRenameUserLibrary}
-            onReorderLibraries={handleReorderUserLibraries}
-            onDeleteLibrary={handleDeleteUserLibrary}
-            onMoveItem={handleMoveLibraryItem}
-            songs={filteredSongs}
-            presentations={filteredPresentations}
-            mediaItems={mediaItems}
-            youtubeItems={youtubeItems}
-            panelLabels={panelLabels}
-            onItemSelect={(type, id) => {
-              if (type === 'song') {
-                const s = songs.find((x) => x.id === id)
-                if (s && currentService) {
-                  const item: ServiceItem = {
-                    id: `item_s_${Date.now()}`,
-                    type: 'song',
-                    name: s.title,
-                    songId: s.id
-                  }
-                  const updated = { ...currentService, items: [...currentService.items, item] }
-                  setCurrentService(updated)
-                  setSelectedServiceItemIndex(updated.items.length - 1)
-                  window.churchPresenterApi.saveService(updated)
-                }
-              } else if (type === 'youtube') {
-                const y = youtubeItems.find((x) => x.id === id)
-                if (y && currentService) {
-                  const item: ServiceItem = {
-                    id: `item_yt_${Date.now()}`,
-                    type: 'youtube',
-                    name: y.title,
-                    youtubeConfig: {
-                      youtubeId: y.youtubeId,
-                      url: y.url,
-                      title: y.title,
-                      channelTitle: y.channelTitle,
-                      thumbnailUrl: y.thumbnailUrl,
-                      duration: y.duration,
-                      inPoint: y.inPoint,
-                      outPoint: y.outPoint,
-                      targetRoles: y.targetRoles,
-                      audioRole: y.audioRole,
-                      endAction: y.endAction,
-                      availabilityStatus: y.availabilityStatus
+        {!isLeftCollapsed ? (
+          <>
+            <aside className="pro-left-column" style={{ width: `${leftWidth}px` }}>
+              <LibraryPanel
+                libraries={userLibraries}
+                activeLibraryId={activeUserLibraryId}
+                onSelectLibrary={setActiveUserLibraryId}
+                onCreateLibrary={handleCreateUserLibrary}
+                onRenameLibrary={handleRenameUserLibrary}
+                onReorderLibraries={handleReorderUserLibraries}
+                onDeleteLibrary={handleDeleteUserLibrary}
+                onMoveItem={handleMoveLibraryItem}
+                songs={filteredSongs}
+                presentations={filteredPresentations}
+                mediaItems={mediaItems}
+                youtubeItems={youtubeItems}
+                panelLabels={panelLabels}
+                height={libHeight}
+                onItemSelect={(type, id) => {
+                  if (type === 'song') {
+                    const s = songs.find((x) => x.id === id)
+                    if (s && currentService) {
+                      const item: ServiceItem = {
+                        id: `item_s_${Date.now()}`,
+                        type: 'song',
+                        name: s.title,
+                        songId: s.id
+                      }
+                      const updated = { ...currentService, items: [...currentService.items, item] }
+                      setCurrentService(updated)
+                      setSelectedServiceItemIndex(updated.items.length - 1)
+                      window.churchPresenterApi.saveService(updated)
+                    }
+                  } else if (type === 'youtube') {
+                    const y = youtubeItems.find((x) => x.id === id)
+                    if (y && currentService) {
+                      const item: ServiceItem = {
+                        id: `item_yt_${Date.now()}`,
+                        type: 'youtube',
+                        name: y.title,
+                        youtubeConfig: {
+                          youtubeId: y.youtubeId,
+                          url: y.url,
+                          title: y.title,
+                          channelTitle: y.channelTitle,
+                          thumbnailUrl: y.thumbnailUrl,
+                          duration: y.duration,
+                          inPoint: y.inPoint,
+                          outPoint: y.outPoint,
+                          targetRoles: y.targetRoles,
+                          audioRole: y.audioRole,
+                          endAction: y.endAction,
+                          availabilityStatus: y.availabilityStatus
+                        }
+                      }
+                      const updated = { ...currentService, items: [...currentService.items, item] }
+                      setCurrentService(updated)
+                      setSelectedServiceItemIndex(updated.items.length - 1)
+                      window.churchPresenterApi.saveService(updated)
                     }
                   }
-                  const updated = { ...currentService, items: [...currentService.items, item] }
-                  setCurrentService(updated)
-                  setSelectedServiceItemIndex(updated.items.length - 1)
-                  window.churchPresenterApi.saveService(updated)
-                }
-              }
-            }}
-            onAddItemToPlaylist={(type, id, name) => {
-              if (currentService) {
-                const newItem: ServiceItem = {
-                  id: `item_${Date.now()}`,
-                  type: type as ServiceItemType,
-                  name,
-                  songId: type === 'song' ? id : undefined,
-                  presentationId: type === 'presentation' ? id : undefined,
-                  mediaId: type === 'media' ? id : undefined
-                }
-                const updated = { ...currentService, items: [...currentService.items, newItem] }
-                setCurrentService(updated)
-                window.churchPresenterApi.saveService(updated)
-              }
-            }}
-          />
+                }}
+                onAddItemToPlaylist={(type, id, name) => {
+                  if (currentService) {
+                    const newItem: ServiceItem = {
+                      id: `item_${Date.now()}`,
+                      type: type as ServiceItemType,
+                      name,
+                      songId: type === 'song' ? id : undefined,
+                      presentationId: type === 'presentation' ? id : undefined,
+                      mediaId: type === 'media' ? id : undefined
+                    }
+                    const updated = { ...currentService, items: [...currentService.items, newItem] }
+                    setCurrentService(updated)
+                    window.churchPresenterApi.saveService(updated)
+                  }
+                }}
+              />
 
-          <PlaylistPanel
-            currentService={currentService}
-            services={services}
-            onSelectService={(sid) => {
-              const found = services.find((s) => s.id === sid)
-              if (found) {
-                setCurrentService(found)
-                setSelectedServiceItemIndex(0)
-              }
-            }}
-            onNewService={handleCreateNewService}
-            onRenameService={handleRenameService}
-            onDuplicateService={handleDuplicateService}
-            onDeleteService={handleDeleteService}
-            selectedItemIndex={selectedServiceItemIndex}
-            onSelectItemIndex={setSelectedServiceItemIndex}
-            liveItemIndex={
-              currentService && liveSourceId
-                ? currentService.items.findIndex(
-                    (it) =>
-                      it.songId === liveSourceId ||
-                      it.presentationId === liveSourceId ||
-                      it.id === liveSourceId
-                  )
-                : null
-            }
-            onReorderItem={handleReorderPlaylistItem}
-            onDeleteItem={handleDeletePlaylistItem}
-            onDuplicateItem={handleDuplicatePlaylistItem}
-            onAddHeader={(headerName, color) => {
-              if (currentService) {
-                const newHeader: ServiceItem = {
-                  id: `header_${Date.now()}`,
-                  type: 'header',
-                  name: headerName,
-                  notes: color || '#3b82f6'
+              {/* Horizontal Resizer H1: Library vs Playlist */}
+              <div
+                className="pro-resizer-horizontal"
+                onMouseDown={handleMouseDownH1}
+                onDoubleClick={() => setLibHeight(240)}
+                title="Arrastrar para redimensionar biblioteca (Doble clic para restablecer)"
+              />
+
+              <PlaylistPanel
+                currentService={currentService}
+                services={services}
+                onSelectService={(sid) => {
+                  const found = services.find((s) => s.id === sid)
+                  if (found) {
+                    setCurrentService(found)
+                    setSelectedServiceItemIndex(0)
+                  }
+                }}
+                onNewService={handleCreateNewService}
+                onRenameService={handleRenameService}
+                onDuplicateService={handleDuplicateService}
+                onDeleteService={handleDeleteService}
+                selectedItemIndex={selectedServiceItemIndex}
+                onSelectItemIndex={setSelectedServiceItemIndex}
+                liveItemIndex={
+                  currentService && liveSourceId
+                    ? currentService.items.findIndex(
+                        (it) =>
+                          it.songId === liveSourceId ||
+                          it.presentationId === liveSourceId ||
+                          it.id === liveSourceId
+                      )
+                    : null
                 }
-                const updated = { ...currentService, items: [...currentService.items, newHeader] }
-                setCurrentService(updated)
-                window.churchPresenterApi.saveService(updated)
-              }
-            }}
-            onRenameHeader={(idx, newTitle, newColor) => {
-              if (currentService && currentService.items[idx]) {
-                const newItems = [...currentService.items]
-                newItems[idx] = {
-                  ...newItems[idx],
-                  name: newTitle,
-                  notes: newColor || newItems[idx].notes || '#3b82f6'
-                }
-                const updated = { ...currentService, items: newItems }
-                setCurrentService(updated)
-                window.churchPresenterApi.saveService(updated)
-              }
-            }}
-            onAddBlankItem={handleAddBlankItem}
-            onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
-            panelLabels={panelLabels}
-          />
-        </aside>
+                onReorderItem={handleReorderPlaylistItem}
+                onDeleteItem={handleDeletePlaylistItem}
+                onDuplicateItem={handleDuplicatePlaylistItem}
+                onAddHeader={(headerName, color) => {
+                  if (currentService) {
+                    const newHeader: ServiceItem = {
+                      id: `header_${Date.now()}`,
+                      type: 'header',
+                      name: headerName,
+                      notes: color || '#FF7A00'
+                    }
+                    const updated = { ...currentService, items: [...currentService.items, newHeader] }
+                    setCurrentService(updated)
+                    window.churchPresenterApi.saveService(updated)
+                  }
+                }}
+                onRenameHeader={(idx, newTitle, newColor) => {
+                  if (currentService && currentService.items[idx]) {
+                    const newItems = [...currentService.items]
+                    newItems[idx] = {
+                      ...newItems[idx],
+                      name: newTitle,
+                      notes: newColor || newItems[idx].notes || '#FF7A00'
+                    }
+                    const updated = { ...currentService, items: newItems }
+                    setCurrentService(updated)
+                    window.churchPresenterApi.saveService(updated)
+                  }
+                }}
+                onAddBlankItem={handleAddBlankItem}
+                onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
+                panelLabels={panelLabels}
+              />
+            </aside>
+
+            {/* Vertical Resizer V1: Left Column vs Center Column */}
+            <div
+              className="pro-resizer-vertical"
+              onMouseDown={handleMouseDownV1}
+              onDoubleClick={() => setLeftWidth(280)}
+              title="Arrastrar para redimensionar panel izquierdo (Doble clic para restablecer)"
+            />
+          </>
+        ) : (
+          <div
+            className="pro-collapsed-column-strip"
+            onClick={() => setIsLeftCollapsed(false)}
+            title="Mostrar panel izquierdo (Library / Playlist)"
+          >
+            <ChevronRight size={14} />
+            <span className="pro-collapsed-strip-label">{panelLabels.library}</span>
+          </div>
+        )}
 
         {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube Browser Panel */}
         <section className="pro-center-column">
@@ -2226,8 +2429,8 @@ export const OperatorApp: React.FC = () => {
                 <div
                   className="pro-yt-active-control-card"
                   style={{
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #334155',
+                    backgroundColor: 'var(--bg-surface-raised, #181818)',
+                    border: '1px solid var(--border-color, #2A2A2A)',
                     borderRadius: 8,
                     padding: 16,
                     margin: '12px 16px 0',
@@ -2254,7 +2457,7 @@ export const OperatorApp: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span
                         style={{
-                          backgroundColor: '#ef4444',
+                          backgroundColor: 'var(--accent-danger, #ef4444)',
                           color: '#fff',
                           fontSize: 10,
                           fontWeight: 800,
@@ -2264,11 +2467,11 @@ export const OperatorApp: React.FC = () => {
                       >
                         YOUTUBE
                       </span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
                         {currentServiceItem.youtubeConfig.title}
                       </span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted, #94a3b8)', marginBottom: 8 }}>
                       {currentServiceItem.youtubeConfig.channelTitle || 'YouTube'} • In:{' '}
                       {currentServiceItem.youtubeConfig.inPoint || 0}s
                     </div>
@@ -2317,7 +2520,7 @@ export const OperatorApp: React.FC = () => {
                             )
                           }
                         }}
-                        style={{ fontSize: 12, padding: '5px 14px', backgroundColor: '#ef4444' }}
+                        style={{ fontSize: 12, padding: '5px 14px', backgroundColor: 'var(--accent-danger, #ef4444)' }}
                       >
                         ▶ Proyectar En Vivo
                       </button>
@@ -2348,6 +2551,16 @@ export const OperatorApp: React.FC = () => {
                 onSelectArrangement={setSelectedArrangementId}
               />
 
+              {/* Resizer H2 between Slides and Media Drawer */}
+              {isMediaDrawerOpen && (
+                <div
+                  className="pro-resizer-horizontal"
+                  onMouseDown={handleMouseDownH2}
+                  onDoubleClick={() => setMediaDrawerHeight(220)}
+                  title="Arrastrar para redimensionar cajón de medios (Doble clic para restablecer)"
+                />
+              )}
+
               {/* Collapsible Media Drawer */}
               <MediaDrawer
                 isOpen={isMediaDrawerOpen}
@@ -2356,6 +2569,7 @@ export const OperatorApp: React.FC = () => {
                 onImportFile={handleNativeImportMedia}
                 onImportFolder={handleNativeImportFolder}
                 panelLabels={panelLabels}
+                height={mediaDrawerHeight}
                 onPlayMedia={(item) => {
                   window.churchPresenterApi.playVideo({
                     mediaId: item.id,
@@ -2375,31 +2589,55 @@ export const OperatorApp: React.FC = () => {
         </section>
 
         {/* Right Column: Preview, Audio VU, Layers, Transport & Timers */}
-        <aside className="pro-right-panel">
-          <RightSidePanel
-            state={state}
-            currentSlide={activeSlides[previewSlideIndex] || null}
-            timers={presentationTimers}
-            panelLabels={panelLabels}
-            onControlTimer={async (id, action) => {
-              await window.churchPresenterApi.controlTimer(id, action)
-            }}
-            onSaveTimer={async (timer) => {
-              await window.churchPresenterApi.saveTimer(timer)
-              const updated = await window.churchPresenterApi.getTimers()
-              setPresentationTimers(updated || [])
-            }}
-            onDeleteTimer={async (id) => {
-              await window.churchPresenterApi.deleteTimer(id)
-              const updated = await window.churchPresenterApi.getTimers()
-              setPresentationTimers(updated || [])
-            }}
-            onClearLayer={handleClearLayer}
-            onControlVideo={(action, time) => {
-              window.churchPresenterApi.controlVideo(action, time)
-            }}
-          />
-        </aside>
+        {!isRightCollapsed ? (
+          <>
+            {/* Vertical Resizer V2: Center Column vs Right Column */}
+            <div
+              className="pro-resizer-vertical"
+              onMouseDown={handleMouseDownV2}
+              onDoubleClick={() => setRightWidth(340)}
+              title="Arrastrar para redimensionar panel derecho (Doble clic para restablecer)"
+            />
+
+            <aside className="pro-right-panel" style={{ width: `${rightWidth}px` }}>
+              <RightSidePanel
+                state={state}
+                currentSlide={activeSlides[previewSlideIndex] || null}
+                timers={presentationTimers}
+                panelLabels={panelLabels}
+                previewHeight={previewHeight}
+                onResizePreview={handleMouseDownH3}
+                onResetPreview={() => setPreviewHeight(260)}
+                onControlTimer={async (id, action) => {
+                  await window.churchPresenterApi.controlTimer(id, action)
+                }}
+                onSaveTimer={async (timer) => {
+                  await window.churchPresenterApi.saveTimer(timer)
+                  const updated = await window.churchPresenterApi.getTimers()
+                  setPresentationTimers(updated || [])
+                }}
+                onDeleteTimer={async (id) => {
+                  await window.churchPresenterApi.deleteTimer(id)
+                  const updated = await window.churchPresenterApi.getTimers()
+                  setPresentationTimers(updated || [])
+                }}
+                onClearLayer={handleClearLayer}
+                onControlVideo={(action, time) => {
+                  window.churchPresenterApi.controlVideo(action, time)
+                }}
+              />
+            </aside>
+          </>
+        ) : (
+          <div
+            className="pro-collapsed-column-strip"
+            onClick={() => setIsRightCollapsed(false)}
+            title="Mostrar panel derecho (Vista previa / Temporizadores)"
+          >
+            <ChevronLeft size={14} />
+            <span className="pro-collapsed-strip-label">PREVIEW</span>
+          </div>
+        )}
       </div>
 
       {/* Drag & Drop Overlay */}
@@ -3185,6 +3423,83 @@ export const OperatorApp: React.FC = () => {
                     />
                     <span><strong>Español:</strong> Biblioteca, Playlist, Medios, Audiencia, Escenario</span>
                   </label>
+                </div>
+              </div>
+
+              {/* Requirement 6: Apariencia y Colores de la Interfaz */}
+              <div className="settings-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div>
+                    <h3>Apariencia y Paleta ProPresenter</h3>
+                    <p className="section-note" style={{ margin: 0 }}>
+                      Paleta oscura profesional con contraste WCAG AA. Personalice los colores de acento principales del operador.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-action-btn"
+                    style={{ fontSize: 11, padding: '3px 8px' }}
+                    onClick={() => {
+                      setAccentPrimary('#FF7A00')
+                      setAccentLive('#22C55E')
+                      setAccentPreview('#2D9CFF')
+                      setAccentDanger('#EF4444')
+                    }}
+                    title="Restablecer paleta a valores predeterminados de ProPresenter"
+                  >
+                    Restablecer Colores
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 10 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Acento Primario (Naranja Pro):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <input
+                        type="color"
+                        value={accentPrimary}
+                        onChange={(e) => setAccentPrimary(e.target.value)}
+                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPrimary}</span>
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>En Vivo (Verde Pro):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <input
+                        type="color"
+                        value={accentLive}
+                        onChange={(e) => setAccentLive(e.target.value)}
+                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentLive}</span>
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Vista Previa (Azul Pro):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <input
+                        type="color"
+                        value={accentPreview}
+                        onChange={(e) => setAccentPreview(e.target.value)}
+                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPreview}</span>
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Peligro / Salida Desconectada:</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <input
+                        type="color"
+                        value={accentDanger}
+                        onChange={(e) => setAccentDanger(e.target.value)}
+                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentDanger}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
