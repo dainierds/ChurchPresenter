@@ -22,7 +22,7 @@ function copySqlWasmPlugin() {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ['sql.js'] }), copySqlWasmPlugin()],
+    plugins: [externalizeDepsPlugin(), copySqlWasmPlugin()],
     resolve: {
       alias: {
         '@shared': resolve(__dirname, 'src/shared')

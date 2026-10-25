@@ -65,7 +65,8 @@ export class DatabaseService {
 
       let SQL: SqlJsStatic
       if (fs.existsSync(wasmPath)) {
-        const wasmBinary = fs.readFileSync(wasmPath)
+        const buf = fs.readFileSync(wasmPath)
+        const wasmBinary = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
         SQL = await initSqlJs({ wasmBinary })
       } else {
         SQL = await initSqlJs()
@@ -79,7 +80,7 @@ export class DatabaseService {
 
       if (fs.existsSync(this.dbPath)) {
         const fileBuffer = fs.readFileSync(this.dbPath)
-        this.db = new SQL.Database(fileBuffer)
+        this.db = new SQL.Database(new Uint8Array(fileBuffer))
         logger.info(`Loaded existing SQLite database from ${this.dbPath}`)
       } else {
         this.db = new SQL.Database()

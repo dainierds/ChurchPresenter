@@ -1,0 +1,253 @@
+.output-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #000000;
+  cursor: none !important;
+  user-select: none;
+}
+
+/* Layer 1: Background */
+.layer-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  transition: opacity 0.25s ease-in-out;
+}
+
+/* Layer 2: Content */
+.layer-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6vw 8vw;
+  text-align: center;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.content-title {
+  font-size: 3.5vw;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 2vw;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.85);
+  letter-spacing: -0.01em;
+}
+
+.content-body {
+  font-size: 2.8vw;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1.45;
+  white-space: pre-line;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.95);
+  max-width: 90%;
+}
+
+.content-subtitle {
+  font-size: 1.8vw;
+  font-weight: 500;
+  color: #93c5fd;
+  margin-top: 2.5vw;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* Stage Mode specific adjustments: higher contrast, large lyrics */
+.stage-mode .content-title {
+  font-size: 2.8vw;
+  color: #fbbf24;
+}
+
+.stage-mode .content-body {
+  font-size: 3.6vw;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* Layer 3: Overlay (Logo) */
+.layer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.church-logo-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5vw;
+  animation: logoFadeIn 0.4s ease-out;
+}
+
+@keyframes logoFadeIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.church-logo-icon {
+  width: 12vw;
+  height: 12vw;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.8));
+}
+
+.church-logo-text {
+  font-size: 3.5vw;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 6px 20px rgba(0, 0, 0, 0.9);
+}
+
+/* Layer 4: Message Layer */
+.layer-message {
+  position: absolute;
+  bottom: 5vh;
+  left: 5vw;
+  right: 5vw;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.92);
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 1.5vw 2.5vw;
+  color: #ffffff;
+  font-size: 2vw;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+}
+
+/* Blackout mode */
+.layer-blackout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  z-index: 100;
+}
+
+/* Stress Test Pattern Overlay */
+.stress-test-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 80;
+  background-color: rgba(5, 7, 12, 0.88);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3vw;
+  border: 4px solid #ef4444;
+}
+
+.stress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.stress-title {
+  font-size: 2vw;
+  font-weight: 900;
+  color: #ef4444;
+  letter-spacing: 0.05em;
+}
+
+.stress-role {
+  font-size: 1.6vw;
+  color: #94a3b8;
+  margin-top: 0.5vw;
+}
+
+.stress-stats {
+  display: flex;
+  gap: 3vw;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.stat-box {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 1vw 1.5vw;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 1vw;
+  color: #94a3b8;
+  margin-bottom: 0.4vw;
+}
+
+.stat-value {
+  font-size: 2.2vw;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.stat-value.fps-alert {
+  color: #f87171;
+  animation: blink 0.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Animated smooth moving test square across the middle */
+.stress-animation-track {
+  position: relative;
+  width: 100%;
+  height: 16vh;
+  background: rgba(15, 23, 42, 0.7);
+  border: 2px dashed #334155;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.stress-moving-square {
+  position: absolute;
+  width: 12vh;
+  height: 12vh;
+  background: linear-gradient(135deg, #3b82f6, #ec4899);
+  border: 3px solid #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2vw;
+  font-weight: 800;
+  color: white;
+}
