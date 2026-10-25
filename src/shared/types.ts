@@ -11,10 +11,12 @@ export const STANDARD_OUTPUT_ROLES: { id: string; label: string; description: st
 ]
 
 /**
- * Normalized physical display information from Electron Screen API.
+ * Normalized physical display information from Electron Screen API,
+ * enriched with a deterministic stableId.
  */
 export interface DisplayInfo {
   id: number
+  stableId: string
   name: string
   bounds: {
     x: number
@@ -34,9 +36,9 @@ export interface DisplayInfo {
 }
 
 /**
- * Mapping between an output role and physical screen ID (null means unassigned).
+ * Mapping between an output role and stable display ID (null means unassigned).
  */
-export type RoleAssignment = Record<string, number | null>
+export type RoleAssignment = Record<string, string | null>
 
 /**
  * Presentation layers for each output.
@@ -82,6 +84,25 @@ export interface GlobalControls {
 }
 
 /**
+ * Configurable keyboard shortcuts and global toggle.
+ */
+export interface AppShortcutsConfig {
+  black: string // default 'F1'
+  clear: string // default 'F2'
+  logo: string // default 'F3'
+  freeze: string // default 'F4'
+  enableGlobalFShortcuts: boolean // default false
+}
+
+export const DEFAULT_SHORTCUTS: AppShortcutsConfig = {
+  black: 'F1',
+  clear: 'F2',
+  logo: 'F3',
+  freeze: 'F4',
+  enableGlobalFShortcuts: false
+}
+
+/**
  * Global presentation state (Single Source of Truth in Main Process).
  */
 export interface PresenterState {
@@ -103,6 +124,14 @@ export interface TestSlide {
   background: LayerBackground
 }
 
+export interface AppNotification {
+  id: string
+  title: string
+  message: string
+  type: 'info' | 'warn' | 'success'
+  timestamp: number
+}
+
 /**
  * IPC API exposed through Preload contextBridge.
  */
@@ -110,7 +139,7 @@ export interface ChurchPresenterApi {
   // Screen management
   getDisplays: () => Promise<DisplayInfo[]>
   getRoleAssignments: () => Promise<RoleAssignment>
-  assignRole: (role: string, displayId: number | null) => Promise<boolean>
+  assignRole: (role: string, stableId: string | null) => Promise<boolean>
   identifyDisplays: () => Promise<void>
   onDisplaysChanged: (callback: (displays: DisplayInfo[]) => void) => () => void
 
@@ -122,7 +151,13 @@ export interface ChurchPresenterApi {
   setStressTestMode: (enabled: boolean) => Promise<PresenterState>
   onStateUpdated: (callback: (state: PresenterState) => void) => () => void
 
-  // Logging & diagnostics
+  // Shortcuts & Settings
+  getShortcuts: () => Promise<AppShortcutsConfig>
+  saveShortcuts: (config: AppShortcutsConfig) => Promise<boolean>
+  openBackupsFolder: () => Promise<void>
+  onNotification: (callback: (notification: AppNotification) => void) => () => void
+
+  // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void
   getAppVersion: () => Promise<string>
 }

@@ -14,6 +14,12 @@ export const IPC_CHANNELS = {
   STATE_SET_STRESS_TEST: 'state:set-stress-test',
   STATE_UPDATED: 'state:updated',
 
+  // Shortcuts & Settings
+  SHORTCUTS_GET: 'shortcuts:get',
+  SHORTCUTS_SAVE: 'shortcuts:save',
+  BACKUPS_OPEN_FOLDER: 'backups:open-folder',
+  NOTIFICATION_EMIT: 'notification:emit',
+
   // Diagnostics & Logging
   LOG_FPS_DROP: 'log:fps-drop',
   APP_GET_VERSION: 'app:get-version'

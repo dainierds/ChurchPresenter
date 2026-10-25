@@ -1,6 +1,7 @@
 import { screen, Display } from 'electron'
 import { EventEmitter } from 'events'
 import { DisplayInfo } from '../shared/types'
+import { generateStableDisplayId } from '../shared/display-utils'
 import { logger } from './logger'
 
 export class DisplayManager extends EventEmitter {
@@ -47,6 +48,10 @@ export class DisplayManager extends EventEmitter {
     return this.getDisplays().find((d) => d.id === id)
   }
 
+  public getDisplayByStableId(stableId: string): DisplayInfo | undefined {
+    return this.getDisplays().find((d) => d.stableId === stableId)
+  }
+
   public getPrimaryDisplay(): DisplayInfo {
     const primary = screen.getPrimaryDisplay()
     return this.mapDisplay(primary)
@@ -64,9 +69,12 @@ export class DisplayManager extends EventEmitter {
   private mapDisplay(d: Display): DisplayInfo {
     const primary = screen.getPrimaryDisplay()
     const isPrimary = d.id === primary.id
-    return {
+    const displayName = d.label && d.label.trim().length > 0 ? d.label : `Pantalla ${d.id}`
+
+    const mapped: DisplayInfo = {
       id: d.id,
-      name: `Pantalla ${d.id}${isPrimary ? ' (Principal)' : ''}`,
+      stableId: '',
+      name: displayName,
       bounds: {
         x: d.bounds.x,
         y: d.bounds.y,
@@ -83,6 +91,9 @@ export class DisplayManager extends EventEmitter {
       isPrimary,
       isInternal: d.internal
     }
+
+    mapped.stableId = generateStableDisplayId(mapped)
+    return mapped
   }
 }
 

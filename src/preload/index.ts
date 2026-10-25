@@ -6,7 +6,9 @@ import {
   GlobalControls,
   PresenterState,
   RoleAssignment,
-  TestSlide
+  TestSlide,
+  AppShortcutsConfig,
+  AppNotification
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -19,8 +21,8 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.DISPLAYS_GET_ASSIGNMENTS)
   },
 
-  assignRole: (role: string, displayId: number | null): Promise<boolean> => {
-    return ipcRenderer.invoke(IPC_CHANNELS.DISPLAYS_ASSIGN_ROLE, role, displayId)
+  assignRole: (role: string, stableId: string | null): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DISPLAYS_ASSIGN_ROLE, role, stableId)
   },
 
   identifyDisplays: (): Promise<void> => {
@@ -65,6 +67,29 @@ const api: ChurchPresenterApi = {
     ipcRenderer.on(IPC_CHANNELS.STATE_UPDATED, subscription)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.STATE_UPDATED, subscription)
+    }
+  },
+
+  // Shortcuts & Settings
+  getShortcuts: (): Promise<AppShortcutsConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUTS_GET)
+  },
+
+  saveShortcuts: (config: AppShortcutsConfig): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUTS_SAVE, config)
+  },
+
+  openBackupsFolder: (): Promise<void> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BACKUPS_OPEN_FOLDER)
+  },
+
+  onNotification: (callback: (notif: AppNotification) => void): (() => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, notif: AppNotification) => {
+      callback(notif)
+    }
+    ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_EMIT, subscription)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_EMIT, subscription)
     }
   },
 

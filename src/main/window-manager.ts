@@ -1,17 +1,19 @@
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, screen, shell } from 'electron'
 import path from 'path'
-import { DisplayInfo } from '../shared/types'
-import { reconcileRoleAssignments } from '../shared/display-utils'
+import { DisplayInfo, AppNotification } from '../shared/types'
+import { reconcileRoleAssignments, matchDisplayByStableId } from '../shared/display-utils'
 import { databaseService } from './db/database-service'
 import { displayManager } from './display-manager'
 import { stateManager } from './state-manager'
 import { logger } from './logger'
+import { IPC_CHANNELS } from '../shared/ipc-events'
 
 export class WindowManager {
   private operatorWindow: BrowserWindow | null = null
   private outputWindows: Map<string, BrowserWindow> = new Map()
   private intentionallyClosedOutputs: Set<string> = new Set()
   private recreationTimeouts: Map<string, NodeJS.Timeout> = new Map()
+  private previouslyDisconnectedRoles: Set<string> = new Set()
 
   private getPreloadPath(): string {
     return path.join(__dirname, '../preload/index.js')
@@ -46,7 +48,8 @@ export class WindowManager {
         preload: this.getPreloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false
+        sandbox: false,
+        backgroundThrottling: false
       }
     })
 
@@ -70,35 +73,67 @@ export class WindowManager {
   public syncOutputWindows(): void {
     const savedAssignments = databaseService.getRoleAssignments()
     const currentDisplays = displayManager.getDisplays()
-    const reconciliation = reconcileRoleAssignments(savedAssignments, currentDisplays)
+    const reconciliation = reconcileRoleAssignments(savedAssignments, currentDisplays, {
+      previouslyDisconnected: Array.from(this.previouslyDisconnectedRoles)
+    })
 
-    // Log warnings if any screen was disconnected
-    for (const warning of reconciliation.missingDisplayWarnings) {
-      logger.warn(
-        `Display ${warning.previousDisplayId} is missing. Role '${warning.role}' is now unassigned.`
-      )
-    }
+    // Handle missing displays (do NOT delete saved assignment, just close window & notify)
+    for (const [role, stableId] of Object.entries(reconciliation.disconnectedRoles)) {
+      if (!this.previouslyDisconnectedRoles.has(role)) {
+        this.previouslyDisconnectedRoles.add(role)
+        logger.warn(`Display '${stableId}' is disconnected. Role '${role}' is marked offline.`)
 
-    // Close windows for unassigned roles or roles whose screen was disconnected
-    for (const [role, window] of this.outputWindows.entries()) {
-      const assignedDisplayId = reconciliation.validAssignments[role]
-      if (assignedDisplayId === null || assignedDisplayId === undefined) {
-        logger.info(`Closing output window for unassigned role: ${role}`)
+        this.emitNotification({
+          id: `disc_${role}_${Date.now()}`,
+          title: 'Pantalla Desconectada',
+          message: `La pantalla para el rol '${role}' se ha desconectado. La asignación se mantiene guardada.`,
+          type: 'warn',
+          timestamp: Date.now()
+        })
+      }
+
+      // Close output window if it was open
+      const existingWin = this.outputWindows.get(role)
+      if (existingWin && !existingWin.isDestroyed()) {
         this.intentionallyClosedOutputs.add(role)
-        window.close()
+        existingWin.close()
         this.outputWindows.delete(role)
       }
     }
 
-    // Open or update windows for validly assigned roles
-    for (const [role, displayId] of Object.entries(reconciliation.validAssignments)) {
-      if (displayId === null || displayId === undefined) continue
-      const targetDisplay = displayManager.getDisplayById(displayId)
+    // Handle reconnected displays (restore automatically)
+    for (const role of reconciliation.reconnectedRoles) {
+      this.previouslyDisconnectedRoles.delete(role)
+      logger.info(`Known display reconnected for role '${role}'! Restoring output window...`)
+
+      this.emitNotification({
+        id: `reconn_${role}_${Date.now()}`,
+        title: 'Pantalla Reconectada',
+        message: `Se ha detectado de nuevo la pantalla para '${role}'. Salida restaurada automáticamente.`,
+        type: 'success',
+        timestamp: Date.now()
+      })
+    }
+
+    // Close windows for explicitly unassigned roles
+    for (const role of reconciliation.unassignedRoles) {
+      this.previouslyDisconnectedRoles.delete(role)
+      const existingWin = this.outputWindows.get(role)
+      if (existingWin && !existingWin.isDestroyed()) {
+        this.intentionallyClosedOutputs.add(role)
+        existingWin.close()
+        this.outputWindows.delete(role)
+      }
+    }
+
+    // Open or reposition windows for active valid assignments
+    for (const [role, assignedStableId] of Object.entries(reconciliation.activeAssignments)) {
+      if (!assignedStableId) continue
+      const targetDisplay = matchDisplayByStableId(assignedStableId, currentDisplays)
       if (!targetDisplay) continue
 
       const existingWindow = this.outputWindows.get(role)
       if (existingWindow && !existingWindow.isDestroyed()) {
-        // Adjust bounds if physical screen metrics changed
         const currentBounds = existingWindow.getBounds()
         if (
           currentBounds.x !== targetDisplay.bounds.x ||
@@ -106,18 +141,16 @@ export class WindowManager {
           currentBounds.width !== targetDisplay.bounds.width ||
           currentBounds.height !== targetDisplay.bounds.height
         ) {
-          logger.info(`Updating bounds for role '${role}' on display ${targetDisplay.id}`)
+          logger.info(`Repositioning output window for role '${role}' to [${targetDisplay.bounds.x}, ${targetDisplay.bounds.y}]`)
           existingWindow.setBounds(targetDisplay.bounds)
         }
       } else {
-        // Create dedicated output window
         this.createOutputWindow(role, targetDisplay)
       }
     }
   }
 
   public createOutputWindow(role: string, targetDisplay: DisplayInfo): BrowserWindow {
-    // If there's an existing window, close it first
     const existing = this.outputWindows.get(role)
     if (existing && !existing.isDestroyed()) {
       this.intentionallyClosedOutputs.add(role)
@@ -127,9 +160,11 @@ export class WindowManager {
     this.intentionallyClosedOutputs.delete(role)
 
     logger.info(
-      `Creating output window for role '${role}' on Display ${targetDisplay.id} (${targetDisplay.bounds.width}x${targetDisplay.bounds.height} at [${targetDisplay.bounds.x}, ${targetDisplay.bounds.y}])`
+      `Creating dedicated output window for role '${role}' on display '${targetDisplay.name}' at bounds: ${JSON.stringify(targetDisplay.bounds)}`
     )
 
+    // Dedicated output window options
+    // Crucial: strictly positioned on target display bounds; never covers operator window
     const win = new BrowserWindow({
       x: targetDisplay.bounds.x,
       y: targetDisplay.bounds.y,
@@ -148,7 +183,7 @@ export class WindowManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
-        backgroundThrottling: false // Keep full 60 FPS even when not focused
+        backgroundThrottling: false // Always render at 60 FPS even when unfocused or covered
       }
     })
 
@@ -161,12 +196,12 @@ export class WindowManager {
 
     win.once('ready-to-show', () => {
       win.setBounds(targetDisplay.bounds)
+      // showInactive ensures the operator window retains keyboard focus
       win.showInactive()
-      // Send current presentation state immediately
       win.webContents.send('state:updated', stateManager.getState())
     })
 
-    // Robustness: Automatic recreation on crash
+    // Auto-recreation on unexpected renderer crash
     win.webContents.on('render-process-gone', (_event, details) => {
       logger.error(
         `Output window for role '${role}' crashed! Reason: ${details.reason}, exitCode: ${details.exitCode}. Auto-recreating...`
@@ -175,13 +210,11 @@ export class WindowManager {
       this.scheduleRecreation(role)
     })
 
-    // Robustness: Automatic recreation on unexpected closure
+    // Auto-recreation on unexpected window closure
     win.on('closed', () => {
       this.outputWindows.delete(role)
       if (!this.intentionallyClosedOutputs.has(role)) {
-        logger.warn(
-          `Output window for role '${role}' closed unexpectedly. Auto-recreating in 1s...`
-        )
+        logger.warn(`Output window for role '${role}' closed unexpectedly. Auto-recreating in 1s...`)
         this.scheduleRecreation(role)
       } else {
         this.intentionallyClosedOutputs.delete(role)
@@ -200,11 +233,11 @@ export class WindowManager {
     const timer = setTimeout(() => {
       this.recreationTimeouts.delete(role)
       const assignments = databaseService.getRoleAssignments()
-      const displayId = assignments[role]
-      if (displayId !== null && displayId !== undefined) {
-        const display = displayManager.getDisplayById(displayId)
+      const stableId = assignments[role]
+      if (stableId) {
+        const display = matchDisplayByStableId(stableId, displayManager.getDisplays())
         if (display) {
-          logger.info(`Recreating output window for role '${role}' on display ${display.id}`)
+          logger.info(`Recreating output window for role '${role}' on display ${display.name}`)
           this.createOutputWindow(role, display)
         }
       }
@@ -222,7 +255,7 @@ export class WindowManager {
     for (const display of allDisplays) {
       // Find roles mapped to this display
       const rolesForDisplay = Object.entries(assignments)
-        .filter(([_, id]) => id === display.id)
+        .filter(([_, id]) => id === display.stableId)
         .map(([role]) => role.toUpperCase())
 
       const rolesText = rolesForDisplay.length > 0 ? rolesForDisplay.join(', ') : 'SIN ROL'
@@ -323,7 +356,6 @@ export class WindowManager {
       identifyWindows.push(win)
     }
 
-    // Close after exactly 3 seconds
     setTimeout(() => {
       for (const win of identifyWindows) {
         if (!win.isDestroyed()) {
@@ -331,6 +363,15 @@ export class WindowManager {
         }
       }
     }, 3000)
+  }
+
+  public emitNotification(notif: AppNotification): void {
+    this.broadcastToAll(IPC_CHANNELS.NOTIFICATION_EMIT, notif)
+  }
+
+  public openBackupsFolder(): void {
+    const backupsDir = databaseService.getBackupsDirectory()
+    shell.openPath(backupsDir)
   }
 
   public broadcastToAll(channel: string, ...args: any[]): void {

@@ -1,10 +1,13 @@
-import { app, globalShortcut } from 'electron'
+import { app } from 'electron'
+
+app.name = 'church-presenter'
+
 import { setupLogger, logger } from './logger'
 import { databaseService } from './db/database-service'
 import { displayManager } from './display-manager'
 import { windowManager } from './window-manager'
-import { stateManager } from './state-manager'
 import { registerIpcHandlers } from './ipc-handlers'
+import { shortcutsManager } from './shortcuts-manager'
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -26,7 +29,9 @@ app.on('web-contents-created', (_event, contents) => {
     return { action: 'deny' }
   })
   contents.on('will-navigate', (event, navigationUrl) => {
-    const isDevUrl = process.env['ELECTRON_RENDERER_URL'] && navigationUrl.startsWith(process.env['ELECTRON_RENDERER_URL'])
+    const isDevUrl =
+      process.env['ELECTRON_RENDERER_URL'] &&
+      navigationUrl.startsWith(process.env['ELECTRON_RENDERER_URL'])
     const isFileUrl = navigationUrl.startsWith('file://')
     if (!isDevUrl && !isFileUrl) {
       event.preventDefault()
@@ -40,6 +45,10 @@ async function initializeApp() {
   logger.info('ChurchPresenter starting up...')
 
   try {
+    // Check GPU Feature status
+    const gpuStatus = app.getGPUFeatureStatus()
+    logger.info(`Hardware acceleration GPU status: ${JSON.stringify(gpuStatus)}`)
+
     await databaseService.initialize()
     logger.info('Database initialized.')
 
@@ -49,11 +58,8 @@ async function initializeApp() {
     registerIpcHandlers()
     logger.info('IPC handlers registered.')
 
-    // Register global shortcuts for operator controls
-    globalShortcut.register('F1', () => stateManager.toggleGlobalControl('black'))
-    globalShortcut.register('F2', () => stateManager.toggleGlobalControl('clear'))
-    globalShortcut.register('F3', () => stateManager.toggleGlobalControl('logo'))
-    globalShortcut.register('F4', () => stateManager.toggleGlobalControl('freeze'))
+    shortcutsManager.initialize()
+    logger.info('ShortcutsManager initialized.')
 
     // Create Operator Window
     windowManager.createOperatorWindow()
@@ -75,8 +81,14 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('before-quit', () => {
+  logger.info('App closing: flushing database and closing windows.')
+  databaseService.persist()
+  databaseService.createBackup()
+})
+
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
+  shortcutsManager.unregisterAll()
   windowManager.closeAllOutputWindows()
   databaseService.close()
   logger.info('ChurchPresenter exited cleanly.')

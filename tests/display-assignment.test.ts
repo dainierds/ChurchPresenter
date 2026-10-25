@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileRoleAssignments, formatDisplayTitle } from '../src/shared/display-utils'
+import {
+  reconcileRoleAssignments,
+  formatDisplayTitle
+} from '../src/shared/display-utils'
 import { DisplayInfo, RoleAssignment } from '../src/shared/types'
 
 describe('Display Assignment Logic', () => {
   const mockDisplays: DisplayInfo[] = [
     {
       id: 1,
+      stableId: 'disp_primary-display_1920x1080_pos_0_0',
       name: 'Primary Display',
       bounds: { x: 0, y: 0, width: 1920, height: 1080 },
       workArea: { x: 0, y: 0, width: 1920, height: 1040 },
@@ -14,6 +18,7 @@ describe('Display Assignment Logic', () => {
     },
     {
       id: 2,
+      stableId: 'disp_auditorium-projector-via-splitter_1920x1080_pos_1920_0',
       name: 'Auditorium Projector via Splitter',
       bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
       workArea: { x: 1920, y: 0, width: 1920, height: 1080 },
@@ -22,6 +27,7 @@ describe('Display Assignment Logic', () => {
     },
     {
       id: 3,
+      stableId: 'disp_stage-monitor_1920x1080_pos_3840_0',
       name: 'Stage Monitor',
       bounds: { x: 3840, y: 0, width: 1920, height: 1080 },
       workArea: { x: 3840, y: 0, width: 1920, height: 1080 },
@@ -32,53 +38,52 @@ describe('Display Assignment Logic', () => {
 
   it('keeps valid assignments when physical displays exist', () => {
     const saved: RoleAssignment = {
-      main: 2,
-      stage: 3,
+      main: mockDisplays[1].stableId,
+      stage: mockDisplays[2].stableId,
       lobby: null
     }
 
     const res = reconcileRoleAssignments(saved, mockDisplays)
-    expect(res.validAssignments['main']).toBe(2)
-    expect(res.validAssignments['stage']).toBe(3)
-    expect(res.validAssignments['lobby']).toBeNull()
+    expect(res.activeAssignments['main']).toBe(mockDisplays[1].stableId)
+    expect(res.activeAssignments['stage']).toBe(mockDisplays[2].stableId)
+    expect(res.unassignedRoles).toContain('lobby')
     expect(res.missingDisplayWarnings).toHaveLength(0)
   })
 
-  it('unassigns role and generates warning when a saved display is disconnected', () => {
+  it('preserves saved assignment in disconnectedRoles when display disconnects', () => {
     const saved: RoleAssignment = {
-      main: 2,
-      stage: 3,
-      lobby: 99 // Disconnected display ID 99
+      main: mockDisplays[1].stableId,
+      stage: mockDisplays[2].stableId,
+      lobby: 'disp_unknown-screen_1920x1080_pos_9999_0'
     }
 
     const res = reconcileRoleAssignments(saved, mockDisplays)
-    expect(res.validAssignments['main']).toBe(2)
-    expect(res.validAssignments['stage']).toBe(3)
-    expect(res.validAssignments['lobby']).toBeNull()
-    expect(res.unassignedRoles).toContain('lobby')
+    expect(res.activeAssignments['main']).toBe(mockDisplays[1].stableId)
+    expect(res.activeAssignments['stage']).toBe(mockDisplays[2].stableId)
+    expect(res.disconnectedRoles['lobby']).toBe('disp_unknown-screen_1920x1080_pos_9999_0')
     expect(res.missingDisplayWarnings).toEqual([
-      { role: 'lobby', previousDisplayId: 99 }
+      { role: 'lobby', previousStableId: 'disp_unknown-screen_1920x1080_pos_9999_0' }
     ])
   })
 
   it('supports multiple roles sharing the same physical screen', () => {
     const saved: RoleAssignment = {
-      main: 2,
-      lobby: 2 // Both main and lobby mapped to display 2
+      main: mockDisplays[1].stableId,
+      lobby: mockDisplays[1].stableId
     }
 
     const res = reconcileRoleAssignments(saved, mockDisplays)
-    expect(res.validAssignments['main']).toBe(2)
-    expect(res.validAssignments['lobby']).toBe(2)
+    expect(res.activeAssignments['main']).toBe(mockDisplays[1].stableId)
+    expect(res.activeAssignments['lobby']).toBe(mockDisplays[1].stableId)
     expect(res.missingDisplayWarnings).toHaveLength(0)
   })
 
   it('formats display title clearly with primary flag', () => {
     const primaryTitle = formatDisplayTitle(mockDisplays[0])
-    expect(primaryTitle).toContain('Pantalla 1: 1920x1080 (Principal)')
+    expect(primaryTitle).toContain('Pantalla 1: Primary Display (1920x1080) (Principal)')
 
     const secondaryTitle = formatDisplayTitle(mockDisplays[1])
-    expect(secondaryTitle).toContain('Pantalla 2: 1920x1080')
+    expect(secondaryTitle).toContain('Pantalla 2: Auditorium Projector via Splitter (1920x1080)')
     expect(secondaryTitle).not.toContain('(Principal)')
   })
 })

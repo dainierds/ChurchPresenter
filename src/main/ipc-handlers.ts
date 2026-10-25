@@ -1,10 +1,11 @@
 import { ipcMain, app } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-events'
-import { GlobalControls, TestSlide } from '../shared/types'
+import { GlobalControls, TestSlide, AppShortcutsConfig } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
 import { stateManager } from './state-manager'
 import { windowManager } from './window-manager'
+import { shortcutsManager } from './shortcuts-manager'
 import { logger } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -19,9 +20,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.DISPLAYS_ASSIGN_ROLE,
-    (_event, role: string, displayId: number | null) => {
-      logger.info(`Assigning role '${role}' to display: ${displayId}`)
-      databaseService.setRoleAssignment(role, displayId)
+    (_event, role: string, stableId: string | null) => {
+      logger.info(`Assigning role '${role}' to stable display id: ${stableId}`)
+      databaseService.setRoleAssignment(role, stableId)
       windowManager.syncOutputWindows()
       return true
     }
@@ -59,6 +60,19 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.STATE_SET_STRESS_TEST, (_event, enabled: boolean) => {
     return stateManager.setStressTestMode(enabled)
+  })
+
+  // Shortcuts & Backups Settings
+  ipcMain.handle(IPC_CHANNELS.SHORTCUTS_GET, () => {
+    return shortcutsManager.getShortcuts()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SHORTCUTS_SAVE, (_event, config: AppShortcutsConfig) => {
+    return shortcutsManager.updateShortcuts(config)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BACKUPS_OPEN_FOLDER, () => {
+    windowManager.openBackupsFolder()
   })
 
   // Diagnostics & Logging

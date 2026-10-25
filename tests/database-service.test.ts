@@ -39,12 +39,12 @@ describe('DatabaseService', () => {
   })
 
   it('saves and retrieves screen role assignments', () => {
-    dbService.setRoleAssignment('main', 101)
-    dbService.setRoleAssignment('stage', 102)
+    dbService.setRoleAssignment('main', 'disp_101')
+    dbService.setRoleAssignment('stage', 'disp_102')
 
     let assignments = dbService.getRoleAssignments()
-    expect(assignments['main']).toBe(101)
-    expect(assignments['stage']).toBe(102)
+    expect(assignments['main']).toBe('disp_101')
+    expect(assignments['stage']).toBe('disp_102')
 
     // Unassign main
     dbService.setRoleAssignment('main', null)
