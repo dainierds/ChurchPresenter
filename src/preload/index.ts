@@ -14,7 +14,11 @@ import {
   GenericPresentation,
   ThemeConfig,
   BackgroundImageItem,
-  ServicePlan
+  ServicePlan,
+  BibleTranslationMeta,
+  BibleReferenceParsed,
+  BibleVerse,
+  BibleSearchResult
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -183,6 +187,80 @@ const api: ChurchPresenterApi = {
 
   importLibrary: (jsonData: string): Promise<{ importedSongs: number; importedPresentations: number }> => {
     return ipcRenderer.invoke(IPC_CHANNELS.LIBRARY_IMPORT, jsonData)
+  },
+
+  // Demo Data Management
+  loadDemoData: (): Promise<{ songsCount: number; servicesCount: number }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DEMO_LOAD)
+  },
+
+  clearDemoData: (): Promise<{ deletedSongs: number; deletedServices: number }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DEMO_CLEAR)
+  },
+
+  hasDemoData: (): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DEMO_HAS)
+  },
+
+  // Phase 4: Bible
+  getBibleTranslations: (): Promise<BibleTranslationMeta[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GET_TRANSLATIONS)
+  },
+
+  importBibleTranslation: (
+    format: 'zefania' | 'osis' | 'usfm' | 'json',
+    rawContent: string,
+    meta: Partial<BibleTranslationMeta>
+  ): Promise<BibleTranslationMeta> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_IMPORT_TRANSLATION, format, rawContent, meta)
+  },
+
+  deleteBibleTranslation: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_DELETE_TRANSLATION, id)
+  },
+
+  parseBibleReference: (input: string): Promise<BibleReferenceParsed | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_PARSE_REFERENCE, input)
+  },
+
+  getVersesByReference: (
+    reference: string,
+    translationAbbrev?: string,
+    secondaryAbbrev?: string
+  ): Promise<{ parsed: BibleReferenceParsed; verses: BibleVerse[]; secondaryVerses?: BibleVerse[] }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GET_VERSES, reference, translationAbbrev, secondaryAbbrev)
+  },
+
+  searchBibleText: (
+    query: string,
+    translationAbbrev?: string,
+    filter?: { bookNumber?: number; testament?: 'OT' | 'NT' }
+  ): Promise<BibleSearchResult[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_SEARCH_TEXT, query, translationAbbrev, filter)
+  },
+
+  getBibleFavorites: (): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GET_FAVORITES)
+  },
+
+  toggleBibleFavorite: (reference: string): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_TOGGLE_FAVORITE, reference)
+  },
+
+  getBibleRecentHistory: (): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GET_RECENT)
+  },
+
+  addBibleRecentHistory: (reference: string): Promise<void> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_ADD_RECENT, reference)
+  },
+
+  generateBibleSlides: (
+    verses: BibleVerse[],
+    secondaryVerses?: BibleVerse[],
+    dualLayout?: 'stacked' | 'sideBySide'
+  ): Promise<SlideItem[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_GENERATE_SLIDES, verses, secondaryVerses, dualLayout)
   },
 
   // Diagnostics & Logging

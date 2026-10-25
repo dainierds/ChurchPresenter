@@ -52,6 +52,24 @@ export const IPC_CHANNELS = {
   LIBRARY_EXPORT: 'library:export',
   LIBRARY_IMPORT: 'library:import',
 
+  // Demo Data Management
+  DEMO_LOAD: 'demo:load',
+  DEMO_CLEAR: 'demo:clear',
+  DEMO_HAS: 'demo:has',
+
+  // Phase 4: Bible
+  BIBLE_GET_TRANSLATIONS: 'bible:get-translations',
+  BIBLE_IMPORT_TRANSLATION: 'bible:import-translation',
+  BIBLE_DELETE_TRANSLATION: 'bible:delete-translation',
+  BIBLE_PARSE_REFERENCE: 'bible:parse-reference',
+  BIBLE_GET_VERSES: 'bible:get-verses',
+  BIBLE_SEARCH_TEXT: 'bible:search-text',
+  BIBLE_GET_FAVORITES: 'bible:get-favorites',
+  BIBLE_TOGGLE_FAVORITE: 'bible:toggle-favorite',
+  BIBLE_GET_RECENT: 'bible:get-recent',
+  BIBLE_ADD_RECENT: 'bible:add-recent',
+  BIBLE_GENERATE_SLIDES: 'bible:generate-slides',
+
   // Diagnostics & Logging
   LOG_FPS_DROP: 'log:fps-drop',
   APP_GET_VERSION: 'app:get-version'

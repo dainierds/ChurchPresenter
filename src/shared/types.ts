@@ -146,6 +146,7 @@ export interface Song {
   groups: SongGroup[]
   arrangements: SongArrangement[]
   linesPerSlide?: number
+  isDemo?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -163,6 +164,7 @@ export interface GenericPresentation {
   title: string
   description: string
   slides: PresentationSlide[]
+  isDemo?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -233,7 +235,7 @@ export interface BackgroundImageItem {
   createdAt: string
 }
 
-export type ServiceItemType = 'song' | 'presentation' | 'blank' | 'header'
+export type ServiceItemType = 'song' | 'presentation' | 'blank' | 'header' | 'scripture'
 
 export interface ServiceItem {
   id: string
@@ -242,6 +244,8 @@ export interface ServiceItem {
   songId?: string
   arrangementId?: string
   presentationId?: string
+  scriptureRef?: string
+  bibleTranslation?: string
   notes?: string
 }
 
@@ -251,6 +255,7 @@ export interface ServicePlan {
   date: string
   items: ServiceItem[]
   isTemplate: boolean
+  isDemo?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -261,7 +266,7 @@ export interface ServicePlan {
 export interface SlideItem {
   id: string
   sourceId: string
-  sourceType: 'song' | 'presentation' | 'blank'
+  sourceType: 'song' | 'presentation' | 'blank' | 'scripture'
   groupLabel?: string
   slideIndex: number
   totalSlidesInGroup: number
@@ -278,6 +283,69 @@ export interface LibraryExportData {
   presentations: GenericPresentation[]
   themes: ThemeConfig[]
   services?: ServicePlan[]
+}
+
+/**
+ * Phase 4: Bible Architecture & Types
+ */
+export interface BibleBook {
+  number: number // 1 to 66
+  name: string // "Génesis", "Juan"
+  englishName: string // "Genesis", "John"
+  abbrev: string // "Gén", "Jn"
+  testament: 'OT' | 'NT'
+  chapterCount: number
+}
+
+export interface BibleVerse {
+  bookNumber: number
+  bookName: string
+  chapter: number
+  verse: number
+  text: string
+  translationAbbrev: string
+}
+
+export interface BibleTranslationMeta {
+  id: string
+  name: string
+  abbrev: string
+  language: string
+  copyright: string
+  licenseNotice: string
+  isPublicDomain: boolean
+  verseCount: number
+  filePath: string
+  isDefault?: boolean
+}
+
+export interface BibleReferenceParsed {
+  rawInput: string
+  bookNumber: number
+  bookName: string
+  startChapter: number
+  startVerse: number
+  endChapter: number
+  endVerse: number
+  isFullChapter: boolean
+  formattedReference: string
+}
+
+export interface BibleSearchResult {
+  bookNumber: number
+  bookName: string
+  chapter: number
+  verse: number
+  text: string
+  translationAbbrev: string
+  highlightedText: string
+  formattedReference: string
+}
+
+export interface BibleDualConfig {
+  primaryAbbrev: string
+  secondaryAbbrev?: string
+  layout: 'single' | 'stacked' | 'sideBySide'
 }
 
 /**
@@ -368,6 +436,40 @@ export interface ChurchPresenterApi {
   // Phase 3: Export & Import
   exportLibrary: () => Promise<string> // Returns JSON string or file path
   importLibrary: (jsonData: string) => Promise<{ importedSongs: number; importedPresentations: number }>
+
+  // Demo Data Management
+  loadDemoData: () => Promise<{ songsCount: number; servicesCount: number }>
+  clearDemoData: () => Promise<{ deletedSongs: number; deletedServices: number }>
+  hasDemoData: () => Promise<boolean>
+
+  // Phase 4: Bible
+  getBibleTranslations: () => Promise<BibleTranslationMeta[]>
+  importBibleTranslation: (
+    format: 'zefania' | 'osis' | 'usfm' | 'json',
+    rawContent: string,
+    meta: Partial<BibleTranslationMeta>
+  ) => Promise<BibleTranslationMeta>
+  deleteBibleTranslation: (id: string) => Promise<boolean>
+  parseBibleReference: (input: string) => Promise<BibleReferenceParsed | null>
+  getVersesByReference: (
+    reference: string,
+    translationAbbrev?: string,
+    secondaryAbbrev?: string
+  ) => Promise<{ parsed: BibleReferenceParsed; verses: BibleVerse[]; secondaryVerses?: BibleVerse[] }>
+  searchBibleText: (
+    query: string,
+    translationAbbrev?: string,
+    filter?: { bookNumber?: number; testament?: 'OT' | 'NT' }
+  ) => Promise<BibleSearchResult[]>
+  getBibleFavorites: () => Promise<string[]>
+  toggleBibleFavorite: (reference: string) => Promise<string[]>
+  getBibleRecentHistory: () => Promise<string[]>
+  addBibleRecentHistory: (reference: string) => Promise<void>
+  generateBibleSlides: (
+    verses: BibleVerse[],
+    secondaryVerses?: BibleVerse[],
+    dualLayout?: 'stacked' | 'sideBySide'
+  ) => Promise<SlideItem[]>
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void

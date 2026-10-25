@@ -180,3 +180,51 @@ El rol de salida `stage` implementa una vista adaptada para músicos, cantantes 
 1. **Reloj de Alta Precisión**: Hora local actualizada cada segundo.
 2. **Banner de Mensajes**: Mensajes instantáneos enviados por el operador (ej. avisos de tiempo, guardería o volumen).
 3. **Panel Dividido Actual vs Siguiente**: Contraste alto con letra extragrande para la diapositiva en curso y previsualización de la siguiente estrofa para anticipar el canto.
+
+---
+
+## 8. Arquitectura del Motor Bíblico (Fase 4)
+
+El subsistema de la Biblia está diseñado para alto rendimiento, desacoplamiento y cero impacto en el tamaño de la base de datos principal de la aplicación:
+
+```mermaid
+graph TD
+    subgraph Storage ["Almacenamiento Desacoplado (Carpeta bibles/)"]
+        RVR["RVR1909.bible\n(SQLite + FTS4 + normalized_text)"]
+        KJV["KJV.bible\n(SQLite + FTS4 + normalized_text)"]
+        CUSTOM["Traducción_Importada.bible\n(JSON, OSIS, Zefania, USFM)"]
+    end
+
+    subgraph MainDB ["Base de Datos Principal (church_presenter.db)"]
+        FAVS["bible_favorites\n(Referencias favoritas)"]
+        HIST["bible_history\n(Historial de recientes)"]
+        SRV["services / service_items\n(Elementos tipo 'scripture')"]
+    end
+
+    subgraph BibleEngine ["BibleService (Main Process)"]
+        Parser["Bible Reference Parser\n(Resolución tolerante ES/EN)"]
+        SearchMgr["Buscador FTS4 / LIKE Normalizado"]
+        CacheMgr["Caché de Conexiones SQLite bajo demanda"]
+        SlideGen["BibleSlideGenerator\n(División inteligente y Doble Traducción)"]
+    end
+
+    subgraph OperatorUI ["Operador (Renderer)"]
+        GoToBar["Barra 'Ir a' Referencia"]
+        WordSearch["Buscador de Palabras"]
+        DualToggle["Selector Doble Traducción (Apilado / Lado a Lado)"]
+    end
+
+    GoToBar -->|IPC: bible:get-verses| Parser
+    Parser --> CacheMgr
+    CacheMgr -->|Consulta puntual| RVR
+    CacheMgr -->|Consulta puntual| KJV
+    SlideGen -->|Genera diapositivas formateadas| OperatorUI
+    WordSearch -->|IPC: bible:search-text| SearchMgr
+    SearchMgr --> RVR
+```
+
+1. **Archivos `.bible` Desacoplados**: Cada traducción reside en su propio archivo SQLite en `userData/bibles/`. La base de datos principal jamás almacena los 31.102 versículos, garantizando arranques ultrarrápidos y copias de seguridad de la base principal en milisegundos.
+2. **Búsqueda Tolerante de Referencias**: Mapeo canónico de los 66 libros con soporte para español e inglés, números romanos ("I Juan" -> "1 Juan"), abreviaturas comunes ("jn", "1 co", "sal", "gén"), rangos entre capítulos y versículos ("Juan 3:16-17", "Génesis 1:1-2:3") y capítulos completos ("Salmos 23").
+3. **Búsqueda Eficiente de Palabras**: Motor híbrido que aprovecha FTS4 para palabras completas y consultas sobre la columna pre-normalizada sin acentos (`normalized_text`), logrando tiempos de respuesta de menos de 1 ms sobre toda la Biblia.
+4. **Doble Traducción Simultánea**: Permite proyectar dos versiones a la vez (por ejemplo RVR1909 y KJV) en modo apilado o lado a lado, con tamaños de letra adaptativos (auto-fit).
+5. **Persistencia en el Culto**: Los pasajes bíblicos se pueden enviar a vivo directamente desde la pestaña de Biblia o guardarse en la lista del servicio activo como elementos de tipo `'scripture'`.

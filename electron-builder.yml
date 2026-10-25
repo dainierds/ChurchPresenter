@@ -6,6 +6,9 @@ directories:
 files:
   - out/**/*
   - node_modules/sql.js/**/*
+extraResources:
+  - from: resources/bibles
+    to: resources/bibles
 win:
   target:
     - target: nsis

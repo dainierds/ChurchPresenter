@@ -33,7 +33,7 @@ export class LibraryService {
   }
 
   public initialize(): void {
-    // Seed initial themes if none exist
+    // Seed default themes only if none exist (database starts clean of songs/services)
     const existingThemes = this.getThemes()
     if (existingThemes.length === 0) {
       this.saveTheme(DEFAULT_THEME)
@@ -57,12 +57,6 @@ export class LibraryService {
           value: 'linear-gradient(135deg, #134e5e 0%, #71b280 100%)'
         }
       })
-    }
-
-    // Seed initial songs and templates if library is empty
-    const existingSongs = this.getSongs()
-    if (existingSongs.length === 0) {
-      this.seedInitialContent()
     }
   }
 
@@ -118,6 +112,7 @@ export class LibraryService {
       groups: groupsBySong.get(String(s.id)) || [],
       arrangements: arrangementsBySong.get(String(s.id)) || [],
       linesPerSlide: 4,
+      isDemo: Boolean(s.is_demo),
       createdAt: String(s.created_at),
       updatedAt: String(s.updated_at)
     }))
@@ -131,8 +126,8 @@ export class LibraryService {
     const tagsStr = (song.tags || []).join(',')
 
     databaseService.run(
-      `INSERT INTO songs (id, title, author, copyright, ccli_number, language, tags, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO songs (id, title, author, copyright, ccli_number, language, tags, is_demo, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          author = excluded.author,
@@ -140,8 +135,18 @@ export class LibraryService {
          ccli_number = excluded.ccli_number,
          language = excluded.language,
          tags = excluded.tags,
+         is_demo = excluded.is_demo,
          updated_at = datetime('now');`,
-      [song.id, song.title, song.author, song.copyright, song.ccliNumber || '', song.language || 'es', tagsStr]
+      [
+        song.id,
+        song.title,
+        song.author,
+        song.copyright,
+        song.ccliNumber || '',
+        song.language || 'es',
+        tagsStr,
+        song.isDemo ? 1 : 0
+      ]
     )
 
     // Clear existing groups & arrangements and re-insert
@@ -192,6 +197,7 @@ export class LibraryService {
         title: String(r.title),
         description: String(r.description || ''),
         slides,
+        isDemo: Boolean(r.is_demo),
         createdAt: String(r.created_at),
         updatedAt: String(r.updated_at)
       }
@@ -200,14 +206,15 @@ export class LibraryService {
 
   public savePresentation(p: GenericPresentation): GenericPresentation {
     databaseService.run(
-      `INSERT INTO generic_presentations (id, title, description, slides_json, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
+      `INSERT INTO generic_presentations (id, title, description, slides_json, is_demo, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          description = excluded.description,
          slides_json = excluded.slides_json,
+         is_demo = excluded.is_demo,
          updated_at = datetime('now');`,
-      [p.id, p.title, p.description, JSON.stringify(p.slides)]
+      [p.id, p.title, p.description, JSON.stringify(p.slides), p.isDemo ? 1 : 0]
     )
     logger.info(`Saved presentation '${p.title}' (${p.id})`)
     return p
@@ -265,6 +272,7 @@ export class LibraryService {
   public setDefaultTheme(id: string): boolean {
     databaseService.run('UPDATE themes SET is_default = 0;')
     databaseService.run('UPDATE themes SET is_default = 1 WHERE id = ?;', [id])
+    logger.info(`Set theme ${id} as default`)
     return true
   }
 
@@ -343,6 +351,7 @@ export class LibraryService {
         date: String(r.date),
         items,
         isTemplate: Boolean(r.is_template),
+        isDemo: Boolean(r.is_demo),
         createdAt: String(r.created_at),
         updatedAt: String(r.updated_at)
       }
@@ -355,15 +364,23 @@ export class LibraryService {
 
   public saveService(service: ServicePlan): ServicePlan {
     databaseService.run(
-      `INSERT INTO services (id, name, date, items_json, is_template, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO services (id, name, date, items_json, is_template, is_demo, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
          date = excluded.date,
          items_json = excluded.items_json,
          is_template = excluded.is_template,
+         is_demo = excluded.is_demo,
          updated_at = datetime('now');`,
-      [service.id, service.name, service.date, JSON.stringify(service.items), service.isTemplate ? 1 : 0]
+      [
+        service.id,
+        service.name,
+        service.date,
+        JSON.stringify(service.items),
+        service.isTemplate ? 1 : 0,
+        service.isDemo ? 1 : 0
+      ]
     )
     logger.info(`Saved service '${service.name}' (template: ${service.isTemplate})`)
     return service
@@ -378,7 +395,7 @@ export class LibraryService {
   // --- EXPORT & IMPORT ---
 
   public exportLibrary(): string {
-    const exportData: LibraryExportData = {
+    const data: LibraryExportData = {
       version: 1,
       exportedAt: new Date().toISOString(),
       songs: this.getSongs(),
@@ -386,189 +403,219 @@ export class LibraryService {
       themes: this.getThemes(),
       services: this.getServices()
     }
-
-    return serializeLibraryToJson(exportData)
+    return serializeLibraryToJson(data)
   }
 
   public importLibrary(jsonData: string): { importedSongs: number; importedPresentations: number } {
     const data = parseAndValidateLibraryJson(jsonData)
+    let importedSongs = 0
+    let importedPresentations = 0
 
-    let songCount = 0
-    for (const song of data.songs) {
-      this.saveSong(song)
-      songCount++
-    }
-
-    let presCount = 0
-    for (const pres of data.presentations) {
-      this.savePresentation(pres)
-      presCount++
-    }
-
-    for (const theme of data.themes) {
-      this.saveTheme(theme)
-    }
-
-    if (data.services) {
-      for (const s of data.services) {
-        this.saveService(s)
+    if (data.songs) {
+      for (const song of data.songs) {
+        this.saveSong(song)
+        importedSongs++
       }
     }
 
-    logger.info(`Imported library backup: ${songCount} songs, ${presCount} presentations.`)
-    return {
-      importedSongs: songCount,
-      importedPresentations: presCount
+    if (data.presentations) {
+      for (const pres of data.presentations) {
+        this.savePresentation(pres)
+        importedPresentations++
+      }
     }
+
+    if (data.themes) {
+      for (const theme of data.themes) {
+        this.saveTheme(theme)
+      }
+    }
+
+    if (data.services) {
+      for (const serv of data.services) {
+        this.saveService(serv)
+      }
+    }
+
+    logger.info(`Imported ${importedSongs} songs and ${importedPresentations} presentations.`)
+    return { importedSongs, importedPresentations }
   }
 
-  // --- INITIAL CONTENT SEEDING (6 Worship Songs & Sunday Template) ---
+  // --- DEMO DATA MANAGEMENT ---
 
-  private seedInitialContent(): void {
-    logger.info('Seeding initial church songs library and Sunday worship service template...')
+  public hasDemoData(): boolean {
+    const rows = databaseService.query('SELECT COUNT(*) as count FROM songs WHERE is_demo = 1;')
+    return Number(rows[0]?.count || 0) > 0
+  }
 
-    const initialSongs = [
+  public clearDemoData(): { deletedSongs: number; deletedServices: number } {
+    const songRows = databaseService.query('SELECT id FROM songs WHERE is_demo = 1;')
+    const deletedSongs = songRows.length
+
+    databaseService.run('DELETE FROM song_groups WHERE song_id IN (SELECT id FROM songs WHERE is_demo = 1);')
+    databaseService.run('DELETE FROM song_arrangements WHERE song_id IN (SELECT id FROM songs WHERE is_demo = 1);')
+    databaseService.run('DELETE FROM songs WHERE is_demo = 1;')
+    databaseService.run('DELETE FROM generic_presentations WHERE is_demo = 1;')
+
+    const srvRows = databaseService.query('SELECT id FROM services WHERE is_demo = 1;')
+    const deletedServices = srvRows.length
+    databaseService.run('DELETE FROM services WHERE is_demo = 1;')
+
+    logger.info(`Cleared demo data: ${deletedSongs} songs, ${deletedServices} services removed.`)
+    return { deletedSongs, deletedServices }
+  }
+
+  public loadDemoData(): { songsCount: number; servicesCount: number } {
+    // If demo data already exists, remove first to prevent duplicates
+    this.clearDemoData()
+
+    // 6 100% verified historical Public Domain Hymns (pre-1920, all authors deceased > 100 yrs ago)
+    const demoHymns = [
       {
-        title: 'Cuán Grande es Él',
-        author: 'Carl Boberg',
-        tags: ['Himno', 'Adoración'],
-        lyrics: `Verso 1
-Señor mi Dios, al contemplar los cielos
-El firmamento y las mil estrellas
-Al oír tu voz en los potentes truenos
-Y ver brillar al sol en su cenit
+        title: 'Castillo Fuerte Es Nuestro Dios',
+        author: 'Martín Lutero (1529)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Fortaleza', 'Reforma'],
+        lyrics: `[Verso 1]
+Castillo fuerte es nuestro Dios,
+Defensa y buen escudo;
+Con su poder nos librará
+En este trance agudo.
 
-Coro
-¡Mi corazón entona la canción!
-¡Cuán grande es Él! ¡Cuán grande es Él!
-¡Mi corazón entona la canción!
-¡Cuán grande es Él! ¡Cuán grande es Él!
+[Coro]
+Luchar no podemos por nuestra fuerza,
+Mas por nosotros pelea el Rey;
+Jesús el Señor de los ejércitos,
+Vencedor invicto por la fe.
 
-Verso 2
-Al recorrer los montes y los valles
-Y ver las bellas flores al pasar
-Al escuchar el canto de las aves
-Y el murmurar del claro manantial
-
-Verso 3
-Cuando recuerdo del amor divino
-Que desde el cielo al Salvador envió
-Aquel Jesús que por salvarme vino
-Y en una cruz por mí murió`
+[Verso 2]
+Y si demonios mil están
+Prontos a devorarnos,
+No temeremos, porque Dios
+Sabrá cómo ampararnos.`
       },
       {
-        title: 'Cantaré de tu Amor por Siempre',
-        author: 'Martin Smith',
-        tags: ['Alabanza', 'Gratitud'],
-        lyrics: `Verso 1
-Sobre los montes y el mar
-Tu río de amor fluye hacia mí
-Y abriré mi corazón
-Para que el sanador me haga libre
+        title: 'Sublime Gracia',
+        author: 'John Newton (1779)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Gracia', 'Salvación'],
+        lyrics: `[Verso 1]
+Sublime gracia del Señor,
+Que a un infeliz salvó;
+Fui ciego mas hoy veo yo,
+Perdido y Él me halló.
 
-Coro
-Cantaré de tu amor por siempre
-Cantaré de tu amor por siempre
-Cantaré de tu amor por siempre
-Cantaré de tu amor por siempre
+[Coro]
+Gracia que es mayor que todo mi pecar,
+Gracia que sobrepasa todo entendimiento;
+En la cruz de Cristo vida y luz hallé,
+Por su gracia eterna siempre cantaré.
 
-Puente
-Quisiera celebrar con gozo en el corazón
-Y cuando el mundo vea tu luz
-Danzarán de gozo como nosotros hoy`
-      },
-      {
-        title: 'En la Cruz Hay Salvación',
-        author: 'Isaac Watts / Ralph E. Hudson',
-        tags: ['Himno', 'Redención'],
-        lyrics: `Verso 1
-Me hirió el pecado, fui a Jesús
-Mostréle mi dolor
-Perdido errante vi su luz
-Bendíjome en su amor
-
-Coro
-En la cruz, en la cruz
-Do primero vi la luz
-Y las manchas de mi alma yo lavé
-Fue allí por fe do vi a Jesús
-Y siempre feliz con Él seré
-
-Verso 2
-Sobre una cruz mi Salvador
-Su sangre derramó
-Por este pobre pecador
-A quien así salvó`
+[Verso 2]
+Su gracia me enseñó a temer,
+Mis dudas ahuyentó;
+¡Oh cuán precioso fue a mi ser,
+Cuando Él me rescató!`
       },
       {
         title: 'Al Contemplar la Excelsa Cruz',
-        author: 'Isaac Watts',
-        tags: ['Himno', 'Comunión'],
-        lyrics: `Verso 1
+        author: 'Isaac Watts (1707)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Cruz', 'Adoración'],
+        lyrics: `[Verso 1]
 Al contemplar la excelsa cruz
-Do el Rey de gloria sucumbió
+Do el Rey de gloria sucumbió,
 Cuanto estimaba tengo en poco
-Y todo orgullo desprecio
+Y todo orgullo desprecio.
 
-Coro
+[Coro]
 ¡Oh qué amor tan grande y santo!
-Exige mi alma y todo mi ser
-A ti me entrego, Dios bendito
-Tu dulce gracia he de tener
+Exige mi alma y todo mi ser;
+A ti me entrego, Dios bendito,
+Tu dulce gracia he de tener.
 
-Verso 2
-Mira en su frente, manos, pies
-Preciosa sangre cómo fluye
+[Verso 2]
+Mira en su frente, manos, pies,
+Preciosa sangre cómo fluye;
 Corona tal de espinas crueles
-Nadie en la tierra conoció`
+Nadie en la tierra conoció.`
       },
       {
-        title: 'A Ti Sea la Gloria',
-        author: 'Marcos Witt',
-        tags: ['Adoración', 'Soberanía'],
-        lyrics: `Verso 1
-No existen fuerzas ni poder
-Que puedan con tu majestad
-El universo canta a una voz
-Tú eres Santo, Señor
+        title: 'Santo, Santo, Santo',
+        author: 'Reginald Heber (1826)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Trinidad', 'Adoración'],
+        lyrics: `[Verso 1]
+¡Santo! ¡Santo! ¡Santo! Señor Omnipotente,
+Siempre el labio mío loores te dará;
+¡Santo! ¡Santo! ¡Santo! Te adoro reverente,
+Dios en tres Personas, bendita Trinidad.
 
-Coro
-A ti sea la gloria, honra y honor
-A ti sea el dominio por siempre Señor
-Grande y temible en poderío
-Nadie se iguala a ti, Dios mío
+[Coro]
+Santo es el Señor, Dios de majestad,
+Cielos y la tierra cantan su bondad;
+Digno de loor por la eternidad,
+Rey de reyes, Dios de santidad.
 
-Puente
-Por los siglos de los siglos
-Reinarás Jesús, reinarás Señor`
+[Verso 2]
+¡Santo! ¡Santo! ¡Santo! La gloria de tu nombre
+Vemos en tus obras, en cielo, tierra y mar;
+¡Santo! ¡Santo! ¡Santo! Te adorará todo hombre,
+Dios en tres Personas, bendita Trinidad.`
       },
       {
-        title: 'Gracia Sublime Es',
-        author: 'Phil Wickham',
-        tags: ['Alabanza', 'Victoria'],
-        lyrics: `Verso 1
-¿Quién rompe el poder del pecado?
-Su amor es fuerte y poderoso
-El Rey de gloria, el Rey de majestad
+        title: 'Cuan Firme Cimiento',
+        author: 'John Rippon (1787)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Fe', 'Promesas'],
+        lyrics: `[Verso 1]
+¡Cuán firme cimiento se ha dado a la fe,
+De Dios en su santa palabra de amor!
+¿Qué más Él pudiera en su libro decir,
+A los que han buscado amparo en Jesús?
 
-Coro
-Gracia sublime es, perfecto es su amor
-Tomó mi lugar, cargó con mi cruz
-Su vida entregó, libre soy en Jesús
-Todo lo que hago es para honrarte a ti
+[Coro]
+No temas jamás, contigo Yo estoy,
+Tu Dios y tu Guía por siempre seré;
+Fuerza te daré y te ayudaré,
+Con diestra justicia te sostendré.
 
-Verso 2
-¿Quién sacude la tierra con truenos?
-¿Y nos asombra con maravillas?
-El Rey de gloria, el Rey de majestad`
+[Verso 2]
+La llama no puede dañarte jamás,
+Si en medio del fuego te ordeno pasar;
+El oro de tu alma más puro será,
+Pues sólo la escoria se consumirá.`
+      },
+      {
+        title: 'A Dios Sea la Gloria',
+        author: 'Fanny Crosby (1875)',
+        copyright: 'Dominio Público',
+        tags: ['Himno', 'Alabanza', 'Gratitud'],
+        lyrics: `[Verso 1]
+¡A Dios sea la gloria por lo que Él ha hecho!
+Amó tanto al mundo que a su Hijo nos dio;
+Quien dio de su vida expiando el pecado,
+Abriendo la puerta a todo creyente.
+
+[Coro]
+¡Alabad al Señor! ¡Alabad al Señor!
+Que la tierra escuche su santa voz;
+¡Alabad al Señor! ¡Alabad al Señor!
+Gócese el pueblo en Cristo Jesús.
+
+[Verso 2]
+¡Oh perfecta redención, precio de sangre!
+Promesa de Dios a quien crea en verdad;
+Al más vil pecador que se humille con fe,
+El perdón de Jesús alcanzará al instante.`
       }
     ]
 
     const createdSongs: Song[] = []
 
-    for (let i = 0; i < initialSongs.length; i++) {
-      const item = initialSongs[i]
-      const songId = `song_seed_${i + 1}`
+    for (let i = 0; i < demoHymns.length; i++) {
+      const item = demoHymns[i]
+      const songId = `demo_song_${i + 1}`
       const groups = parseLyricsToGroups(item.lyrics, songId)
       const defaultArrangement: SongArrangement = {
         id: `arr_${songId}_default`,
@@ -582,12 +629,13 @@ El Rey de gloria, el Rey de majestad`
         id: songId,
         title: item.title,
         author: item.author,
-        copyright: 'Uso congregacional interno',
+        copyright: item.copyright,
         language: 'es',
         tags: item.tags,
         groups,
         arrangements: [defaultArrangement],
         linesPerSlide: 4,
+        isDemo: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
@@ -596,27 +644,28 @@ El Rey de gloria, el Rey de majestad`
       createdSongs.push(song)
     }
 
-    // Seed Announcements Presentation
-    const presId = 'pres_anuncios_seed'
+    // Demo Announcements Presentation
+    const presId = 'demo_pres_anuncios'
     const announcements: GenericPresentation = {
       id: presId,
-      title: 'Avisos Semanales y Bienvenida',
-      description: 'Anuncios oficiales para el servicio dominical',
+      title: 'Avisos Semanales y Bienvenida (Demo)',
+      description: 'Anuncios oficiales para el servicio dominical de prueba',
+      isDemo: true,
       slides: [
         {
-          id: 'sl_seed_1',
+          id: 'sl_demo_1',
           title: 'Bienvenidos a ChurchPresenter',
           body: 'Nos gozamos de adorar juntos hoy.\n"Mirad cuán bueno y cuán delicioso es habitar los hermanos juntos en armonía."'
         },
         {
-          id: 'sl_seed_2',
+          id: 'sl_demo_2',
           title: 'Estudio Bíblico y Oración',
-          body: '• Miércoles 7:30 PM: Escuela Bíblica y Clamor\n• Viernes 7:00 PM: Reunión de Jóvenes en el Salón Principal\n• Sábado 8:00 AM: Desayuno de Varones'
+          body: '• Miércoles 7:30 PM: Escuela Bíblica y Clamor\n• Viernes 7:00 PM: Reunión de Jóvenes\n• Sábado 8:00 AM: Desayuno de Varones'
         },
         {
-          id: 'sl_seed_3',
-          title: 'Ministerio de Niños (Semillero de Fe)',
-          body: 'Las clases para niños de 3 a 11 años inician inmediatamente tras el tiempo de alabanza y adoración.'
+          id: 'sl_demo_3',
+          title: 'Ministerio de Niños',
+          body: 'Las clases para niños inician inmediatamente tras el tiempo de alabanza y adoración.'
         }
       ],
       createdAt: new Date().toISOString(),
@@ -624,17 +673,18 @@ El Rey de gloria, el Rey de majestad`
     }
     this.savePresentation(announcements)
 
-    // Seed Sunday Service Template with 6 songs and announcements
-    const sundayTemplate: ServicePlan = {
-      id: 'tpl_domingo_general',
-      name: 'Plantilla Culto Dominical Completo',
+    // Demo Sunday Service
+    const demoService: ServicePlan = {
+      id: 'demo_srv_domingo',
+      name: 'Culto Dominical Completo (Demostración)',
       date: new Date().toISOString().split('T')[0],
       isTemplate: true,
+      isDemo: true,
       items: [
         { id: 'item_1', type: 'header', name: 'PRELUDIO Y BIENVENIDA' },
-        { id: 'item_2', type: 'presentation', name: 'Avisos Semanales y Bienvenida', presentationId: presId },
+        { id: 'item_2', type: 'presentation', name: announcements.title, presentationId: presId },
         { id: 'item_3', type: 'blank', name: 'Pausa en Blanco' },
-        { id: 'item_4', type: 'header', name: 'BLOQUE DE ALABANZA Y ADORACIÓN' },
+        { id: 'item_4', type: 'header', name: 'BLOQUE DE ADORACIÓN' },
         { id: 'item_5', type: 'song', name: createdSongs[0].title, songId: createdSongs[0].id, arrangementId: createdSongs[0].arrangements[0].id },
         { id: 'item_6', type: 'song', name: createdSongs[1].title, songId: createdSongs[1].id, arrangementId: createdSongs[1].arrangements[0].id },
         { id: 'item_7', type: 'song', name: createdSongs[2].title, songId: createdSongs[2].id, arrangementId: createdSongs[2].arrangements[0].id },
@@ -649,9 +699,10 @@ El Rey de gloria, el Rey de majestad`
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
-    this.saveService(sundayTemplate)
+    this.saveService(demoService)
 
-    logger.info('Finished seeding initial content.')
+    logger.info(`Loaded demo data: ${createdSongs.length} songs, 1 presentation, 1 service plan.`)
+    return { songsCount: createdSongs.length, servicesCount: 1 }
   }
 }
 

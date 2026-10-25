@@ -1508,3 +1508,375 @@ body {
     opacity: 1;
   }
 }
+
+/* =========================================================
+   FASE 4: DEMO DATA BADGES & BIBLE UI STYLES
+   ========================================================= */
+
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.bible-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bible-translations-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+}
+
+.bible-translation-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.bible-select {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.bible-select:focus {
+  border-color: #3b82f6;
+}
+
+.bible-select.mini {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.dual-translation-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bible-mode-switch {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 8px;
+}
+
+.bible-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background-color: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bible-mode-btn:hover {
+  background-color: #334155;
+  color: #f8fafc;
+}
+
+.bible-mode-btn.active {
+  background-color: #3b82f6;
+  border-color: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.bible-reference-mode-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bible-go-to-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bible-reference-input {
+  flex: 1;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.bible-reference-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8;
+}
+
+.bible-go-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #3b82f6;
+  border: 1px solid #2563eb;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.bible-go-btn:hover {
+  background-color: #2563eb;
+}
+
+.bible-passage-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-references-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.section-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.chips-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ref-chip {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ref-chip:hover {
+  background-color: #334155;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+.ref-chip.recent {
+  border-style: dashed;
+  color: #94a3b8;
+}
+
+.ref-chip.recent:hover {
+  color: #e2e8f0;
+}
+
+.bible-text-search-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.bible-filters-row {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-pill {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-pill:hover {
+  background-color: #334155;
+  color: #f8fafc;
+}
+
+.filter-pill.active {
+  background-color: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.bible-search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bible-search-card {
+  padding: 8px 10px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bible-search-card:hover {
+  background-color: #283548;
+  border-color: #475569;
+}
+
+.bible-card-ref {
+  font-size: 12px;
+  font-weight: 600;
+  color: #38bdf8;
+  margin-bottom: 3px;
+}
+
+.bible-card-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.bible-card-text mark {
+  background-color: #f59e0b;
+  color: #0f172a;
+  border-radius: 2px;
+  padding: 0 3px;
+  font-weight: 600;
+}
+
+.license-warning-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #fde68a;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.license-warning-notice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #fbbf24;
+}
+
+.license-warning-notice p {
+  margin: 0;
+}
+
+.translations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.translation-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.translation-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #f8fafc;
+}
+
+.trans-pill {
+  font-size: 10px;
+  font-family: monospace;
+  background-color: #334155;
+  color: #94a3b8;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.default-pill {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background-color: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.trans-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+

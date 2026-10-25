@@ -16,6 +16,9 @@ import { stateManager } from './state-manager'
 import { windowManager } from './window-manager'
 import { shortcutsManager } from './shortcuts-manager'
 import { libraryService } from './library-service'
+import { bibleService } from './bible/bible-service'
+import { parseBibleReference } from '../shared/bible-reference-parser'
+import { buildBibleSlides } from '../shared/bible-slide-generator'
 import { logger } from './logger'
 
 export function registerIpcHandlers(): void {
@@ -186,6 +189,83 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.LIBRARY_IMPORT, (_event, jsonData: string) => {
     return libraryService.importLibrary(jsonData)
   })
+
+  // Demo Data Management
+  ipcMain.handle(IPC_CHANNELS.DEMO_LOAD, () => {
+    return libraryService.loadDemoData()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DEMO_CLEAR, () => {
+    return libraryService.clearDemoData()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DEMO_HAS, () => {
+    return libraryService.hasDemoData()
+  })
+
+  // Phase 4: Bible
+  ipcMain.handle(IPC_CHANNELS.BIBLE_GET_TRANSLATIONS, () => {
+    return bibleService.getTranslations()
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.BIBLE_IMPORT_TRANSLATION,
+    (_event, format: 'zefania' | 'osis' | 'usfm' | 'json', rawContent: string, meta: any) => {
+      return bibleService.importTranslation(format, rawContent, meta)
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_DELETE_TRANSLATION, (_event, id: string) => {
+    return bibleService.deleteTranslation(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_PARSE_REFERENCE, (_event, input: string) => {
+    return parseBibleReference(input)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.BIBLE_GET_VERSES,
+    (_event, reference: string, translationAbbrev?: string, secondaryAbbrev?: string) => {
+      return bibleService.getVersesByReference(reference, translationAbbrev, secondaryAbbrev)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.BIBLE_SEARCH_TEXT,
+    (_event, query: string, translationAbbrev?: string, filter?: any) => {
+      return bibleService.searchBibleText(query, translationAbbrev, filter)
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_GET_FAVORITES, () => {
+    return bibleService.getFavorites()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_TOGGLE_FAVORITE, (_event, reference: string) => {
+    return bibleService.toggleFavorite(reference)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_GET_RECENT, () => {
+    return bibleService.getRecentHistory()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_ADD_RECENT, (_event, reference: string) => {
+    bibleService.addRecentHistory(reference)
+    return true
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.BIBLE_GENERATE_SLIDES,
+    (_event, verses: any[], secondaryVerses?: any[], dualLayout?: any) => {
+      const primaryAbbrev = verses[0]?.translationAbbrev || 'RVR1909'
+      const secAbbrev = secondaryVerses?.[0]?.translationAbbrev
+      return buildBibleSlides(verses, secondaryVerses, {
+        translationAbbrev: primaryAbbrev,
+        secondaryAbbrev: secAbbrev,
+        dualLayout
+      })
+    }
+  )
 
   // Diagnostics & Logging
   ipcMain.on(

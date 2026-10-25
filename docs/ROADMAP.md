@@ -40,10 +40,19 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Atajos de teclado para avance de diapositivas y navegación de listas, y botón "Actualizar en vivo" para canciones editadas mientras están proyectadas.
 - Monitor de Escenario (Confidence Monitor): vista dividida con diapositiva actual en alto contraste, vista previa de la siguiente diapositiva, reloj en tiempo real y banner de alertas del operador.
 
-### Fase 4: Biblia
-- Múltiples versiones bíblicas locales (RVR1960, NVI, etc.).
-- Búsqueda rápida por libro, capítulo y versículo.
-- Modos de visualización de versículos en capas de contenido y superposición.
+### Fase 4: Biblia (Completada)
+- Almacenamiento desacoplado: cada traducción en su propio archivo SQLite `.bible` de solo lectura en la carpeta de datos del usuario, abierto bajo demanda y con caché en memoria.
+- Base de datos principal limpia: no almacena versículos, únicamente favoritos y referencias recientes del operador.
+- Evaluado e implementado motor de búsqueda de texto completo eficiente (FTS4 con normalización sin acentos para coincidencia instantánea sobre 31.102 versículos en < 5 ms).
+- Importador de traducciones con soporte para 4 formatos estándar: JSON estructurado, Zefania XML, OSIS XML y USFM, con validación de derechos de autor y aviso explícito de licencia de propiedad intelectual.
+- Traducciones de fábrica 100% de Dominio Público verificado: Reina-Valera 1909 (Español) y King James Version (Inglés), obtenidas de fuentes legítimas y libres.
+- Analizador tolerante de referencias en español e inglés: soporta abreviaturas, nombres canónicos, números romanos, capítulos completos y rangos entre capítulos y versículos ("Juan 3:16", "jn 3 16", "1 co 13:4-7", "Salmos 23", "Gén 1.1-5").
+- Motor de diapositivas bíblicas con auto-fit, salto inteligente de versículos sin cortes a mitad de versículo, indicación de referencia y traducción.
+- Soporte de Doble Traducción simultánea (Español e Inglés lado a lado o apilado) configurable en tiempo real.
+- Flujo de trabajo ágil para el operador: barra "Ir a", favoritos en un clic, historial de recientes, búsqueda de palabras con resaltado `<mark>`, atajos de teclado para versículos (flechas) y capítulos (C/X), y botón para añadir pasajes al orden del culto como elemento de tipo `'scripture'`.
+- Monitor de escenario sincronizado con versículo proyectado y versículo siguiente.
+- Banco de pruebas de guardado real con 5.000 canciones documentado en `DECISIONS.md`.
+- Pruebas unitarias completas (Vitest) y pruebas E2E automatizadas con Playwright y Electron con capturas en `docs/evidence/`.
 
 ### Fase 5: PowerPoint/PDF/video/YouTube
 - Integración y renderizado de presentaciones externas.

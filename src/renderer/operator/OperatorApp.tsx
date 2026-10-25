@@ -15,7 +15,9 @@ import {
   ServiceItem,
   BackgroundImageItem,
   SongGroup,
-  DEFAULT_THEME
+  DEFAULT_THEME,
+  BibleTranslationMeta,
+  BibleSearchResult
 } from '../../shared/types'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -25,6 +27,7 @@ import {
 } from '../../shared/song-parser'
 import { searchItems } from '../../shared/search-utils'
 import { createServiceFromTemplate, duplicateService } from '../../shared/service-utils'
+import { parseBibleReference } from '../../shared/bible-reference-parser'
 import {
   Monitor,
   Eye,
@@ -54,7 +57,11 @@ import {
   Minus,
   Sparkles,
   Download,
-  Upload
+  Upload,
+  BookOpen,
+  Star,
+  History,
+  Book
 } from 'lucide-react'
 import './operator.css'
 
@@ -66,13 +73,29 @@ export const OperatorApp: React.FC = () => {
   const [shortcuts, setShortcuts] = useState<AppShortcutsConfig>(DEFAULT_SHORTCUTS)
   const [appVersion, setAppVersion] = useState<string>('1.0.0')
 
-  // Phase 3 Data Collections
+  // Phase 3 & 4 Data Collections
   const [songs, setSongs] = useState<Song[]>([])
   const [presentations, setPresentations] = useState<GenericPresentation[]>([])
   const [themes, setThemes] = useState<ThemeConfig[]>([])
   const [services, setServices] = useState<ServicePlan[]>([])
   const [templates, setTemplates] = useState<ServicePlan[]>([])
   const [backgroundImages, setBackgroundImages] = useState<BackgroundImageItem[]>([])
+
+  // Bible State
+  const [bibleTranslations, setBibleTranslations] = useState<BibleTranslationMeta[]>([])
+  const [primaryBibleAbbrev, setPrimaryBibleAbbrev] = useState<string>('RVR1909')
+  const [secondaryBibleAbbrev, setSecondaryBibleAbbrev] = useState<string>('KJV')
+  const [isDualBibleActive, setIsDualBibleActive] = useState<boolean>(false)
+  const [dualBibleLayout, setDualBibleLayout] = useState<'stacked' | 'sideBySide'>('stacked')
+  const [bibleRefInput, setBibleRefInput] = useState<string>('Juan 3:16')
+  const [currentLoadedBibleRef, setCurrentLoadedBibleRef] = useState<string>('Juan 3:16')
+  const [bibleFavorites, setBibleFavorites] = useState<string[]>([])
+  const [bibleRecentHistory, setBibleRecentHistory] = useState<string[]>([])
+  const [bibleSearchMode, setBibleSearchMode] = useState<'reference' | 'text'>('reference')
+  const [bibleTextQuery, setBibleTextQuery] = useState<string>('')
+  const [bibleSearchResults, setBibleSearchResults] = useState<BibleSearchResult[]>([])
+  const [bibleTestamentFilter, setBibleTestamentFilter] = useState<'ALL' | 'OT' | 'NT'>('ALL')
+  const [bibleDirectSlides, setBibleDirectSlides] = useState<SlideItem[]>([])
 
   // Active Service & Current Selection
   const [currentService, setCurrentService] = useState<ServicePlan | null>(null)
@@ -89,8 +112,8 @@ export const OperatorApp: React.FC = () => {
   const [stageMessageText, setStageMessageText] = useState<string>('')
   const [isStageMessageActive, setIsStageMessageActive] = useState<boolean>(false)
 
-  // Zone 1 Library State
-  const [libraryTab, setLibraryTab] = useState<'songs' | 'presentations'>('songs')
+  // Zone 1 Library State ('songs' | 'presentations' | 'bible')
+  const [libraryTab, setLibraryTab] = useState<'songs' | 'presentations' | 'bible'>('songs')
   const [searchQuery, setSearchQuery] = useState<string>('')
 
   // Modals
@@ -101,6 +124,18 @@ export const OperatorApp: React.FC = () => {
   const [isThemesModalOpen, setIsThemesModalOpen] = useState<boolean>(false)
   const [isBackgroundsModalOpen, setIsBackgroundsModalOpen] = useState<boolean>(false)
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false)
+  const [isBibleImportModalOpen, setIsBibleImportModalOpen] = useState<boolean>(false)
+  const [isBibleManagerModalOpen, setIsBibleManagerModalOpen] = useState<boolean>(false)
+  const [showFirstLaunchModal, setShowFirstLaunchModal] = useState<boolean>(false)
+
+  // Bible Import Form State
+  const [importFormat, setImportFormat] = useState<'zefania' | 'osis' | 'usfm' | 'json'>('json')
+  const [importName, setImportName] = useState<string>('')
+  const [importAbbrev, setImportAbbrev] = useState<string>('')
+  const [importLang, setImportLang] = useState<string>('es')
+  const [importCopyright, setImportCopyright] = useState<string>('Dominio Público')
+  const [importRawContent, setImportRawContent] = useState<string>('')
+  const [importConsent, setImportConsent] = useState<boolean>(false)
 
   // Editing Song / Presentation State
   const [editingSong, setEditingSong] = useState<Song | null>(null)
@@ -126,7 +161,10 @@ export const OperatorApp: React.FC = () => {
         themeList,
         servList,
         tempList,
-        bgList
+        bgList,
+        bTranslations,
+        bFavs,
+        bRecents
       ] = await Promise.all([
         window.churchPresenterApi.getDisplays(),
         window.churchPresenterApi.getRoleAssignments(),
@@ -138,7 +176,10 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.getThemes(),
         window.churchPresenterApi.getServices(),
         window.churchPresenterApi.getTemplates(),
-        window.churchPresenterApi.getBackgroundImages()
+        window.churchPresenterApi.getBackgroundImages(),
+        window.churchPresenterApi.getBibleTranslations(),
+        window.churchPresenterApi.getBibleFavorites(),
+        window.churchPresenterApi.getBibleRecentHistory()
       ])
 
       setDisplays(disp)
@@ -153,10 +194,18 @@ export const OperatorApp: React.FC = () => {
       setServices(servList)
       setTemplates(tempList)
       setBackgroundImages(bgList)
+      setBibleTranslations(bTranslations)
+      setBibleFavorites(bFavs)
+      setBibleRecentHistory(bRecents)
 
-      // Set active service to first service or seeded Sunday service
       if (servList.length > 0 && !currentService) {
         setCurrentService(servList[0])
+      }
+
+      // Check first launch demo prompt
+      const seen = localStorage.getItem('cp_demo_prompt_seen')
+      if (!seen) {
+        setShowFirstLaunchModal(true)
       }
     } catch (err) {
       console.error('Failed to load initial data:', err)
@@ -211,8 +260,49 @@ export const OperatorApp: React.FC = () => {
     return null
   }, [currentServiceItem, presentations])
 
+  // Load Bible passage into direct Bible slides
+  const loadBiblePassage = useCallback(
+    async (reference: string, sendLiveImmediately: boolean = false) => {
+      try {
+        const secAbbrev = isDualBibleActive ? secondaryBibleAbbrev : undefined
+        const res = await window.churchPresenterApi.getVersesByReference(
+          reference,
+          primaryBibleAbbrev,
+          secAbbrev
+        )
+
+        setCurrentLoadedBibleRef(res.parsed.formattedReference)
+        setBibleRefInput(res.parsed.formattedReference)
+
+        const slides = await window.churchPresenterApi.generateBibleSlides(
+          res.verses,
+          res.secondaryVerses,
+          dualBibleLayout
+        )
+        setBibleDirectSlides(slides)
+
+        // Record recent history
+        await window.churchPresenterApi.addBibleRecentHistory(res.parsed.formattedReference)
+        const updatedRecents = await window.churchPresenterApi.getBibleRecentHistory()
+        setBibleRecentHistory(updatedRecents)
+
+        if (sendLiveImmediately && slides.length > 0) {
+          handleGoLive(slides[0], slides[1])
+        }
+      } catch (err: any) {
+        alert(err.message || 'Error al buscar referencia bíblica')
+      }
+    },
+    [isDualBibleActive, secondaryBibleAbbrev, primaryBibleAbbrev, dualBibleLayout]
+  )
+
   // Generated slides for the currently selected item in Zone 3
   const activeSlides: SlideItem[] = useMemo(() => {
+    // If operator is on Bible tab and has searched/loaded a passage directly, prioritize Bible slides
+    if (libraryTab === 'bible' && bibleDirectSlides.length > 0) {
+      return bibleDirectSlides
+    }
+
     if (!currentServiceItem) return []
 
     if (currentServiceItem.type === 'blank') {
@@ -247,6 +337,25 @@ export const OperatorApp: React.FC = () => {
       ]
     }
 
+    if (currentServiceItem.type === 'scripture' && currentServiceItem.scriptureRef) {
+      if (bibleDirectSlides.length > 0) {
+        return bibleDirectSlides
+      }
+      return [
+        {
+          id: `scr_${currentServiceItem.id}`,
+          sourceId: currentServiceItem.id,
+          sourceType: 'scripture',
+          groupLabel: currentServiceItem.name,
+          slideIndex: 1,
+          totalSlidesInGroup: 1,
+          title: currentServiceItem.name,
+          body: 'Cargando pasaje bíblico...',
+          subtitle: currentServiceItem.name
+        }
+      ]
+    }
+
     if (currentSong) {
       const arrangementId =
         selectedArrangementId ||
@@ -271,7 +380,14 @@ export const OperatorApp: React.FC = () => {
     }
 
     return []
-  }, [currentServiceItem, currentSong, selectedArrangementId, currentPresentation])
+  }, [
+    libraryTab,
+    bibleDirectSlides,
+    currentServiceItem,
+    currentSong,
+    selectedArrangementId,
+    currentPresentation
+  ])
 
   // Clamp preview slide index when activeSlides change
   useEffect(() => {
@@ -279,6 +395,13 @@ export const OperatorApp: React.FC = () => {
       setPreviewSlideIndex(Math.max(0, activeSlides.length - 1))
     }
   }, [activeSlides, previewSlideIndex])
+
+  // When a service item of type 'scripture' is selected in Zone 2, load its verses
+  useEffect(() => {
+    if (currentServiceItem?.type === 'scripture' && currentServiceItem.scriptureRef) {
+      loadBiblePassage(currentServiceItem.scriptureRef, false)
+    }
+  }, [currentServiceItem, loadBiblePassage])
 
   // Project a slide live to main, lobby and stage
   const handleGoLive = useCallback(
@@ -321,6 +444,24 @@ export const OperatorApp: React.FC = () => {
       }
     }
   }, [previewSlideIndex, activeSlides, liveSlideId, handleGoLive])
+
+  // Next chapter for Bible passage (Key C)
+  const handleNextChapter = useCallback(() => {
+    const parsed = parseBibleReference(currentLoadedBibleRef)
+    if (parsed) {
+      const nextChap = parsed.startChapter + 1
+      loadBiblePassage(`${parsed.bookName} ${nextChap}`, Boolean(liveSlideId))
+    }
+  }, [currentLoadedBibleRef, liveSlideId, loadBiblePassage])
+
+  // Prev chapter for Bible passage (Key X)
+  const handlePrevChapter = useCallback(() => {
+    const parsed = parseBibleReference(currentLoadedBibleRef)
+    if (parsed && parsed.startChapter > 1) {
+      const prevChap = parsed.startChapter - 1
+      loadBiblePassage(`${parsed.bookName} ${prevChap}`, Boolean(liveSlideId))
+    }
+  }, [currentLoadedBibleRef, liveSlideId, loadBiblePassage])
 
   // Next playlist item (PageDown or 'N')
   const handleNextPlaylistItem = useCallback(() => {
@@ -387,6 +528,12 @@ export const OperatorApp: React.FC = () => {
       } else if (key === 'PAGEUP' || key === 'P') {
         e.preventDefault()
         handlePrevPlaylistItem()
+      } else if (key === 'C') {
+        e.preventDefault()
+        handleNextChapter()
+      } else if (key === 'X') {
+        e.preventDefault()
+        handlePrevChapter()
       } else if (key === 'ENTER') {
         e.preventDefault()
         sendPreviewToLive()
@@ -398,6 +545,8 @@ export const OperatorApp: React.FC = () => {
       handlePrevSlide,
       handleNextPlaylistItem,
       handlePrevPlaylistItem,
+      handleNextChapter,
+      handlePrevChapter,
       sendPreviewToLive
     ]
   )
@@ -427,6 +576,21 @@ export const OperatorApp: React.FC = () => {
     ])
   }, [presentations, searchQuery])
 
+  // Bible Text Search Runner
+  const handleRunBibleTextSearch = async () => {
+    if (!bibleTextQuery.trim()) return
+    const filter =
+      bibleTestamentFilter === 'ALL'
+        ? undefined
+        : { testament: bibleTestamentFilter }
+    const results = await window.churchPresenterApi.searchBibleText(
+      bibleTextQuery.trim(),
+      primaryBibleAbbrev,
+      filter
+    )
+    setBibleSearchResults(results)
+  }
+
   // Stage Message Handlers
   const handleSendStageMessage = async () => {
     if (!stageMessageText.trim()) return
@@ -449,7 +613,12 @@ export const OperatorApp: React.FC = () => {
   }
 
   // Playlist Actions
-  const handleAddItemToService = (type: 'song' | 'presentation', id: string, name: string) => {
+  const handleAddItemToService = (
+    type: 'song' | 'presentation' | 'scripture',
+    id: string,
+    name: string,
+    scriptureRef?: string
+  ) => {
     if (!currentService) return
 
     const newItem: ServiceItem = {
@@ -457,7 +626,9 @@ export const OperatorApp: React.FC = () => {
       type,
       name,
       songId: type === 'song' ? id : undefined,
-      presentationId: type === 'presentation' ? id : undefined
+      presentationId: type === 'presentation' ? id : undefined,
+      scriptureRef: type === 'scripture' ? scriptureRef || name : undefined,
+      bibleTranslation: type === 'scripture' ? primaryBibleAbbrev : undefined
     }
 
     const updatedService: ServicePlan = {
@@ -639,6 +810,7 @@ export const OperatorApp: React.FC = () => {
     })
   }
 
+  // Presentation Editor Handlers
   const handleOpenPresentationEditor = (pres?: GenericPresentation) => {
     if (pres) {
       setEditingPresentation({ ...pres })
@@ -672,7 +844,7 @@ export const OperatorApp: React.FC = () => {
     setIsPresentationEditorOpen(false)
   }
 
-  // Song Editor: Open & Automatic Parsing with Undo / Redo
+  // Song Editor Handlers with Undo / Redo
   const handleOpenSongEditor = (song?: Song) => {
     if (song) {
       setEditingSong({ ...song })
@@ -686,7 +858,7 @@ export const OperatorApp: React.FC = () => {
         id: `song_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         title: '',
         author: '',
-        copyright: '',
+        copyright: 'Dominio Público',
         language: 'es',
         tags: ['Alabanza'],
         groups: [],
@@ -797,7 +969,6 @@ export const OperatorApp: React.FC = () => {
       return exists ? prev.map((s) => (s.id === saved.id ? saved : s)) : [saved, ...prev]
     })
 
-    // If this song was live, mark dirty so operator can choose to push live
     if (liveSourceId === saved.id) {
       setIsLiveDirty(true)
     }
@@ -805,7 +976,6 @@ export const OperatorApp: React.FC = () => {
     setIsSongEditorOpen(false)
   }
 
-  // Delete Song
   const handleDeleteSong = async (id: string, title: string) => {
     if (!confirm(`¿Eliminar definitivamente la canción "${title}"?`)) return
     await window.churchPresenterApi.deleteSong(id)
@@ -842,6 +1012,39 @@ export const OperatorApp: React.FC = () => {
       }
     }
     reader.readAsText(file)
+  }
+
+  // Bible Import Handler
+  const handleExecuteBibleImport = async () => {
+    if (!importConsent) {
+      alert('Debe aceptar la declaración de licencia y derechos de autor para continuar.')
+      return
+    }
+    if (!importRawContent.trim()) {
+      alert('Por favor pegue o cargue el contenido del archivo de la traducción bíblica.')
+      return
+    }
+
+    try {
+      const res = await window.churchPresenterApi.importBibleTranslation(
+        importFormat,
+        importRawContent,
+        {
+          name: importName.trim() || undefined,
+          abbrev: importAbbrev.trim() || undefined,
+          language: importLang.trim() || 'es',
+          copyright: importCopyright.trim() || 'Dominio Público',
+          isPublicDomain: true
+        }
+      )
+
+      alert(`¡Traducción bíblica "${res.name}" (${res.abbrev}) importada exitosamente con ${res.verseCount} versículos!`)
+      setIsBibleImportModalOpen(false)
+      const updated = await window.churchPresenterApi.getBibleTranslations()
+      setBibleTranslations(updated)
+    } catch (err: any) {
+      alert(`Error al importar traducción bíblica: ${err.message}`)
+    }
   }
 
   // Theme preview in Song Editor
@@ -971,7 +1174,7 @@ export const OperatorApp: React.FC = () => {
           <button
             className="topbar-tool-btn"
             onClick={() => setIsSettingsOpen(true)}
-            title="Atajos y Copias de Seguridad"
+            title="Atajos, Datos de Demo y Respaldo"
           >
             <Settings size={16} />
           </button>
@@ -984,7 +1187,7 @@ export const OperatorApp: React.FC = () => {
           ========================================================= */}
       <main className="operator-main-zones">
         {/* =======================================================
-            ZONE 1: BIBLIOTECA (Library with fast search)
+            ZONE 1: BIBLIOTECA (Canciones, Presentaciones y Biblia)
             ======================================================= */}
         <section className="operator-zone zone-library">
           <div className="zone-header">
@@ -1000,136 +1203,414 @@ export const OperatorApp: React.FC = () => {
                 className={`tab-btn ${libraryTab === 'presentations' ? 'active' : ''}`}
                 onClick={() => setLibraryTab('presentations')}
               >
-                Presentaciones ({presentations.length})
+                Avisos ({presentations.length})
+              </button>
+              <button
+                className={`tab-btn ${libraryTab === 'bible' ? 'active' : ''}`}
+                onClick={() => setLibraryTab('bible')}
+              >
+                Biblia
               </button>
             </div>
           </div>
 
-          {/* Real-time search input */}
-          <div className="search-box">
-            <Search size={15} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Buscar título, letra, etiqueta o autor..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-            {searchQuery && (
-              <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
-                <X size={14} />
-              </button>
-            )}
-          </div>
+          {/* TAB 1 & 2: Songs and Presentations */}
+          {libraryTab !== 'bible' ? (
+            <>
+              {/* Real-time search input */}
+              <div className="search-box">
+                <Search size={15} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Buscar título, letra, etiqueta o autor..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input"
+                />
+                {searchQuery && (
+                  <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
 
-          {/* Library Items List */}
-          <div className="zone-content-list">
-            {libraryTab === 'songs' ? (
-              filteredSongs.length > 0 ? (
-                filteredSongs.map((song) => (
-                  <div key={song.id} className="library-item-card">
-                    <div className="item-info">
-                      <div className="item-title-row">
-                        <Music size={14} className="item-icon song-icon" />
-                        <span className="item-title">{song.title}</span>
+              {/* Library Items List */}
+              <div className="zone-content-list">
+                {libraryTab === 'songs' ? (
+                  filteredSongs.length > 0 ? (
+                    filteredSongs.map((song) => (
+                      <div key={song.id} className="library-item-card">
+                        <div className="item-info">
+                          <div className="item-title-row">
+                            <Music size={14} className="item-icon song-icon" />
+                            <span className="item-title">{song.title}</span>
+                            {song.isDemo && <span className="demo-badge">DEMO</span>}
+                          </div>
+                          <div className="item-meta">
+                            {song.author || 'Autor desconocido'} • {song.groups.length} partes
+                          </div>
+                        </div>
+                        <div className="item-actions">
+                          <button
+                            className="item-action-btn add-btn"
+                            onClick={() => handleAddItemToService('song', song.id, song.title)}
+                            title="Añadir a la lista de servicio"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            className="item-action-btn edit-btn"
+                            onClick={() => handleOpenSongEditor(song)}
+                            title="Editar canción"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            className="item-action-btn delete-btn"
+                            onClick={() => handleDeleteSong(song.id, song.title)}
+                            title="Eliminar canción"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="item-meta">
-                        {song.author || 'Autor desconocido'} • {song.groups.length} partes
+                    ))
+                  ) : (
+                    <div className="empty-list-notice">
+                      No se encontraron canciones. Puede cargar himnos de demostración desde Configuración.
+                    </div>
+                  )
+                ) : filteredPresentations.length > 0 ? (
+                  filteredPresentations.map((pres) => (
+                    <div key={pres.id} className="library-item-card">
+                      <div className="item-info">
+                        <div className="item-title-row">
+                          <FileText size={14} className="item-icon pres-icon" />
+                          <span className="item-title">{pres.title}</span>
+                          {pres.isDemo && <span className="demo-badge">DEMO</span>}
+                        </div>
+                        <div className="item-meta">{pres.slides.length} diapositivas</div>
+                      </div>
+                      <div className="item-actions">
+                        <button
+                          className="item-action-btn add-btn"
+                          onClick={() => handleAddItemToService('presentation', pres.id, pres.title)}
+                          title="Añadir a la lista de servicio"
+                        >
+                          <Plus size={14} />
+                        </button>
                       </div>
                     </div>
-                    <div className="item-actions">
-                      <button
-                        className="item-action-btn add-btn"
-                        onClick={() => handleAddItemToService('song', song.id, song.title)}
-                        title="Añadir a la lista de servicio"
+                  ))
+                ) : (
+                  <div className="empty-list-notice">No se encontraron presentaciones.</div>
+                )}
+              </div>
+
+              {/* Zone 1 Footer Actions */}
+              <div className="zone-footer-actions">
+                {libraryTab === 'songs' ? (
+                  <button className="primary-action-btn" onClick={() => handleOpenSongEditor()}>
+                    <Plus size={14} />
+                    <span>Nueva Canción</span>
+                  </button>
+                ) : (
+                  <button
+                    className="primary-action-btn"
+                    onClick={() => handleOpenPresentationEditor()}
+                  >
+                    <Plus size={14} />
+                    <span>Nueva Presentación</span>
+                  </button>
+                )}
+
+                <div className="secondary-actions-row">
+                  <label className="secondary-action-btn file-upload-label" title="Importar Biblioteca JSON">
+                    <Upload size={13} />
+                    <span>Importar</span>
+                    <input
+                      type="file"
+                      accept=".json,.txt"
+                      style={{ display: 'none' }}
+                      onChange={handleImportLibrary}
+                    />
+                  </label>
+
+                  <button
+                    className="secondary-action-btn"
+                    onClick={handleExportLibrary}
+                    title="Exportar toda la biblioteca a archivo JSON"
+                  >
+                    <Download size={13} />
+                    <span>Exportar</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* TAB 3: BIBLE CONTROLS & BROWSER */
+            <div className="bible-tab-container">
+              {/* Translation Selection Bar */}
+              <div className="bible-translations-bar">
+                <div className="bible-translation-select-group">
+                  <label>Traducción:</label>
+                  <select
+                    className="bible-select"
+                    value={primaryBibleAbbrev}
+                    onChange={(e) => setPrimaryBibleAbbrev(e.target.value)}
+                  >
+                    {bibleTranslations.map((t) => (
+                      <option key={t.id} value={t.abbrev}>
+                        {t.name} ({t.abbrev})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Dual translation toggle */}
+                <div className="dual-translation-toggle-row">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={isDualBibleActive}
+                      onChange={(e) => setIsDualBibleActive(e.target.checked)}
+                    />
+                    <span>Doble Traducción</span>
+                  </label>
+
+                  {isDualBibleActive && (
+                    <>
+                      <select
+                        className="bible-select mini"
+                        value={secondaryBibleAbbrev}
+                        onChange={(e) => setSecondaryBibleAbbrev(e.target.value)}
                       >
-                        <Plus size={14} />
-                      </button>
-                      <button
-                        className="item-action-btn edit-btn"
-                        onClick={() => handleOpenSongEditor(song)}
-                        title="Editar canción"
+                        {bibleTranslations.map((t) => (
+                          <option key={t.id} value={t.abbrev}>
+                            {t.abbrev}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        className="bible-select mini"
+                        value={dualBibleLayout}
+                        onChange={(e) => setDualBibleLayout(e.target.value as any)}
+                        title="Disposición de doble traducción"
                       >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        className="item-action-btn delete-btn"
-                        onClick={() => handleDeleteSong(song.id, song.title)}
-                        title="Eliminar canción"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-list-notice">No se encontraron canciones.</div>
-              )
-            ) : filteredPresentations.length > 0 ? (
-              filteredPresentations.map((pres) => (
-                <div key={pres.id} className="library-item-card">
-                  <div className="item-info">
-                    <div className="item-title-row">
-                      <FileText size={14} className="item-icon pres-icon" />
-                      <span className="item-title">{pres.title}</span>
-                    </div>
-                    <div className="item-meta">{pres.slides.length} diapositivas</div>
-                  </div>
-                  <div className="item-actions">
+                        <option value="stacked">Apilado</option>
+                        <option value="sideBySide">Lado a Lado</option>
+                      </select>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Mode Switch: Go to Reference vs Text Search */}
+              <div className="bible-mode-switch">
+                <button
+                  className={`bible-mode-btn ${bibleSearchMode === 'reference' ? 'active' : ''}`}
+                  onClick={() => setBibleSearchMode('reference')}
+                >
+                  <BookOpen size={13} />
+                  <span>Ir a Referencia</span>
+                </button>
+                <button
+                  className={`bible-mode-btn ${bibleSearchMode === 'text' ? 'active' : ''}`}
+                  onClick={() => setBibleSearchMode('text')}
+                >
+                  <Search size={13} />
+                  <span>Buscar Palabras</span>
+                </button>
+              </div>
+
+              {/* REFERENCE MODE */}
+              {bibleSearchMode === 'reference' ? (
+                <div className="bible-reference-mode-box">
+                  <div className="bible-go-to-bar">
+                    <input
+                      type="text"
+                      className="bible-reference-input"
+                      placeholder="ej. Juan 3:16, 1 Co 13:4-7, Salmos 23..."
+                      value={bibleRefInput}
+                      onChange={(e) => setBibleRefInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          loadBiblePassage(bibleRefInput, false)
+                        }
+                      }}
+                    />
                     <button
-                      className="item-action-btn add-btn"
-                      onClick={() => handleAddItemToService('presentation', pres.id, pres.title)}
-                      title="Añadir a la lista de servicio"
+                      className="bible-go-btn"
+                      onClick={() => loadBiblePassage(bibleRefInput, false)}
+                      title="Mostrar en Vista Previa (Enter)"
                     >
-                      <Plus size={14} />
+                      <Play size={13} fill="currentColor" />
+                      <span>Ir</span>
                     </button>
                   </div>
+
+                  {/* Actions for current loaded passage */}
+                  <div className="bible-passage-actions-row">
+                    <button
+                      className="secondary-action-btn mini-btn"
+                      onClick={() => {
+                        window.churchPresenterApi.toggleBibleFavorite(currentLoadedBibleRef).then(setBibleFavorites)
+                      }}
+                      title="Marcar / desmarcar como favorito"
+                    >
+                      <Star
+                        size={12}
+                        fill={bibleFavorites.includes(currentLoadedBibleRef) ? '#fbbf24' : 'none'}
+                        color={bibleFavorites.includes(currentLoadedBibleRef) ? '#fbbf24' : '#94a3b8'}
+                      />
+                      <span>Favorito</span>
+                    </button>
+
+                    <button
+                      className="primary-action-btn mini-btn"
+                      onClick={() =>
+                        handleAddItemToService('scripture', `scr_${Date.now()}`, currentLoadedBibleRef, currentLoadedBibleRef)
+                      }
+                      title="Añadir pasaje a la lista del servicio"
+                    >
+                      <Plus size={12} />
+                      <span>Al Servicio</span>
+                    </button>
+                  </div>
+
+                  {/* Favorites Quick Chips */}
+                  {bibleFavorites.length > 0 && (
+                    <div className="quick-references-section">
+                      <div className="section-subtitle">
+                        <Star size={11} color="#fbbf24" fill="#fbbf24" />
+                        <span>Favoritos</span>
+                      </div>
+                      <div className="chips-cloud">
+                        {bibleFavorites.map((fav) => (
+                          <button
+                            key={fav}
+                            className="ref-chip"
+                            onClick={() => loadBiblePassage(fav, false)}
+                          >
+                            {fav}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent History Quick Chips */}
+                  {bibleRecentHistory.length > 0 && (
+                    <div className="quick-references-section">
+                      <div className="section-subtitle">
+                        <History size={11} />
+                        <span>Recientes</span>
+                      </div>
+                      <div className="chips-cloud">
+                        {bibleRecentHistory.slice(0, 8).map((rec) => (
+                          <button
+                            key={rec}
+                            className="ref-chip recent"
+                            onClick={() => loadBiblePassage(rec, false)}
+                          >
+                            {rec}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))
-            ) : (
-              <div className="empty-list-notice">No se encontraron presentaciones.</div>
-            )}
-          </div>
+              ) : (
+                /* TEXT SEARCH MODE */
+                <div className="bible-text-search-box">
+                  <div className="search-box">
+                    <Search size={14} className="search-icon" />
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Buscar palabras (ej. amor mundo)..."
+                      value={bibleTextQuery}
+                      onChange={(e) => setBibleTextQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRunBibleTextSearch()}
+                    />
+                    <button className="bible-go-btn" onClick={handleRunBibleTextSearch}>
+                      Buscar
+                    </button>
+                  </div>
 
-          {/* Zone 1 Footer Actions */}
-          <div className="zone-footer-actions">
-            {libraryTab === 'songs' ? (
-              <button className="primary-action-btn" onClick={() => handleOpenSongEditor()}>
-                <Plus size={14} />
-                <span>Nueva Canción</span>
-              </button>
-            ) : (
-              <button
-                className="primary-action-btn"
-                onClick={() => handleOpenPresentationEditor()}
-              >
-                <Plus size={14} />
-                <span>Nueva Presentación</span>
-              </button>
-            )}
+                  {/* Filters by Testament */}
+                  <div className="bible-filters-row">
+                    <button
+                      className={`filter-pill ${bibleTestamentFilter === 'ALL' ? 'active' : ''}`}
+                      onClick={() => setBibleTestamentFilter('ALL')}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      className={`filter-pill ${bibleTestamentFilter === 'OT' ? 'active' : ''}`}
+                      onClick={() => setBibleTestamentFilter('OT')}
+                    >
+                      Antiguo Testamento
+                    </button>
+                    <button
+                      className={`filter-pill ${bibleTestamentFilter === 'NT' ? 'active' : ''}`}
+                      onClick={() => setBibleTestamentFilter('NT')}
+                    >
+                      Nuevo Testamento
+                    </button>
+                  </div>
 
-            <div className="secondary-actions-row">
-              <label className="secondary-action-btn file-upload-label" title="Importar Biblioteca JSON">
-                <Upload size={13} />
-                <span>Importar</span>
-                <input
-                  type="file"
-                  accept=".json,.txt"
-                  style={{ display: 'none' }}
-                  onChange={handleImportLibrary}
-                />
-              </label>
+                  {/* Search Results List */}
+                  <div className="bible-search-results-list">
+                    {bibleSearchResults.length > 0 ? (
+                      bibleSearchResults.map((res, rIdx) => (
+                        <div
+                          key={rIdx}
+                          className="bible-search-card"
+                          onClick={() => {
+                            loadBiblePassage(res.formattedReference, false)
+                          }}
+                        >
+                          <div className="bible-card-ref">{res.formattedReference}</div>
+                          <div
+                            className="bible-card-text"
+                            dangerouslySetInnerHTML={{ __html: res.highlightedText }}
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-list-notice">
+                        {bibleTextQuery ? 'Sin resultados para la búsqueda.' : 'Escriba palabras para buscar en toda la Biblia.'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-              <button
-                className="secondary-action-btn"
-                onClick={handleExportLibrary}
-                title="Exportar toda la biblioteca a archivo JSON"
-              >
-                <Download size={13} />
-                <span>Exportar</span>
-              </button>
+              {/* Bible Zone Footer Tools */}
+              <div className="zone-footer-actions">
+                <div className="secondary-actions-row">
+                  <button
+                    className="secondary-action-btn"
+                    onClick={() => setIsBibleImportModalOpen(true)}
+                    title="Importar traducción (Zefania, OSIS, USFM, JSON)"
+                  >
+                    <Upload size={13} />
+                    <span>Importar Versión</span>
+                  </button>
+                  <button
+                    className="secondary-action-btn"
+                    onClick={() => setIsBibleManagerModalOpen(true)}
+                    title="Ver traducciones instaladas"
+                  >
+                    <Book size={13} />
+                    <span>Versiones ({bibleTranslations.length})</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* =======================================================
@@ -1230,7 +1711,7 @@ export const OperatorApp: React.FC = () => {
                 return (
                   <div
                     key={item.id}
-                    className={`playlist-item-card ${isSelected ? 'selected' : ''} ${item.type === 'header' ? 'item-header-type' : ''}`}
+                    className={`playlist-item-card ${isSelected ? 'selected' : ''} ${item.type === 'header' ? 'item-header-type' : ''} ${item.type === 'scripture' ? 'item-scripture-type' : ''}`}
                     onClick={() => {
                       setSelectedServiceItemIndex(index)
                       setPreviewSlideIndex(0)
@@ -1244,6 +1725,8 @@ export const OperatorApp: React.FC = () => {
                           <Music size={13} className="song-icon" />
                         ) : item.type === 'presentation' ? (
                           <FileText size={13} className="pres-icon" />
+                        ) : item.type === 'scripture' ? (
+                          <BookOpen size={13} className="scripture-icon" />
                         ) : item.type === 'header' ? (
                           <Layers size={13} className="header-icon" />
                         ) : (
@@ -1301,7 +1784,7 @@ export const OperatorApp: React.FC = () => {
               })
             ) : (
               <div className="empty-list-notice">
-                La lista de servicio está vacía. Añade canciones o presentaciones desde la Biblioteca.
+                La lista de servicio está vacía. Añada canciones, pasajes bíblicos o avisos.
               </div>
             )}
           </div>
@@ -1316,7 +1799,9 @@ export const OperatorApp: React.FC = () => {
             <div className="active-item-title-box">
               <div className="zone-title">DIAPOSITIVAS</div>
               <div className="active-item-name">
-                {currentServiceItem?.name || 'Ningún elemento seleccionado'}
+                {libraryTab === 'bible' && bibleDirectSlides.length > 0
+                  ? currentLoadedBibleRef
+                  : currentServiceItem?.name || 'Ningún elemento seleccionado'}
               </div>
             </div>
 
@@ -1411,12 +1896,232 @@ export const OperatorApp: React.FC = () => {
               })
             ) : (
               <div className="empty-grid-notice">
-                Seleccione un elemento del servicio para visualizar y proyectar sus diapositivas.
+                Seleccione un elemento del servicio o busque un pasaje bíblico para proyectar.
               </div>
             )}
           </div>
         </section>
       </main>
+
+      {/* =========================================================
+          FIRST-TIME LAUNCH DEMO PROMPT MODAL
+          ========================================================= */}
+      {showFirstLaunchModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content first-launch-modal" style={{ maxWidth: 520, padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12, color: '#38bdf8' }}>
+              ¡Bienvenido a ChurchPresenter!
+            </div>
+            <p style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, marginBottom: 20 }}>
+              ¿Desea cargar los datos de demostración con himnos clásicos de dominio público (Martín Lutero, John Newton, Isaac Watts, etc.) para explorar la aplicación? Puede borrarlos en cualquier momento desde Configuración.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                className="secondary-action-btn"
+                style={{ padding: '8px 16px' }}
+                onClick={() => {
+                  localStorage.setItem('cp_demo_prompt_seen', '1')
+                  setShowFirstLaunchModal(false)
+                }}
+              >
+                Comenzar en Blanco
+              </button>
+              <button
+                className="primary-action-btn"
+                style={{ padding: '8px 16px' }}
+                onClick={async () => {
+                  localStorage.setItem('cp_demo_prompt_seen', '1')
+                  await window.churchPresenterApi.loadDemoData()
+                  await loadAllData()
+                  setShowFirstLaunchModal(false)
+                }}
+              >
+                Cargar Datos de Demostración
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          BIBLE IMPORT MODAL
+          ========================================================= */}
+      {isBibleImportModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content bible-import-modal">
+            <div className="modal-header">
+              <div className="modal-title">Importar Traducción de la Biblia</div>
+              <button className="modal-close-btn" onClick={() => setIsBibleImportModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="license-warning-notice">
+                <AlertCircle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+                <div>
+                  <strong>Aviso de Propiedad Intelectual y Licencia:</strong>
+                  <p>
+                    ChurchPresenter respeta los derechos de autor. Solo importe traducciones que pertenezcan al <strong>Dominio Público</strong> o respecto de las cuales su congregación posea la licencia por escrito otorgada por los titulares o sociedades bíblicas. No incluya traducciones protegidas sin autorización.
+                  </p>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group flex-1">
+                  <label>Formato de Archivo:</label>
+                  <select
+                    value={importFormat}
+                    onChange={(e) => setImportFormat(e.target.value as any)}
+                  >
+                    <option value="json">JSON Estructurado ChurchPresenter</option>
+                    <option value="zefania">Zefania XML (.xml)</option>
+                    <option value="osis">OSIS XML (.osis / .xml)</option>
+                    <option value="usfm">USFM (.usfm / .txt)</option>
+                  </select>
+                </div>
+
+                <div className="form-group flex-2">
+                  <label>Nombre de la Traducción *</label>
+                  <input
+                    type="text"
+                    placeholder="ej. Reina-Valera 1909"
+                    value={importName}
+                    onChange={(e) => setImportName(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group flex-1">
+                  <label>Abreviatura *</label>
+                  <input
+                    type="text"
+                    placeholder="ej. RVR1909"
+                    value={importAbbrev}
+                    onChange={(e) => setImportAbbrev(e.target.value.toUpperCase())}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Idioma (ISO):</label>
+                  <input
+                    type="text"
+                    value={importLang}
+                    onChange={(e) => setImportLang(e.target.value)}
+                  />
+                </div>
+                <div className="form-group flex-2">
+                  <label>Texto de Derechos de Autor:</label>
+                  <input
+                    type="text"
+                    placeholder="ej. Dominio Público"
+                    value={importCopyright}
+                    onChange={(e) => setImportCopyright(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label>Pegar o cargar contenido del archivo:</label>
+                <textarea
+                  className="raw-lyrics-textarea"
+                  rows={8}
+                  placeholder="Pegue aquí el texto JSON, Zefania XML, OSIS XML o USFM..."
+                  value={importRawContent}
+                  onChange={(e) => setImportRawContent(e.target.value)}
+                />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <label className="checkbox-label" style={{ fontSize: 12, color: '#f8fafc' }}>
+                  <input
+                    type="checkbox"
+                    checked={importConsent}
+                    onChange={(e) => setImportConsent(e.target.checked)}
+                  />
+                  <span>
+                    Confirmo que esta traducción bíblica es de dominio público o cuenta con la licencia correspondiente.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="secondary-action-btn"
+                onClick={() => setIsBibleImportModalOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button className="primary-action-btn" onClick={handleExecuteBibleImport}>
+                Procesar e Importar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          BIBLE MANAGER MODAL (List installed versions)
+          ========================================================= */}
+      {isBibleManagerModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content bible-manager-modal" style={{ width: 620 }}>
+            <div className="modal-header">
+              <div className="modal-title">Traducciones Bíblicas Instaladas</div>
+              <button className="modal-close-btn" onClick={() => setIsBibleManagerModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="section-note">
+                Cada traducción se almacena en su propio archivo SQLite independiente dentro de la carpeta de datos de la aplicación y se consulta bajo demanda.
+              </p>
+
+              <div className="translations-list">
+                {bibleTranslations.map((bt) => (
+                  <div key={bt.id} className="translation-item-card">
+                    <div>
+                      <div className="translation-name-row">
+                        <strong>{bt.name}</strong>
+                        <span className="trans-pill">{bt.abbrev}</span>
+                        {bt.isDefault && <span className="default-pill">POR DEFECTO</span>}
+                      </div>
+                      <div className="trans-meta">
+                        {bt.verseCount.toLocaleString()} versículos • {bt.language.toUpperCase()} • {bt.copyright}
+                      </div>
+                    </div>
+
+                    {!bt.isDefault && (
+                      <button
+                        className="control-btn delete-btn"
+                        onClick={async () => {
+                          if (confirm(`¿Eliminar la traducción ${bt.name}?`)) {
+                            await window.churchPresenterApi.deleteBibleTranslation(bt.id)
+                            const updated = await window.churchPresenterApi.getBibleTranslations()
+                            setBibleTranslations(updated)
+                          }
+                        }}
+                        title="Eliminar traducción"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="primary-action-btn" onClick={() => setIsBibleManagerModalOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================
           SONG EDITOR MODAL (Automatic section detection, Undo/Redo)
@@ -1443,7 +2148,7 @@ export const OperatorApp: React.FC = () => {
                       type="text"
                       value={editingSong.title}
                       onChange={(e) => setEditingSong({ ...editingSong, title: e.target.value })}
-                      placeholder="ej. Cuán Grande es Él"
+                      placeholder="ej. Castillo Fuerte Es Nuestro Dios"
                     />
                   </div>
                   <div className="form-group flex-1">
@@ -1452,7 +2157,7 @@ export const OperatorApp: React.FC = () => {
                       type="text"
                       value={editingSong.author}
                       onChange={(e) => setEditingSong({ ...editingSong, author: e.target.value })}
-                      placeholder="ej. Stuart K. Hine"
+                      placeholder="ej. Martín Lutero"
                     />
                   </div>
                 </div>
@@ -1464,7 +2169,7 @@ export const OperatorApp: React.FC = () => {
                       type="text"
                       value={editingSong.copyright}
                       onChange={(e) => setEditingSong({ ...editingSong, copyright: e.target.value })}
-                      placeholder="ej. © 1953 S.K. Hine"
+                      placeholder="ej. Dominio Público"
                     />
                   </div>
                   <div className="form-group">
@@ -1498,7 +2203,7 @@ export const OperatorApp: React.FC = () => {
                     rows={12}
                     value={editingSongLyricsRaw}
                     onChange={(e) => setEditingSongLyricsRaw(e.target.value)}
-                    placeholder={`[Verso 1]\nSeñor, mi Dios, al contemplar los cielos,\nel firmamento y las estrellas mil...\n\n[Coro]\n¡Cuán grande es Él! ¡Cuán grande es Él!\nCanta mi ser, mi Salvador, a Ti...`}
+                    placeholder={`[Verso 1]\nCastillo fuerte es nuestro Dios,\ndefensa y buen escudo...\n\n[Coro]\nLuchar no podemos por nuestra fuerza,\nmas por nosotros pelea el Rey...`}
                   />
                 </div>
               </div>
@@ -1883,6 +2588,39 @@ export const OperatorApp: React.FC = () => {
             </div>
 
             <div className="modal-body">
+              {/* Demo Data Management */}
+              <div className="settings-section">
+                <h3>Datos de Demostración</h3>
+                <p className="section-note">
+                  Cargue o elimine los himnos y cultos de demostración de dominio público (Martín Lutero, John Newton, Isaac Watts, etc.) sin afectar los datos reales de su iglesia.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="secondary-action-btn"
+                    onClick={async () => {
+                      const res = await window.churchPresenterApi.loadDemoData()
+                      alert(`Se cargaron ${res.songsCount} canciones de demostración de dominio público y 1 plantilla.`)
+                      loadAllData()
+                    }}
+                  >
+                    <span>Cargar datos de demostración</span>
+                  </button>
+                  <button
+                    className="secondary-action-btn"
+                    style={{ borderColor: '#ef4444', color: '#f87171' }}
+                    onClick={async () => {
+                      if (confirm('¿Desea borrar todos los datos de demostración? Los datos reales no serán afectados.')) {
+                        const res = await window.churchPresenterApi.clearDemoData()
+                        alert(`Se eliminaron ${res.deletedSongs} canciones de demostración.`)
+                        loadAllData()
+                      }
+                    }}
+                  >
+                    <span>Borrar datos de demostración</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="settings-section">
                 <h3>Atajos de Teclado Rápidos (Solo Foco de Ventana)</h3>
                 <p className="section-note">

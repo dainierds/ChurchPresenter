@@ -132,6 +132,36 @@ const MIGRATIONS: Migration[] = [
         );
       `)
     }
+  },
+  {
+    version: 4,
+    name: 'demo_data_and_bible_support',
+    up: (db: Database) => {
+      // Safe addition of is_demo to content tables
+      const addColumnSafe = (table: string, columnDef: string) => {
+        try {
+          db.run(`ALTER TABLE ${table} ADD COLUMN ${columnDef};`)
+        } catch {
+          // Column may already exist
+        }
+      }
+      addColumnSafe('songs', 'is_demo INTEGER DEFAULT 0')
+      addColumnSafe('generic_presentations', 'is_demo INTEGER DEFAULT 0')
+      addColumnSafe('services', 'is_demo INTEGER DEFAULT 0')
+
+      // Phase 4: Bible favorites & recent history in main DB (verses stay in separate .bible SQLite files)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS bible_favorites (
+          reference TEXT PRIMARY KEY,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS bible_recent_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          reference TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+    }
   }
 ]
 
