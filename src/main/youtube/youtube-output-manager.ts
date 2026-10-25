@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContentsView } from 'electron'
-import { YouTubeItemConfig } from '../../shared/types'
+import { YouTubeItemConfig, YouTubeSyncTick } from '../../shared/types'
 import { youtubeService, YouTubeService } from './youtube-service'
 import { buildYouTubeEmbedUrl, calculatePlaybackDrift } from '../../shared/youtube-utils'
 import { logger } from '../logger'
@@ -195,6 +195,34 @@ export class YouTubeOutputManager {
     }
     this.isLive = false
     this.stopSyncLoop()
+  }
+
+  public syncToTick(tick: YouTubeSyncTick): void {
+    if (!this.outputViews.size) return
+    this.currentTime = tick.currentTime
+    this.duration = tick.duration
+    this.isPlaying = tick.isPlaying
+
+    for (const view of this.outputViews.values()) {
+      if (view.webContents.isDestroyed()) continue
+      if (tick.isBrowserSource) {
+        view.webContents.setAudioMuted(true)
+      }
+      view.webContents.executeJavaScript(`
+        (function() {
+          const v = document.querySelector('video');
+          if (!v) return;
+          if (${tick.isPlaying} && v.paused) {
+            v.play().catch(() => {});
+          } else if (!${tick.isPlaying} && !v.paused) {
+            v.pause();
+          }
+          if (Math.abs(v.currentTime - ${tick.currentTime}) > 0.6) {
+            v.currentTime = ${tick.currentTime};
+          }
+        })();
+      `).catch(() => {})
+    }
   }
 
   public seek(seconds: number): void {

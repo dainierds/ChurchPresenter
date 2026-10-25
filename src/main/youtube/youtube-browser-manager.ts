@@ -1,12 +1,23 @@
 import { BrowserWindow, WebContentsView, shell } from 'electron'
 import { youtubeService, YouTubeService } from './youtube-service'
 import { parseYouTubeUrl } from '../../shared/youtube-utils'
+import { YouTubeSyncTick } from '../../shared/types'
 import { logger } from '../logger'
 
 export class YouTubeBrowserManager {
   private view: WebContentsView | null = null
   private parentWindow: BrowserWindow | null = null
   private currentUrl = 'https://www.youtube.com'
+  private syncInterval: NodeJS.Timeout | null = null
+  private syncCallback: ((tick: YouTubeSyncTick) => void) | null = null
+
+  public setSyncCallback(cb: (tick: YouTubeSyncTick) => void): void {
+    this.syncCallback = cb
+  }
+
+  public isAttached(): boolean {
+    return Boolean(this.view && !this.view.webContents.isDestroyed())
+  }
 
   public attachToWindow(
     win: BrowserWindow,
@@ -65,6 +76,7 @@ export class YouTubeBrowserManager {
 
     this.setBounds(bounds)
     this.view.setVisible(true)
+    this.startSyncLoop()
   }
 
   public setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
@@ -76,16 +88,19 @@ export class YouTubeBrowserManager {
   public hide(): void {
     if (this.view) {
       this.view.setVisible(false)
+      this.stopSyncLoop()
     }
   }
 
   public show(): void {
     if (this.view) {
       this.view.setVisible(true)
+      this.startSyncLoop()
     }
   }
 
   public close(): void {
+    this.stopSyncLoop()
     if (this.view && this.parentWindow && !this.parentWindow.isDestroyed()) {
       try {
         this.parentWindow.contentView.removeChildView(this.view)
@@ -95,6 +110,51 @@ export class YouTubeBrowserManager {
     }
     this.view = null
     this.parentWindow = null
+  }
+
+  private startSyncLoop(): void {
+    if (this.syncInterval) return
+    this.syncInterval = setInterval(async () => {
+      if (!this.view || this.view.webContents.isDestroyed()) return
+      try {
+        const data = await this.view.webContents.executeJavaScript(`
+          (function() {
+            const v = document.querySelector('video');
+            if (!v) return null;
+            return {
+              paused: v.paused,
+              currentTime: v.currentTime,
+              duration: v.duration || 0,
+              ended: v.ended
+            };
+          })()
+        `)
+        if (data && this.syncCallback) {
+          const url = this.view.webContents.getURL()
+          const parsed = parseYouTubeUrl(url)
+          if (parsed.isValid && parsed.videoId) {
+            this.syncCallback({
+              videoId: parsed.videoId,
+              url,
+              currentTime: data.currentTime,
+              duration: data.duration,
+              isPlaying: !data.paused && !data.ended,
+              isBrowserSource: true,
+              timestamp: Date.now()
+            })
+          }
+        }
+      } catch {
+        // Ignore evaluation errors during page navigation
+      }
+    }, 250)
+  }
+
+  private stopSyncLoop(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval)
+      this.syncInterval = null
+    }
   }
 
   public navigate(action: 'back' | 'forward' | 'home' | 'reload' | 'go', url?: string): void {

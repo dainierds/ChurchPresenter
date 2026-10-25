@@ -4,7 +4,8 @@ import {
   DEFAULT_THEME,
   ThemeConfig,
   LayerBackground,
-  PresentationTimer
+  PresentationTimer,
+  YouTubeSyncTick
 } from '../../shared/types'
 import { computeLayerVisibility } from '../../shared/state-utils'
 import { parseYouTubeUrl } from '../../shared/youtube-utils'
@@ -52,6 +53,41 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   const [hasMediaError, setHasMediaError] = useState<boolean>(false)
   const isFrozenRef = useRef<boolean>(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  // YouTube Mirror Sync State & Control
+  const [liveYtSync, setLiveYtSync] = useState<YouTubeSyncTick | null>(null)
+  const ytIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const lastSyncTimeRef = useRef<number>(0)
+  const lastPlayStateRef = useRef<boolean | null>(null)
+
+  useEffect(() => {
+    const unsub = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
+      setLiveYtSync(tick)
+
+      const iframe = ytIframeRef.current
+      if (!iframe || !iframe.contentWindow) return
+
+      // Mirror Play / Pause
+      if (lastPlayStateRef.current !== tick.isPlaying) {
+        lastPlayStateRef.current = tick.isPlaying
+        if (tick.isPlaying) {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
+        } else {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
+        }
+      }
+
+      // Mirror Seek if difference is > 0.6s
+      if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.6) {
+        lastSyncTimeRef.current = tick.currentTime
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+          '*'
+        )
+      }
+    })
+    return () => unsub?.()
+  }, [])
 
   // Master Clock Video Sync effect
   useEffect(() => {
@@ -480,8 +516,8 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
         ) : (
           /* STANDARD AUDIENCE VIEW (Main / Lobby) */
           <>
-            {visibility.showContent && content && (
-              content.mediaType === 'video' && content.mediaUrl && !hasMediaError ? (
+            {visibility.showContent && (content || liveYtSync?.videoId) && (
+              content?.mediaType === 'video' && content?.mediaUrl && !hasMediaError ? (
                 <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', overflow: 'hidden' }}>
                   <video
                     ref={videoRef}
@@ -504,19 +540,31 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     }}
                   />
                 </div>
-              ) : content.mediaType === 'youtube' ? (
-                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', position: 'relative' }}>
+              ) : (content?.mediaType === 'youtube' || Boolean(liveYtSync?.videoId)) ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    zIndex: 20,
+                    backgroundColor: '#000000',
+                    overflow: 'hidden'
+                  }}
+                >
                   {(() => {
                     const ytId =
-                      content.youtubeId ||
-                      (content.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
+                      liveYtSync?.videoId ||
+                      content?.youtubeId ||
+                      (content?.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
                     if (!ytId) return null
-                    const shouldPlayAudio = role === (displayState?.mediaSyncTick?.audioOutputRole || 'main')
+                    const isMuted = liveYtSync?.isBrowserSource || role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')
                     return (
                       <iframe
+                        ref={ytIframeRef}
                         key={ytId}
-                        src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=${
-                          shouldPlayAudio ? '0' : '1'
+                        src={`https://www.youtube-nocookie.com/embed/${ytId}?enablejsapi=1&autoplay=1&mute=${
+                          isMuted ? '1' : '0'
                         }&controls=0&playsinline=1`}
                         title="YouTube Output"
                         allow="autoplay; encrypted-media"
@@ -532,13 +580,13 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     )
                   })()}
                 </div>
-              ) : content.mediaType === 'pdf' && content.mediaUrl ? (
+              ) : content?.mediaType === 'pdf' && content?.mediaUrl ? (
                 <PdfPageView
                   pdfUrl={content.mediaUrl}
                   pageNumber={content.pdfPage || 1}
                   fitMode={content.fitMode || 'contain'}
                 />
-              ) : (content.mediaType === 'image' || content.mediaType === 'powerpoint') && content.mediaUrl ? (
+              ) : content && (content.mediaType === 'image' || content.mediaType === 'powerpoint') && content.mediaUrl ? (
                 <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <img
                     src={toMediaUrl(content.mediaUrl)}
@@ -550,7 +598,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     }}
                   />
                 </div>
-              ) : (
+              ) : content ? (
                 <div
                   className="layer-content"
                   ref={contentBoxRef}
@@ -619,7 +667,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     )}
                   </div>
                 </div>
-              )
+              ) : null
             )}
 
             {/* Layer 3: Overlay (Logo) */}

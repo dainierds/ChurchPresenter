@@ -336,6 +336,17 @@ export interface YouTubeItemConfig {
   availabilityStatus?: YouTubeAvailabilityStatus
 }
 
+export interface YouTubeSyncTick {
+  videoId: string
+  url: string
+  title?: string
+  currentTime: number
+  duration: number
+  isPlaying: boolean
+  isBrowserSource: boolean
+  timestamp: number
+}
+
 export interface YouTubeItem {
   id: string
   youtubeId: string
@@ -885,6 +896,7 @@ export interface ChurchPresenterApi {
   ) => Promise<any>
   downloadYouTubeVideo: (youtubeUrl: string) => Promise<{ success: boolean; item?: MediaItem; error?: string }>
   onYouTubeAdStatus: (callback: (isAd: boolean) => void) => () => void
+  onYouTubeSyncTick: (callback: (tick: YouTubeSyncTick) => void) => () => void
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void

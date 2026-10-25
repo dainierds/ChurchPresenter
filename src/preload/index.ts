@@ -31,6 +31,7 @@ import {
   FileChangedEvent,
   YouTubeItem,
   YouTubeAvailabilityStatus,
+  YouTubeSyncTick,
   ServiceItem
 } from '../shared/types'
 
@@ -536,6 +537,14 @@ const api: ChurchPresenterApi = {
     ipcRenderer.on(IPC_CHANNELS.YOUTUBE_AD_STATUS, handler)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.YOUTUBE_AD_STATUS, handler)
+    }
+  },
+
+  onYouTubeSyncTick: (callback: (tick: YouTubeSyncTick) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, tick: YouTubeSyncTick) => callback(tick)
+    ipcRenderer.on(IPC_CHANNELS.YOUTUBE_SYNC_TICK, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.YOUTUBE_SYNC_TICK, handler)
     }
   },
 

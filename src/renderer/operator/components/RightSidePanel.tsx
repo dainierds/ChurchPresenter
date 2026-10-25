@@ -19,7 +19,8 @@ import {
   PresenterState,
   PresentationTimer,
   SlideItem,
-  TimerType
+  TimerType,
+  YouTubeSyncTick
 } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 
@@ -79,6 +80,41 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const [newTimerType] = useState<TimerType>('countdown_duration')
   const [isCreatingTimer, setIsCreatingTimer] = useState(false)
   const [clockTime, setClockTime] = useState('')
+
+  // YouTube Mirror Sync State & Control
+  const [mirrorSync, setMirrorSync] = useState<YouTubeSyncTick | null>(null)
+  const ytIframeRef = React.useRef<HTMLIFrameElement | null>(null)
+  const lastSyncTimeRef = React.useRef<number>(0)
+  const lastPlayStateRef = React.useRef<boolean | null>(null)
+
+  useEffect(() => {
+    const unsub = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
+      setMirrorSync(tick)
+
+      const iframe = ytIframeRef.current
+      if (!iframe || !iframe.contentWindow) return
+
+      // Mirror Play / Pause
+      if (lastPlayStateRef.current !== tick.isPlaying) {
+        lastPlayStateRef.current = tick.isPlaying
+        if (tick.isPlaying) {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
+        } else {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
+        }
+      }
+
+      // Mirror Seek if difference is > 0.6s
+      if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.6) {
+        lastSyncTimeRef.current = tick.currentTime
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
+          '*'
+        )
+      }
+    })
+    return () => unsub?.()
+  }, [])
 
   // Clock for Stage Monitor header
   useEffect(() => {
@@ -151,11 +187,13 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const activeMediaType = roleContent?.mediaType || currentSlide?.mediaType
   const isYouTube =
     !isCleared &&
-    (activeMediaType === 'youtube' ||
+    (Boolean(mirrorSync?.videoId) ||
+      activeMediaType === 'youtube' ||
       Boolean((roleContent as any)?.youtubeId) ||
       Boolean((currentSlide as any)?.youtubeId))
 
   const activeYoutubeId =
+    mirrorSync?.videoId ||
     (roleContent as any)?.youtubeId ||
     (currentSlide as any)?.youtubeId ||
     (isYouTube && activeMediaUrl ? parseYouTubeUrl(activeMediaUrl).videoId : null)
@@ -442,8 +480,9 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   >
                     {activeYoutubeId ? (
                       <iframe
+                        ref={ytIframeRef}
                         key={activeYoutubeId}
-                        src={`https://www.youtube-nocookie.com/embed/${activeYoutubeId}?autoplay=1&mute=1&controls=0&playsinline=1`}
+                        src={`https://www.youtube-nocookie.com/embed/${activeYoutubeId}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1`}
                         title="YouTube Live Preview"
                         allow="autoplay; encrypted-media"
                         style={{
@@ -476,7 +515,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                         position: 'absolute',
                         top: 6,
                         left: 6,
-                        backgroundColor: 'rgba(220, 38, 38, 0.95)',
+                        backgroundColor: mirrorSync && !mirrorSync.isPlaying ? 'rgba(100, 116, 139, 0.95)' : 'rgba(220, 38, 38, 0.95)',
                         color: '#ffffff',
                         fontSize: 9,
                         fontWeight: 800,
@@ -495,11 +534,11 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                           width: 6,
                           height: 6,
                           borderRadius: '50%',
-                          backgroundColor: '#ffffff',
+                          backgroundColor: mirrorSync && !mirrorSync.isPlaying ? '#cbd5e1' : '#ffffff',
                           display: 'inline-block'
                         }}
                       />
-                      YOUTUBE EN VIVO
+                      {mirrorSync && !mirrorSync.isPlaying ? 'YOUTUBE EN PAUSA' : 'YOUTUBE EN VIVO'}
                     </div>
                   </div>
                 )}

@@ -654,6 +654,11 @@ export function registerIpcHandlers(): void {
     windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_AD_STATUS, isAd)
   })
 
+  youTubeBrowserManager.setSyncCallback((tick) => {
+    youtubeOutputManager.syncToTick(tick)
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
+  })
+
   ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_ITEMS, () => {
     return databaseService.getYouTubeItems()
   })
