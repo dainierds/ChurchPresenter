@@ -921,6 +921,24 @@ const api: ChurchPresenterApi = {
   },
   triggerMidiMessage: (msg: any) => {
     return ipcRenderer.invoke(IPC_CHANNELS.MIDI_TRIGGER_MESSAGE, msg)
+  },
+
+  // Phase 9: OBS Studio Integration
+  getObsConfig: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_GET_CONFIG),
+  saveObsConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.OBS_SAVE_CONFIG, config),
+  connectObs: (overrideOptions?: any) => ipcRenderer.invoke(IPC_CHANNELS.OBS_CONNECT, overrideOptions),
+  disconnectObs: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_DISCONNECT),
+  getObsStatus: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_GET_STATUS),
+  getObsScenes: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_GET_SCENES),
+  setObsScene: (sceneName: string) => ipcRenderer.invoke(IPC_CHANNELS.OBS_SET_SCENE, sceneName),
+  startObsStream: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_START_STREAM),
+  stopObsStream: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_STOP_STREAM),
+  startObsRecord: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_START_RECORD),
+  stopObsRecord: () => ipcRenderer.invoke(IPC_CHANNELS.OBS_STOP_RECORD),
+  onObsStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on(IPC_CHANNELS.OBS_STATUS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.OBS_STATUS_CHANGED, handler)
   }
 }
 

@@ -906,3 +906,294 @@ export function getStageViewerHtml(options?: { requirePin?: boolean }): string {
 </body>
 </html>`;
 }
+
+/**
+ * OBS Browser Source HTML template for ChurchPresenter outputs.
+ * Designed for OBS Studio / vMix / Wirecast Browser Source.
+ * Supports alpha channel transparency (?transparent=true) for direct overlay on camera.
+ */
+export function getObsBrowserSourceHtml(options: {
+  role: string
+  transparent?: boolean
+  requirePin?: boolean
+}): string {
+  const { role, transparent = false, requirePin = false } = options
+  const bgColor = transparent ? 'transparent' : '#000000'
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0">
+  <title>ChurchPresenter - OBS Browser Source (${role})</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: ${bgColor} !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+    }
+    #viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.25s ease;
+    }
+    .slide-container {
+      width: 90%;
+      max-width: 1720px;
+      margin: 0 auto;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .slide-body {
+      font-size: 5.2vmin;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+      text-shadow: 0 3px 12px rgba(0, 0, 0, 0.95), 0 0 4px #000000, 0 1px 3px rgba(0, 0, 0, 0.8);
+    }
+    .slide-meta {
+      margin-top: 2vmin;
+      font-size: 2.4vmin;
+      font-weight: 600;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 3px #000000;
+    }
+    /* Props Overlay Layer */
+    #propsLayer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+    }
+    .prop-item {
+      position: absolute;
+      pointer-events: auto;
+      transition: all 0.3s ease;
+    }
+    .prop-lower-third {
+      background: rgba(18, 18, 18, 0.92);
+      border-left: 6px solid #FF7A00;
+      border-radius: 6px;
+      padding: 1.5vmin 2.5vmin;
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+    }
+    .prop-lower-third-title {
+      font-size: 2.6vmin;
+      font-weight: 800;
+      color: #FF7A00;
+      margin-bottom: 0.4vmin;
+    }
+    .prop-lower-third-body {
+      font-size: 2vmin;
+      font-weight: 500;
+      color: #f3f4f6;
+      white-space: pre-wrap;
+    }
+    .prop-logo img {
+      max-width: 15vmin;
+      max-height: 15vmin;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));
+    }
+    .prop-countdown {
+      background: rgba(10, 10, 10, 0.88);
+      border: 1px solid #FF7A00;
+      border-radius: 8px;
+      padding: 1vmin 2vmin;
+      font-size: 3.5vmin;
+      font-weight: 800;
+      font-family: monospace;
+      color: #22c55e;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.8);
+    }
+    /* Message Overlay */
+    #messageOverlay {
+      position: absolute;
+      top: 3vmin;
+      left: 8vw;
+      right: 8vw;
+      background: rgba(220, 38, 38, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      color: #ffffff;
+      padding: 1.5vmin 3vmin;
+      font-size: 3.2vmin;
+      font-weight: 800;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      z-index: 100;
+      display: none;
+      animation: msgPulse 1.5s infinite;
+    }
+    @keyframes msgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
+    .hidden { opacity: 0 !important; visibility: hidden !important; }
+  </style>
+</head>
+<body>
+  <div id="viewport">
+    <div id="slideBox" class="slide-container">
+      <div id="slideBody" class="slide-body"></div>
+      <div id="slideMeta" class="slide-meta"></div>
+    </div>
+    <div id="propsLayer"></div>
+    <div id="messageOverlay"></div>
+  </div>
+
+  <script>
+    const targetRole = "${role}";
+    const isTransparent = ${transparent};
+    let token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('cp_remote_token') || '';
+    let ws = null;
+    let state = null;
+    let activeProps = [];
+    let activeMessage = null;
+
+    function connect() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = protocol + '//' + window.location.host + '/ws' + (token ? '?token=' + encodeURIComponent(token) : '');
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        // Connected
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleMessage(msg);
+        } catch (e) {}
+      };
+
+      ws.onclose = () => {
+        setTimeout(connect, 2000);
+      };
+    }
+
+    function handleMessage(msg) {
+      if (msg.type === 'init' || msg.type === 'state-update') {
+        if (msg.state) state = msg.state;
+        if (msg.activeProps) activeProps = msg.activeProps;
+        if (msg.activeMessage !== undefined) activeMessage = msg.activeMessage;
+        render();
+      } else if (msg.type === 'slide-update') {
+        if (state) state.currentSlide = msg.slide;
+        render();
+      } else if (msg.type === 'props-update') {
+        activeProps = msg.activeProps || [];
+        render();
+      } else if (msg.type === 'message-update') {
+        activeMessage = msg.message;
+        render();
+      }
+    }
+
+    function render() {
+      const viewport = document.getElementById('viewport');
+      const slideBox = document.getElementById('slideBox');
+      const slideBody = document.getElementById('slideBody');
+      const slideMeta = document.getElementById('slideMeta');
+      const propsLayer = document.getElementById('propsLayer');
+      const messageOverlay = document.getElementById('messageOverlay');
+
+      if (!state) return;
+
+      const c = state.controls || {};
+      const isBlack = Boolean(c.black);
+      const isClear = Boolean(c.clear);
+
+      // Blackout hides everything
+      if (isBlack) {
+        viewport.className = 'hidden';
+        return;
+      } else {
+        viewport.className = '';
+      }
+
+      // Slide Layer
+      if (isClear || !state.currentSlide) {
+        slideBox.className = 'slide-container hidden';
+        slideBody.innerText = '';
+        slideMeta.innerText = '';
+      } else {
+        slideBox.className = 'slide-container';
+        const s = state.currentSlide;
+        slideBody.innerText = s.body || '';
+        slideMeta.innerText = s.title || s.subtitle || s.reference || '';
+      }
+
+      // Props Layer (respects targetRoles and Blackout/Clear)
+      propsLayer.innerHTML = '';
+      if (!isClear && Array.isArray(activeProps)) {
+        activeProps.forEach((p) => {
+          const roles = p.targetRoles || ['audience', 'main', 'program'];
+          const matchesRole = roles.includes('all') || roles.includes(targetRole) || (targetRole === 'program' && roles.includes('audience')) || (targetRole === 'audience' && roles.includes('main'));
+          if (!matchesRole) return;
+
+          const propDiv = document.createElement('div');
+          propDiv.className = 'prop-item';
+          const pos = p.position || {};
+          if (pos.alignment === 'bottomCenter' || pos.alignment === 'bottomLeft') {
+            propDiv.style.bottom = (pos.offsetY || 5) + '%';
+            propDiv.style.left = (pos.offsetX || 5) + '%';
+          } else if (pos.alignment === 'topRight') {
+            propDiv.style.top = (pos.offsetY || 5) + '%';
+            propDiv.style.right = (pos.offsetX || 5) + '%';
+          } else {
+            propDiv.style.top = (pos.offsetY || 5) + '%';
+            propDiv.style.left = (pos.offsetX || 5) + '%';
+          }
+          if (pos.widthPercent) propDiv.style.width = pos.widthPercent + '%';
+
+          if (p.type === 'lower_third') {
+            propDiv.className += ' prop-lower-third';
+            const c = p.content || {};
+            propDiv.innerHTML = '<div class="prop-lower-third-title">' + (c.title || '') + '</div><div class="prop-lower-third-body">' + (c.text || '') + '</div>';
+          } else if (p.type === 'logo') {
+            propDiv.className += ' prop-logo';
+            const c = p.content || {};
+            if (c.imageUrl) propDiv.innerHTML = '<img src="' + c.imageUrl + '" alt="Logo" />';
+          } else if (p.type === 'countdown') {
+            propDiv.className += ' prop-countdown';
+            propDiv.innerText = p.content?.text || '05:00';
+          } else if (p.type === 'text') {
+            propDiv.style.color = '#ffffff';
+            propDiv.style.fontSize = '3vmin';
+            propDiv.style.fontWeight = '700';
+            propDiv.innerText = p.content?.text || '';
+          }
+          propsLayer.appendChild(propDiv);
+        });
+      }
+
+      // Message Overlay
+      if (activeMessage && (activeMessage.target === 'audience' || activeMessage.target === 'both')) {
+        messageOverlay.innerText = activeMessage.text;
+        messageOverlay.style.display = 'block';
+      } else {
+        messageOverlay.style.display = 'none';
+      }
+    }
+
+    connect();
+  </script>
+</body>
+</html>`;
+}

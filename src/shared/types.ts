@@ -1219,6 +1219,20 @@ export interface ChurchPresenterApi {
 
   getMidiInputs: () => Promise<Array<{ id: string; name: string; manufacturer?: string }>>
   triggerMidiMessage?: (message: { type: 'note_on' | 'control_change'; channel: number; number: number; value: number }) => Promise<void>
+
+  // Phase 9: OBS Studio Integration
+  getObsConfig: () => Promise<ObsConfig>
+  saveObsConfig: (config: Partial<ObsConfig>) => Promise<ObsConfig>
+  connectObs: (overrideOptions?: { host?: string; port?: number; password?: string }) => Promise<{ success: boolean; error?: string }>
+  disconnectObs: () => Promise<{ success: boolean }>
+  getObsStatus: () => Promise<ObsStatus>
+  getObsScenes: () => Promise<string[]>
+  setObsScene: (sceneName: string) => Promise<{ success: boolean; error?: string }>
+  startObsStream: () => Promise<{ success: boolean; error?: string }>
+  stopObsStream: () => Promise<{ success: boolean; error?: string }>
+  startObsRecord: () => Promise<{ success: boolean; error?: string }>
+  stopObsRecord: () => Promise<{ success: boolean; error?: string }>
+  onObsStatusChanged?: (callback: (status: ObsStatus) => void) => () => void
 }
 
 // =========================================================================
@@ -1358,6 +1372,8 @@ export type MacroActionType =
   | 'delay'
   | 'trigger_macro'
   | 'external_command'
+  | 'obs_control'
+  | 'broadcast_control'
 
 export interface MacroActionParams {
   itemId?: string
@@ -1385,6 +1401,31 @@ export interface MacroActionParams {
   targetMacroId?: string
   command?: string
   args?: string[]
+  obsAction?: 'change_scene' | 'start_stream' | 'stop_stream' | 'start_record' | 'stop_record'
+  obsSceneName?: string
+  broadcastAction?: 'start_stream' | 'stop_stream' | 'start_record' | 'stop_record' | 'switch_scene'
+  broadcastSceneId?: string
+}
+
+export interface ObsConfig {
+  host: string
+  port: number
+  password?: string
+  passwordEncrypted?: string
+  autoConnect: boolean
+}
+
+export interface ObsStatus {
+  connected: boolean
+  streaming: boolean
+  recording: boolean
+  currentScene: string
+  scenes: string[]
+  streamTimecode?: string
+  recordTimecode?: string
+  fps?: number
+  kbitsPerSec?: number
+  error?: string
 }
 
 export interface MacroAction {

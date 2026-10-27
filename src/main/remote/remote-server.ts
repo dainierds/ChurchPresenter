@@ -20,7 +20,7 @@ import { messageService } from '../messages/message-service'
 import { stageLayoutService } from '../stage/stage-layout-service'
 import { macroEngine } from '../macros/macro-engine'
 import { remoteAuthService, REMOTE_CONFIG_KEY } from './remote-auth-service'
-import { getRemoteControlHtml, getStageViewerHtml } from './client-templates'
+import { getRemoteControlHtml, getStageViewerHtml, getObsBrowserSourceHtml } from './client-templates'
 import { logger } from '../logger'
 
 export const DEFAULT_REMOTE_CONFIG: RemoteServerConfig = {
@@ -480,6 +480,39 @@ export class RemoteServer {
       }
 
       const html = getStageViewerHtml({ requirePin: false })
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      })
+      res.end(html)
+      return
+    }
+
+    // 2.B. OBS Browser Source Outputs (/outputs/:role?transparent=true)
+    if (pathname.startsWith('/outputs/')) {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'text/plain', Allow: 'GET' })
+        res.end('Método no permitido.')
+        return
+      }
+      const rawRole = pathname.replace('/outputs/', '').split('/')[0] || 'audience'
+      const normalizedRole = rawRole === 'main' ? 'audience' : rawRole
+      const transparent = parsedUrl.searchParams.get('transparent') === 'true'
+      const token = parsedUrl.searchParams.get('token')
+      const hasValidToken = token ? Boolean(remoteAuthService.verifySession(token)) : false
+
+      if (!this.config.allowReadOnlyWithoutPin && !hasValidToken && !['127.0.0.1', '::1', 'localhost'].includes(clientIp)) {
+        // Enforce PIN security on external LAN requests if read-only without PIN is disabled
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'Autenticación requerida para acceder a las salidas.' }))
+        return
+      }
+
+      const html = getObsBrowserSourceHtml({
+        role: normalizedRole,
+        transparent,
+        requirePin: !this.config.allowReadOnlyWithoutPin
+      })
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate'

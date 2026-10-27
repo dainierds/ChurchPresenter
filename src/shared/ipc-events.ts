@@ -235,5 +235,19 @@ export const IPC_CHANNELS = {
   LOOP_GET_STATUS: 'loop:get-status',
   LOOP_STATUS_CHANGED: 'loop:status-changed',
   MIDI_GET_INPUTS: 'midi:get-inputs',
-  MIDI_TRIGGER_MESSAGE: 'midi:trigger-message'
+  MIDI_TRIGGER_MESSAGE: 'midi:trigger-message',
+
+  // Phase 9: OBS Studio & Broadcast
+  OBS_GET_CONFIG: 'obs:get-config',
+  OBS_SAVE_CONFIG: 'obs:save-config',
+  OBS_CONNECT: 'obs:connect',
+  OBS_DISCONNECT: 'obs:disconnect',
+  OBS_GET_STATUS: 'obs:get-status',
+  OBS_GET_SCENES: 'obs:get-scenes',
+  OBS_SET_SCENE: 'obs:set-scene',
+  OBS_START_STREAM: 'obs:start-stream',
+  OBS_STOP_STREAM: 'obs:stop-stream',
+  OBS_START_RECORD: 'obs:start-record',
+  OBS_STOP_RECORD: 'obs:stop-record',
+  OBS_STATUS_CHANGED: 'obs:status-changed'
 } as const

@@ -52,6 +52,7 @@ import { macroEngine } from './macros/macro-engine'
 import { propService } from './props/prop-service'
 import { loopService } from './loop/loop-service'
 import { midiService } from './midi/midi-service'
+import { obsWebSocketService } from './broadcast/obs-websocket-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -1228,6 +1229,57 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.MIDI_TRIGGER_MESSAGE, async (_event, msg) => {
     midiService.handleMidiMessage(msg)
+  })
+
+  // Phase 9: OBS Studio Integration
+  ipcMain.handle(IPC_CHANNELS.OBS_GET_CONFIG, async () => {
+    return obsWebSocketService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_SAVE_CONFIG, async (_event, config) => {
+    obsWebSocketService.saveConfig(config)
+    return obsWebSocketService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_CONNECT, async (_event, overrideOptions) => {
+    return obsWebSocketService.connect(overrideOptions)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_DISCONNECT, async () => {
+    obsWebSocketService.disconnect()
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_GET_STATUS, async () => {
+    return obsWebSocketService.getStatus()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_GET_SCENES, async () => {
+    return obsWebSocketService.getScenes()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_SET_SCENE, async (_event, sceneName: string) => {
+    return obsWebSocketService.setCurrentProgramScene(sceneName)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_START_STREAM, async () => {
+    return obsWebSocketService.startStreaming()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_STOP_STREAM, async () => {
+    return obsWebSocketService.stopStreaming()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_START_RECORD, async () => {
+    return obsWebSocketService.startRecording()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OBS_STOP_RECORD, async () => {
+    return obsWebSocketService.stopRecording()
+  })
+
+  obsWebSocketService.setOnStatusChanged((st) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.OBS_STATUS_CHANGED, st)
   })
 
   // Hook DisplayManager events

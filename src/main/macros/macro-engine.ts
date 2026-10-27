@@ -9,6 +9,7 @@ import { stateManager } from '../state-manager'
 import { propService } from '../props/prop-service'
 import { messageService } from '../messages/message-service'
 import { themeService } from '../theme/theme-service'
+import { obsWebSocketService } from '../broadcast/obs-websocket-service'
 import { logger } from '../logger'
 
 const MAX_EXECUTION_DEPTH = 5
@@ -366,6 +367,27 @@ export class MacroEngine extends EventEmitter {
           )
         }
         logger.warn(`External command executed by macro: ${params.command} ${JSON.stringify(params.args)}`)
+        break
+      }
+
+      case 'obs_control': {
+        const obsAct = params.obsAction || 'change_scene'
+        if (obsAct === 'change_scene' && params.obsSceneName) {
+          const res = await obsWebSocketService.setCurrentProgramScene(params.obsSceneName)
+          if (!res.success) throw new Error(res.error || 'Error cambiando escena en OBS')
+        } else if (obsAct === 'start_stream') {
+          const res = await obsWebSocketService.startStreaming()
+          if (!res.success) throw new Error(res.error || 'Error iniciando transmisión en OBS')
+        } else if (obsAct === 'stop_stream') {
+          const res = await obsWebSocketService.stopStreaming()
+          if (!res.success) throw new Error(res.error || 'Error deteniendo transmisión en OBS')
+        } else if (obsAct === 'start_record') {
+          const res = await obsWebSocketService.startRecording()
+          if (!res.success) throw new Error(res.error || 'Error iniciando grabación en OBS')
+        } else if (obsAct === 'stop_record') {
+          const res = await obsWebSocketService.stopRecording()
+          if (!res.success) throw new Error(res.error || 'Error deteniendo grabación en OBS')
+        }
         break
       }
 
