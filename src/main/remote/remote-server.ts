@@ -18,6 +18,7 @@ import { windowManager } from '../window-manager'
 import { masterMediaSyncService } from '../media/master-media-sync-service'
 import { messageService } from '../messages/message-service'
 import { stageLayoutService } from '../stage/stage-layout-service'
+import { macroEngine } from '../macros/macro-engine'
 import { remoteAuthService, REMOTE_CONFIG_KEY } from './remote-auth-service'
 import { getRemoteControlHtml, getStageViewerHtml } from './client-templates'
 import { logger } from '../logger'
@@ -585,6 +586,71 @@ export class RemoteServer {
       return
     }
 
+    // 5.B API Macros List
+    if (pathname === '/api/macros' || pathname === '/api/macros/') {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'text/plain', Allow: 'GET' })
+        res.end('Método no permitido.')
+        return
+      }
+      const token = extractToken()
+      const session = token ? remoteAuthService.verifySession(token) : null
+      if (!session) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'Unauthorized: Missing or invalid token' }))
+        return
+      }
+      const macros = databaseService.getMacros().map((m) => ({
+        id: m.id,
+        name: m.name,
+        color: m.color,
+        icon: m.icon,
+        description: m.description,
+        shortcut: m.shortcut,
+        actionsCount: m.actions.length
+      }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success: true, macros }))
+      return
+    }
+
+    // 5.C API Run Macro (HTTP Trigger for Stream Deck & Automations)
+    if (pathname.startsWith('/api/macros/') && pathname.endsWith('/run')) {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'text/plain', Allow: 'POST' })
+        res.end('Método no permitido.')
+        return
+      }
+      const token = extractToken()
+      const session = token ? remoteAuthService.verifySession(token) : null
+      if (!session) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'Unauthorized: Missing or invalid token' }))
+        return
+      }
+      if (session.role !== 'operator') {
+        res.writeHead(403, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'Forbidden: Read-only token cannot execute macros' }))
+        return
+      }
+      const parts = pathname.split('/')
+      const macroId = parts[3]
+      if (!macroId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'ID de macro no especificado.' }))
+        return
+      }
+      macroEngine.runMacro(macroId).then((result) => {
+        const statusCode = result.success ? 200 : 400
+        res.writeHead(statusCode, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      }).catch((err) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: err.message }))
+      })
+      return
+    }
+
     // 6. API Control
     if (pathname === '/api/control') {
       if (req.method !== 'POST') {
@@ -878,6 +944,15 @@ export class RemoteServer {
           const updated = databaseService.getTimers()
           windowManager.broadcastToAll(IPC_CHANNELS.TIMERS_TICK, updated)
           this.broadcastStateUpdate({ activeTimer: targetTimer })
+        }
+        break
+      }
+      case 'run-macro': {
+        const macroId = msg.macroId || msg.id
+        if (macroId) {
+          macroEngine.runMacro(macroId).catch((err) => {
+            logger.error(`Error running macro '${macroId}' via remote WebSocket:`, err)
+          })
         }
         break
       }

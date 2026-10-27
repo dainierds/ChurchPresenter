@@ -288,6 +288,7 @@ export interface ThemeConfig {
   fontFamily: string
   fontSizeVmin: number
   autoFit?: boolean
+  slideTransition?: SlideTransitionConfig
   fontWeight?: '300' | '400' | '600' | '700' | 'normal' | 'bold'
   fontStyle?: 'normal' | 'italic'
   color: string
@@ -480,6 +481,8 @@ export interface ServiceItem {
   imageConfig?: ImagePresentationConfig
   powerpointConfig?: { manifestPath?: string; originalPath: string; hash: string }
   youtubeConfig?: YouTubeItemConfig
+  macroId?: string
+  loopConfig?: LoopConfig
   notes?: string
 }
 
@@ -706,6 +709,11 @@ export interface SlideItem {
   nextSlideTitle?: string
   nextSlideBody?: string
   warnings?: string[]
+  transition?: SlideTransitionConfig
+  macroTrigger?: {
+    onEnterMacroId?: string
+    onExitMacroId?: string
+  }
   scripturePayload?: {
     reference: string
     bookNumber: number
@@ -817,6 +825,10 @@ export interface PresenterState {
   roleBibleConfigs?: RoleBibleConfigsMap
   activeMessage?: PresentationMessage | null
   activeStageLayout?: StageLayoutConfig | null
+  activeProps?: PropItem[]
+  activeLoopStatus?: LoopStatus | null
+  disableTransitions?: boolean
+  macroExecutionState?: MacroExecutionState | null
   updatedAt: number
 }
 
@@ -1181,6 +1193,32 @@ export interface ChurchPresenterApi {
   deactivateEmergencyMode: () => Promise<boolean>
   isEmergencyModeActive: () => Promise<boolean>
   isSafeModeActive: () => Promise<boolean>
+
+  // Phase 8: Automation, Macros, Props, Loops & Transitions
+  getMacros: () => Promise<MacroItem[]>
+  saveMacro: (macro: MacroItem) => Promise<MacroItem>
+  deleteMacro: (id: string) => Promise<boolean>
+  duplicateMacro: (id: string) => Promise<MacroItem>
+  runMacro: (id: string) => Promise<{ success: boolean; error?: string }>
+  runMacroStep: (id: string, actionIndex: number) => Promise<{ success: boolean; error?: string }>
+  stopAllMacros: () => Promise<boolean>
+  getMacroExecutionState: () => Promise<MacroExecutionState>
+  onMacroStatusChanged?: (callback: (state: MacroExecutionState) => void) => () => void
+
+  getProps: () => Promise<PropItem[]>
+  saveProp: (prop: PropItem) => Promise<PropItem>
+  deleteProp: (id: string) => Promise<boolean>
+  toggleProp: (id: string, active?: boolean) => Promise<PropItem>
+  getActiveProps: () => Promise<PropItem[]>
+  onPropsActiveChanged?: (callback: (props: PropItem[]) => void) => () => void
+
+  startPresentationLoop: (config: LoopConfig, totalSlides: number) => Promise<boolean>
+  stopPresentationLoop: () => Promise<boolean>
+  getLoopStatus: () => Promise<LoopStatus | null>
+  onLoopStatusChanged?: (callback: (status: LoopStatus | null) => void) => () => void
+
+  getMidiInputs: () => Promise<Array<{ id: string; name: string; manufacturer?: string }>>
+  triggerMidiMessage?: (message: { type: 'note_on' | 'control_change'; channel: number; number: number; value: number }) => Promise<void>
 }
 
 // =========================================================================
@@ -1294,6 +1332,182 @@ export interface LogEntry {
   timestamp: string
   level: 'info' | 'warn' | 'error' | 'debug'
   message: string
+}
+
+// =========================================================================
+// PHASE 8: Automation, Macros, Props, Loops & Transitions
+// =========================================================================
+
+export type SlideTransitionType = 'cut' | 'fade' | 'slide_left' | 'slide_right' | 'slide_up'
+
+export interface SlideTransitionConfig {
+  type: SlideTransitionType
+  durationMs: number
+}
+
+export type MacroActionType =
+  | 'go_to_item_slide'
+  | 'clear_layer'
+  | 'emergency_control'
+  | 'timer_control'
+  | 'media_control'
+  | 'play_audio_track'
+  | 'display_message'
+  | 'prop_control'
+  | 'set_output_theme'
+  | 'delay'
+  | 'trigger_macro'
+  | 'external_command'
+
+export interface MacroActionParams {
+  itemId?: string
+  slideIndex?: number
+  relative?: 'next_slide' | 'prev_slide' | 'next_item' | 'prev_item' | 'specific'
+  layer?: 'all' | 'slide' | 'background' | 'audio' | 'message' | 'media' | 'props'
+  emergencyType?: 'black' | 'logo' | 'freeze'
+  active?: boolean
+  timerId?: string
+  timerAction?: 'start' | 'pause' | 'reset'
+  mediaAction?: 'play' | 'pause' | 'stop' | 'seek'
+  seekSeconds?: number
+  audioPath?: string
+  fadeInSeconds?: number
+  volume?: number
+  loop?: boolean
+  messageAction?: 'show' | 'hide'
+  messageText?: string
+  targetRole?: OutputRole | 'all'
+  propId?: string
+  propAction?: 'show' | 'hide' | 'toggle'
+  role?: OutputRole
+  themeId?: string
+  seconds?: number
+  targetMacroId?: string
+  command?: string
+  args?: string[]
+}
+
+export interface MacroAction {
+  id: string
+  type: MacroActionType
+  label?: string
+  delayBeforeMs?: number
+  delayAfterMs?: number
+  params: MacroActionParams
+}
+
+export interface MacroMidiTrigger {
+  enabled: boolean
+  type: 'note_on' | 'control_change'
+  channel: number // 1-16
+  number: number // Note or CC number (0-127)
+  value?: number
+}
+
+export interface MacroScheduleTrigger {
+  enabled: boolean
+  type: 'daily' | 'weekly'
+  time: string // "HH:MM" 24h
+  daysOfWeek?: number[] // 0=Sunday, 1=Monday, etc.
+}
+
+export interface MacroItem {
+  id: string
+  name: string
+  color: string
+  icon: string
+  description?: string
+  shortcut?: string
+  midiTrigger?: MacroMidiTrigger
+  scheduleTrigger?: MacroScheduleTrigger
+  actions: MacroAction[]
+  isBuiltIn?: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MacroExecutionState {
+  activeMacros: Array<{
+    macroId: string
+    macroName: string
+    startedAt: number
+    currentActionIndex: number
+    totalActions: number
+    status: 'running' | 'paused' | 'step_by_step'
+  }>
+  executionLog: Array<{
+    timestamp: number
+    macroId: string
+    macroName: string
+    actionIndex: number
+    actionType: string
+    status: 'success' | 'failed' | 'skipped'
+    error?: string
+  }>
+}
+
+export type PropType = 'image' | 'text' | 'logo' | 'lower_third' | 'countdown'
+
+export interface PropPosition {
+  x: number // percent 0-100
+  y: number // percent 0-100
+  width: number // percent 0-100
+  height: number // percent 0-100
+  alignment: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'center' | 'custom'
+}
+
+export interface PropStyle {
+  opacity: number // 0.0 - 1.0
+  fontSizeVmin?: number
+  fontColor?: string
+  backgroundColor?: string
+  borderRadiusPx?: number
+  paddingPx?: number
+}
+
+export interface PropTransition {
+  inType: 'cut' | 'fade' | 'slide_up' | 'slide_down' | 'zoom'
+  outType: 'cut' | 'fade' | 'slide_up' | 'slide_down' | 'zoom'
+  durationMs: number
+}
+
+export interface PropItem {
+  id: string
+  name: string
+  type: PropType
+  content: {
+    text?: string
+    subtitle?: string
+    imageUrl?: string
+    targetTime?: string
+    countdownSeconds?: number
+  }
+  position: PropPosition
+  style: PropStyle
+  transition: PropTransition
+  targetRoles: OutputRole[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LoopConfig {
+  enabled: boolean
+  autoAdvanceSeconds: number
+  loop: boolean
+  shuffle: boolean
+  backgroundMusicPath?: string
+  backgroundMusicVolume?: number
+}
+
+export interface LoopStatus {
+  isActive: boolean
+  currentSlideIndex: number
+  totalSlides: number
+  autoAdvanceSeconds: number
+  nextAdvanceInSeconds: number
+  isPaused: boolean
+  hasMusic: boolean
 }
 
 declare global {

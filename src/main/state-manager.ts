@@ -14,7 +14,10 @@ import {
   ThemeContentType,
   OutputRole,
   PresentationMessage,
-  StageLayoutConfig
+  StageLayoutConfig,
+  PropItem,
+  LoopStatus,
+  MacroExecutionState
 } from '../shared/types'
 import {
   createInitialPresenterState,
@@ -352,6 +355,46 @@ export class StateManager extends EventEmitter {
     this.state = {
       ...this.state,
       activeStageLayout: layout,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setActiveProps(props: PropItem[]): PresenterState {
+    this.state = {
+      ...this.state,
+      activeProps: [...props],
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setLoopStatus(status: LoopStatus | null): PresenterState {
+    this.state = {
+      ...this.state,
+      activeLoopStatus: status,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setDisableTransitions(disabled: boolean): PresenterState {
+    this.state = {
+      ...this.state,
+      disableTransitions: disabled,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setMacroExecutionState(macroState: MacroExecutionState | null): PresenterState {
+    this.state = {
+      ...this.state,
+      macroExecutionState: macroState,
       updatedAt: Date.now()
     }
     this.emit('state-updated', this.state)

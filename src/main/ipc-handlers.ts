@@ -15,7 +15,10 @@ import {
   PresentationTimer,
   YouTubeItem,
   YouTubeItemConfig,
-  ServiceItem
+  ServiceItem,
+  MacroItem,
+  PropItem,
+  LoopConfig
 } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
@@ -45,6 +48,10 @@ import { checklistService } from './checklist/checklist-service'
 import { diagnosticsService } from './diagnostics/diagnostics-service'
 import { rehearsalService } from './rehearsal/rehearsal-service'
 import { emergencyService } from './emergency/emergency-service'
+import { macroEngine } from './macros/macro-engine'
+import { propService } from './props/prop-service'
+import { loopService } from './loop/loop-service'
+import { midiService } from './midi/midi-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -1095,6 +1102,134 @@ export function registerIpcHandlers(): void {
     return emergencyService.isSafeModeEnabled()
   })
 
+  // =========================================================================
+  // Phase 8: Macros, Props, Loops & MIDI
+  // =========================================================================
+
+  // Wire MacroEngine execution callbacks to real application controllers
+  macroEngine.registerCallbacks({
+    onNavigate: (direction, itemId, slideIndex) => {
+      windowManager.getOperatorWindow()?.webContents.send(IPC_CHANNELS.REMOTE_ACTION_DISPATCH, {
+        type: direction === 'specific' ? 'select-item' : direction.replace('_', '-'),
+        itemId,
+        slideIndex
+      })
+    },
+    onTimerControl: (timerId, action) => {
+      const timers = databaseService.getTimers()
+      const target = timers.find((t) => t.id === timerId) || timers[0]
+      if (target) {
+        if (action === 'start') target.isRunning = true
+        else if (action === 'pause') target.isRunning = false
+        else if (action === 'reset') {
+          target.isRunning = false
+          target.currentSeconds = target.type === 'stopwatch' ? 0 : target.durationSeconds
+        }
+        databaseService.saveTimer(target)
+        windowManager.broadcastToAll(IPC_CHANNELS.TIMERS_TICK, databaseService.getTimers())
+      }
+    },
+    onMediaControl: (action, seekSec) => {
+      masterMediaSyncService.controlVideo(action, seekSec)
+    },
+    onAudioPlay: (filePath, fadeInSec, volume) => {
+      masterMediaSyncService.playIndependentAudio(`macro_audio_${Date.now()}`, filePath, filePath)
+      if (typeof volume === 'number') {
+        masterMediaSyncService.controlIndependentAudio('volume', volume)
+      }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_GET_ALL, async () => {
+    return databaseService.getMacros()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_SAVE, async (_event, macro: MacroItem) => {
+    return databaseService.saveMacro(macro)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_DELETE, async (_event, id: string) => {
+    return databaseService.deleteMacro(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_DUPLICATE, async (_event, id: string) => {
+    const all = databaseService.getMacros()
+    const original = all.find((m) => m.id === id)
+    if (!original) {
+      throw new Error(`Macro '${id}' no encontrada.`)
+    }
+    const duplicated: MacroItem = {
+      ...original,
+      id: `macro_${Date.now()}`,
+      name: `${original.name} (Copia)`,
+      isBuiltIn: false,
+      shortcut: undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    return databaseService.saveMacro(duplicated)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_RUN, async (_event, id: string) => {
+    return macroEngine.runMacro(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_RUN_STEP, async (_event, id: string, actionIndex: number) => {
+    return macroEngine.runStep(id, actionIndex)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_STOP_ALL, async () => {
+    return macroEngine.stopAllMacros()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MACROS_GET_STATUS, async () => {
+    return macroEngine.getExecutionState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROPS_GET_ALL, async () => {
+    return propService.getProps()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROPS_SAVE, async (_event, prop: PropItem) => {
+    return propService.saveProp(prop)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROPS_DELETE, async (_event, id: string) => {
+    return propService.deleteProp(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROPS_TOGGLE, async (_event, id: string, forceActive?: boolean) => {
+    return propService.toggleProp(id, forceActive)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROPS_GET_ACTIVE, async () => {
+    return propService.getActiveProps()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LOOP_START, async (_event, config: LoopConfig, totalSlides: number) => {
+    return loopService.startLoop(config, totalSlides, (_nextIndex) => {
+      windowManager.getOperatorWindow()?.webContents.send(IPC_CHANNELS.REMOTE_ACTION_DISPATCH, {
+        type: 'next-slide'
+      })
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LOOP_STOP, async () => {
+    return loopService.stopLoop(true)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.LOOP_GET_STATUS, async () => {
+    return loopService.getStatus()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MIDI_GET_INPUTS, async () => {
+    return midiService.getDevices()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MIDI_TRIGGER_MESSAGE, async (_event, msg) => {
+    midiService.handleMidiMessage(msg)
+  })
+
   // Hook DisplayManager events
   displayManager.on('displays-changed', (displays) => {
     logger.info(`Notifying windows of displays-changed (${displays.length} displays)`)
@@ -1121,5 +1256,18 @@ export function registerIpcHandlers(): void {
   // Hook RehearsalService events
   rehearsalService.on('mode-changed', (active) => {
     windowManager.broadcastToAll(IPC_CHANNELS.REHEARSAL_MODE_CHANGED, active)
+  })
+
+  // Hook Phase 8 Engine Events
+  macroEngine.on('macro-status-changed', (st) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.MACROS_STATUS_CHANGED, st)
+  })
+
+  propService.on('active-props-changed', (props) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.PROPS_ACTIVE_CHANGED, props)
+  })
+
+  loopService.on('loop-status-changed', (status) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.LOOP_STATUS_CHANGED, status)
   })
 }

@@ -847,6 +847,80 @@ const api: ChurchPresenterApi = {
   },
   isSafeModeActive: () => {
     return ipcRenderer.invoke(IPC_CHANNELS.SAFE_MODE_GET_STATUS)
+  },
+
+  // Phase 8: Automation, Macros, Props, Loops & MIDI
+  getMacros: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_GET_ALL)
+  },
+  saveMacro: (macro: any) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_SAVE, macro)
+  },
+  deleteMacro: (id: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_DELETE, id)
+  },
+  duplicateMacro: (id: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_DUPLICATE, id)
+  },
+  runMacro: (id: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_RUN, id)
+  },
+  runMacroStep: (id: string, actionIndex: number) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_RUN_STEP, id, actionIndex)
+  },
+  stopAllMacros: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_STOP_ALL)
+  },
+  getMacroExecutionState: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MACROS_GET_STATUS)
+  },
+  onMacroStatusChanged: (callback: (state: any) => void) => {
+    const handler = (_event: any, state: any) => callback(state)
+    ipcRenderer.on(IPC_CHANNELS.MACROS_STATUS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MACROS_STATUS_CHANGED, handler)
+  },
+
+  getProps: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PROPS_GET_ALL)
+  },
+  saveProp: (prop: any) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PROPS_SAVE, prop)
+  },
+  deleteProp: (id: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PROPS_DELETE, id)
+  },
+  toggleProp: (id: string, active?: boolean) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PROPS_TOGGLE, id, active)
+  },
+  getActiveProps: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.PROPS_GET_ACTIVE)
+  },
+  onPropsActiveChanged: (callback: (props: any[]) => void) => {
+    const handler = (_event: any, props: any[]) => callback(props)
+    ipcRenderer.on(IPC_CHANNELS.PROPS_ACTIVE_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PROPS_ACTIVE_CHANGED, handler)
+  },
+
+  startPresentationLoop: (config: any, totalSlides: number) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LOOP_START, config, totalSlides)
+  },
+  stopPresentationLoop: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LOOP_STOP)
+  },
+  getLoopStatus: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.LOOP_GET_STATUS)
+  },
+  onLoopStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on(IPC_CHANNELS.LOOP_STATUS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.LOOP_STATUS_CHANGED, handler)
+  },
+
+  getMidiInputs: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MIDI_GET_INPUTS)
+  },
+  triggerMidiMessage: (msg: any) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MIDI_TRIGGER_MESSAGE, msg)
   }
 }
 

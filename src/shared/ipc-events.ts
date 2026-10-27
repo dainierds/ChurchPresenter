@@ -212,5 +212,28 @@ export const IPC_CHANNELS = {
   EMERGENCY_ACTIVATE: 'emergency:activate',
   EMERGENCY_DEACTIVATE: 'emergency:deactivate',
   EMERGENCY_GET_STATUS: 'emergency:get-status',
-  SAFE_MODE_GET_STATUS: 'safe-mode:get-status'
+  SAFE_MODE_GET_STATUS: 'safe-mode:get-status',
+
+  // Phase 8: Automation, Macros, Props, Loops & MIDI
+  MACROS_GET_ALL: 'macros:get-all',
+  MACROS_SAVE: 'macros:save',
+  MACROS_DELETE: 'macros:delete',
+  MACROS_DUPLICATE: 'macros:duplicate',
+  MACROS_RUN: 'macros:run',
+  MACROS_RUN_STEP: 'macros:run-step',
+  MACROS_STOP_ALL: 'macros:stop-all',
+  MACROS_GET_STATUS: 'macros:get-status',
+  MACROS_STATUS_CHANGED: 'macros:status-changed',
+  PROPS_GET_ALL: 'props:get-all',
+  PROPS_SAVE: 'props:save',
+  PROPS_DELETE: 'props:delete',
+  PROPS_TOGGLE: 'props:toggle',
+  PROPS_GET_ACTIVE: 'props:get-active',
+  PROPS_ACTIVE_CHANGED: 'props:active-changed',
+  LOOP_START: 'loop:start',
+  LOOP_STOP: 'loop:stop',
+  LOOP_GET_STATUS: 'loop:get-status',
+  LOOP_STATUS_CHANGED: 'loop:status-changed',
+  MIDI_GET_INPUTS: 'midi:get-inputs',
+  MIDI_TRIGGER_MESSAGE: 'midi:trigger-message'
 } as const

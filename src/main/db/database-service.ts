@@ -12,7 +12,9 @@ import {
   UserLibrary,
   LibraryItemReference,
   PresentationTimer,
-  YouTubeItem
+  YouTubeItem,
+  MacroItem,
+  PropItem
 } from '../../shared/types'
 
 export interface Migration {
@@ -423,6 +425,230 @@ const MIGRATIONS: Migration[] = [
           }
         }
         stmt.free()
+      } catch {
+        // ignore
+      }
+    }
+  },
+  {
+    version: 10,
+    name: 'phase_8_automation_macros_and_props',
+    up: (db: Database) => {
+      // Macros table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS macros (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          color TEXT DEFAULT '#FF7A00',
+          icon TEXT DEFAULT 'Zap',
+          description TEXT DEFAULT '',
+          shortcut TEXT,
+          midi_trigger_json TEXT,
+          schedule_trigger_json TEXT,
+          actions_json TEXT NOT NULL,
+          is_built_in INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Props table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS props (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          content_json TEXT NOT NULL,
+          position_json TEXT NOT NULL,
+          style_json TEXT NOT NULL,
+          transition_json TEXT NOT NULL,
+          target_roles_json TEXT NOT NULL,
+          is_active INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Seed default built-in macros
+      try {
+        const stmt = db.prepare('SELECT COUNT(*) as cnt FROM macros;')
+        if (stmt.step()) {
+          const row = stmt.getAsObject()
+          if (Number(row.cnt || 0) === 0) {
+            const now = new Date().toISOString()
+            const defaultMacros = [
+              {
+                id: 'macro_service_start',
+                name: 'Inicio de Culto',
+                color: '#FF7A00',
+                icon: 'Play',
+                description: 'Activa pantalla negra de seguridad, inicia conteo regresivo de culto, muestra logo y envía primera diapositiva.',
+                shortcut: 'Ctrl+Shift+1',
+                actions: [
+                  {
+                    id: 'act_1',
+                    type: 'emergency_control',
+                    label: 'Negro Activo',
+                    params: { emergencyType: 'black', active: true }
+                  },
+                  {
+                    id: 'act_2',
+                    type: 'timer_control',
+                    label: 'Iniciar Conteo de Culto',
+                    params: { timerId: 'timer_countdown_service', timerAction: 'start' }
+                  },
+                  {
+                    id: 'act_3',
+                    type: 'delay',
+                    label: 'Esperar 1 Segundo',
+                    params: { seconds: 1 }
+                  },
+                  {
+                    id: 'act_4',
+                    type: 'prop_control',
+                    label: 'Mostrar Logo Esquina',
+                    params: { propId: 'prop_logo_corner', propAction: 'show' }
+                  },
+                  {
+                    id: 'act_5',
+                    type: 'emergency_control',
+                    label: 'Quitar Negro',
+                    params: { emergencyType: 'black', active: false }
+                  }
+                ]
+              },
+              {
+                id: 'macro_offering',
+                name: 'Momento de Ofrenda',
+                color: '#10b981',
+                icon: 'Layers',
+                description: 'Muestra tercio inferior con datos bancarios y pausa temporizador de predicación.',
+                shortcut: 'Ctrl+Shift+2',
+                actions: [
+                  {
+                    id: 'act_off_1',
+                    type: 'prop_control',
+                    label: 'Mostrar Tercio Inferior Ofrenda',
+                    params: { propId: 'prop_lower_third_offering', propAction: 'show' }
+                  },
+                  {
+                    id: 'act_off_2',
+                    type: 'timer_control',
+                    label: 'Pausar Predicación',
+                    params: { timerId: 'timer_preach_message', timerAction: 'pause' }
+                  }
+                ]
+              },
+              {
+                id: 'macro_service_end',
+                name: 'Fin de Culto',
+                color: '#38bdf8',
+                icon: 'RotateCcw',
+                description: 'Limpia capas y proyecta mensaje de despedida.',
+                shortcut: 'Ctrl+Shift+3',
+                actions: [
+                  {
+                    id: 'act_end_1',
+                    type: 'clear_layer',
+                    label: 'Limpiar Diapositiva',
+                    params: { layer: 'slide' }
+                  },
+                  {
+                    id: 'act_end_2',
+                    type: 'display_message',
+                    label: 'Mensaje de Despedida',
+                    params: {
+                      messageAction: 'show',
+                      messageText: 'Fin del servicio, ¡gracias por acompañarnos!',
+                      targetRole: 'all'
+                    }
+                  }
+                ]
+              }
+            ]
+
+            defaultMacros.forEach((m) => {
+              db.run(
+                `INSERT INTO macros (id, name, color, icon, description, shortcut, actions_json, is_built_in, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?);`,
+                [m.id, m.name, m.color, m.icon, m.description, m.shortcut, JSON.stringify(m.actions), now, now]
+              )
+            })
+          }
+        }
+        stmt.free()
+      } catch {
+        // ignore
+      }
+
+      // Seed default built-in props
+      try {
+        const stmtProp = db.prepare('SELECT COUNT(*) as cnt FROM props;')
+        if (stmtProp.step()) {
+          const row = stmtProp.getAsObject()
+          if (Number(row.cnt || 0) === 0) {
+            const now = new Date().toISOString()
+            const defaultProps = [
+              {
+                id: 'prop_logo_corner',
+                name: 'Logo Esquina Superior',
+                type: 'logo',
+                content: { text: 'CHURCH', subtitle: '' },
+                position: { alignment: 'top-right', x: 88, y: 5, width: 8, height: 8 },
+                style: { opacity: 0.85, fontSizeVmin: 2, fontColor: '#ffffff', backgroundColor: 'transparent' },
+                transition: { inType: 'fade', outType: 'fade', durationMs: 300 },
+                targetRoles: ['main', 'lobby'],
+                isActive: 0
+              },
+              {
+                id: 'prop_lower_third_offering',
+                name: 'Tercio Inferior - Datos Ofrenda',
+                type: 'lower_third',
+                content: {
+                  text: 'Tiempo de Diezmos y Ofrendas',
+                  subtitle: 'Banco Nacional | Cta: 123-456-789 | Móvil: 555-0100'
+                },
+                position: { alignment: 'bottom-center', x: 10, y: 78, width: 80, height: 16 },
+                style: { opacity: 0.95, fontSizeVmin: 3.2, fontColor: '#ffffff', backgroundColor: '#181818', borderRadiusPx: 8, paddingPx: 12 },
+                transition: { inType: 'slide_up', outType: 'slide_down', durationMs: 400 },
+                targetRoles: ['main'],
+                isActive: 0
+              },
+              {
+                id: 'prop_countdown_corner',
+                name: 'Cuenta Regresiva Esquina',
+                type: 'countdown',
+                content: { text: 'Iniciamos en:', countdownSeconds: 300 },
+                position: { alignment: 'bottom-right', x: 74, y: 82, width: 22, height: 12 },
+                style: { opacity: 0.9, fontSizeVmin: 2.8, fontColor: '#38bdf8', backgroundColor: 'rgba(0,0,0,0.7)', borderRadiusPx: 6, paddingPx: 8 },
+                transition: { inType: 'fade', outType: 'fade', durationMs: 300 },
+                targetRoles: ['main', 'lobby'],
+                isActive: 0
+              }
+            ]
+
+            defaultProps.forEach((p) => {
+              db.run(
+                `INSERT INTO props (id, name, type, content_json, position_json, style_json, transition_json, target_roles_json, is_active, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                [
+                  p.id,
+                  p.name,
+                  p.type,
+                  JSON.stringify(p.content),
+                  JSON.stringify(p.position),
+                  JSON.stringify(p.style),
+                  JSON.stringify(p.transition),
+                  JSON.stringify(p.targetRoles),
+                  p.isActive,
+                  now,
+                  now
+                ]
+              )
+            })
+          }
+        }
+        stmtProp.free()
       } catch {
         // ignore
       }
@@ -1422,6 +1648,179 @@ export class DatabaseService {
   public deleteYouTubeItem(id: string): boolean {
     this.run('DELETE FROM youtube_items WHERE id = ?;', [id])
     this.run("DELETE FROM library_items WHERE item_type = 'youtube' AND item_id = ?;", [id])
+    return true
+  }
+
+  // =========================================================================
+  // Phase 8: Macros
+  // =========================================================================
+
+  public getMacros(): MacroItem[] {
+    if (!this.db) return []
+    try {
+      const stmt = this.db.prepare('SELECT * FROM macros ORDER BY is_built_in DESC, name ASC;')
+      const macros: MacroItem[] = []
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as any
+        macros.push({
+          id: String(row.id),
+          name: String(row.name),
+          color: String(row.color || '#FF7A00'),
+          icon: String(row.icon || 'Zap'),
+          description: String(row.description || ''),
+          shortcut: row.shortcut ? String(row.shortcut) : undefined,
+          midiTrigger: row.midi_trigger_json ? JSON.parse(row.midi_trigger_json) : undefined,
+          scheduleTrigger: row.schedule_trigger_json ? JSON.parse(row.schedule_trigger_json) : undefined,
+          actions: row.actions_json ? JSON.parse(row.actions_json) : [],
+          isBuiltIn: Boolean(row.is_built_in),
+          createdAt: String(row.created_at || ''),
+          updatedAt: String(row.updated_at || '')
+        })
+      }
+      stmt.free()
+      return macros
+    } catch (err) {
+      logger.error('Failed to get macros from database:', err)
+      return []
+    }
+  }
+
+  public saveMacro(macro: MacroItem): MacroItem {
+    const now = new Date().toISOString()
+    const isNew = !this.getMacros().some((m) => m.id === macro.id)
+    if (isNew) {
+      this.run(
+        `INSERT INTO macros (id, name, color, icon, description, shortcut, midi_trigger_json, schedule_trigger_json, actions_json, is_built_in, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          macro.id,
+          macro.name,
+          macro.color || '#FF7A00',
+          macro.icon || 'Zap',
+          macro.description || '',
+          macro.shortcut || null,
+          macro.midiTrigger ? JSON.stringify(macro.midiTrigger) : null,
+          macro.scheduleTrigger ? JSON.stringify(macro.scheduleTrigger) : null,
+          JSON.stringify(macro.actions || []),
+          macro.isBuiltIn ? 1 : 0,
+          macro.createdAt || now,
+          now
+        ]
+      )
+    } else {
+      this.run(
+        `UPDATE macros
+         SET name = ?, color = ?, icon = ?, description = ?, shortcut = ?, midi_trigger_json = ?, schedule_trigger_json = ?, actions_json = ?, updated_at = ?
+         WHERE id = ?;`,
+        [
+          macro.name,
+          macro.color || '#FF7A00',
+          macro.icon || 'Zap',
+          macro.description || '',
+          macro.shortcut || null,
+          macro.midiTrigger ? JSON.stringify(macro.midiTrigger) : null,
+          macro.scheduleTrigger ? JSON.stringify(macro.scheduleTrigger) : null,
+          JSON.stringify(macro.actions || []),
+          now,
+          macro.id
+        ]
+      )
+    }
+    return { ...macro, updatedAt: now }
+  }
+
+  public deleteMacro(id: string): boolean {
+    this.run('DELETE FROM macros WHERE id = ?;', [id])
+    return true
+  }
+
+  // =========================================================================
+  // Phase 8: Props
+  // =========================================================================
+
+  public getProps(): PropItem[] {
+    if (!this.db) return []
+    try {
+      const stmt = this.db.prepare('SELECT * FROM props ORDER BY name ASC;')
+      const props: PropItem[] = []
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as any
+        props.push({
+          id: String(row.id),
+          name: String(row.name),
+          type: row.type,
+          content: row.content_json ? JSON.parse(row.content_json) : {},
+          position: row.position_json ? JSON.parse(row.position_json) : { alignment: 'center', x: 0, y: 0, width: 100, height: 100 },
+          style: row.style_json ? JSON.parse(row.style_json) : { opacity: 1 },
+          transition: row.transition_json ? JSON.parse(row.transition_json) : { inType: 'fade', outType: 'fade', durationMs: 300 },
+          targetRoles: row.target_roles_json ? JSON.parse(row.target_roles_json) : ['main'],
+          isActive: Boolean(row.is_active),
+          createdAt: String(row.created_at || ''),
+          updatedAt: String(row.updated_at || '')
+        })
+      }
+      stmt.free()
+      return props
+    } catch (err) {
+      logger.error('Failed to get props from database:', err)
+      return []
+    }
+  }
+
+  public saveProp(prop: PropItem): PropItem {
+    const now = new Date().toISOString()
+    const isNew = !this.getProps().some((p) => p.id === prop.id)
+    if (isNew) {
+      this.run(
+        `INSERT INTO props (id, name, type, content_json, position_json, style_json, transition_json, target_roles_json, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          prop.id,
+          prop.name,
+          prop.type,
+          JSON.stringify(prop.content || {}),
+          JSON.stringify(prop.position || {}),
+          JSON.stringify(prop.style || {}),
+          JSON.stringify(prop.transition || {}),
+          JSON.stringify(prop.targetRoles || ['main']),
+          prop.isActive ? 1 : 0,
+          prop.createdAt || now,
+          now
+        ]
+      )
+    } else {
+      this.run(
+        `UPDATE props
+         SET name = ?, type = ?, content_json = ?, position_json = ?, style_json = ?, transition_json = ?, target_roles_json = ?, is_active = ?, updated_at = ?
+         WHERE id = ?;`,
+        [
+          prop.name,
+          prop.type,
+          JSON.stringify(prop.content || {}),
+          JSON.stringify(prop.position || {}),
+          JSON.stringify(prop.style || {}),
+          JSON.stringify(prop.transition || {}),
+          JSON.stringify(prop.targetRoles || ['main']),
+          prop.isActive ? 1 : 0,
+          now,
+          prop.id
+        ]
+      )
+    }
+    return { ...prop, updatedAt: now }
+  }
+
+  public deleteProp(id: string): boolean {
+    this.run('DELETE FROM props WHERE id = ?;', [id])
+    return true
+  }
+
+  public setPropActive(id: string, active: boolean): boolean {
+    this.run('UPDATE props SET is_active = ?, updated_at = ? WHERE id = ?;', [
+      active ? 1 : 0,
+      new Date().toISOString(),
+      id
+    ])
     return true
   }
 
