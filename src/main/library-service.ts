@@ -129,7 +129,7 @@ export class LibraryService {
     databaseService.run('DELETE FROM song_groups WHERE song_id = ?;', [song.id])
     databaseService.run('DELETE FROM song_arrangements WHERE song_id = ?;', [song.id])
 
-    for (const g of song.groups) {
+    for (const g of (song.groups || [])) {
       databaseService.run(
         `INSERT INTO song_groups (id, song_id, group_type, group_number, label, content, sort_order)
          VALUES (?, ?, ?, ?, ?, ?, ?);`,
@@ -137,7 +137,7 @@ export class LibraryService {
       )
     }
 
-    for (const a of song.arrangements) {
+    for (const a of (song.arrangements || [])) {
       databaseService.run(
         `INSERT INTO song_arrangements (id, song_id, name, group_order, is_default)
          VALUES (?, ?, ?, ?, ?);`,

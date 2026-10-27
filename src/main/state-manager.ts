@@ -400,6 +400,26 @@ export class StateManager extends EventEmitter {
     this.emit('state-updated', this.state)
     return this.state
   }
+
+  public setActiveSubtitle(subtitle: any | null): PresenterState {
+    this.state = {
+      ...this.state,
+      activeSubtitle: subtitle,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setSubtitlesConfig(config: any | null): PresenterState {
+    this.state = {
+      ...this.state,
+      subtitlesConfig: config,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
 }
 
 export const stateManager = new StateManager()

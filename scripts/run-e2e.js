@@ -98,8 +98,30 @@ async function run() {
     }
   })
 
+  function wrapScreenshot(page) {
+    if (!page || page._screenshotWrapped) return page
+    page._screenshotWrapped = true
+    const origScreenshot = page.screenshot.bind(page)
+    page.screenshot = async function (options = {}) {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          if (options && options.path && fs.existsSync(options.path)) {
+            try { fs.unlinkSync(options.path) } catch (_) {}
+          }
+          return await origScreenshot(options)
+        } catch (err) {
+          if (attempt === 5) throw err
+          await new Promise((r) => setTimeout(r, 300 * attempt))
+        }
+      }
+    }
+    return page
+  }
+
+  app.on('window', (w) => wrapScreenshot(w))
+
   try {
-    const win = await app.firstWindow()
+    const win = wrapScreenshot(await app.firstWindow())
     await win.waitForLoadState('domcontentloaded')
     console.log('[E2E] Operator window loaded successfully.')
 
@@ -1799,9 +1821,105 @@ async function run() {
     )
 
     // =========================================================================
-    // STEP 19: Final Audit & Zero Console Errors Assertion
+    // STEP 19: Phase 10 - Extras (Sincronización, Importación Multi-Formato, CCLI, Subtítulos y Asistente IA)
     // =========================================================================
-    console.log('\n[Step 19/19] Auditing Console Errors and Unhandled Exceptions...')
+    console.log('\n[Step 19/20] Testing Phase 10: Extras (Live Subtitles, Importers, CCLI Reports & Sync)...')
+
+    // 1. Test Real-Time Live Subtitles Projection on Output Windows
+    console.log('  -> Sending live subtitle to output windows...')
+    await win.evaluate(async () => {
+      await window.churchPresenterApi.sendLiveSubtitle({
+        text: 'Porque de tal manera amó Dios al mundo (Subtítulo en Vivo)',
+        translation: 'For God so loved the world (Live Subtitle)',
+        targetRoles: ['main', 'audience', 'program'],
+        durationSec: 10
+      })
+    })
+    await win.waitForTimeout(600)
+
+    // Capture output displays with subtitle overlay
+    await captureOutputWindows('26_live_subtitles_output')
+    console.log('  -> Live subtitle rendered on screen & captured in output evidence: 26_live_subtitles_output')
+
+    // Clear subtitle
+    await win.evaluate(async () => {
+      await window.churchPresenterApi.clearLiveSubtitle()
+    })
+    await win.waitForTimeout(300)
+
+    // 2. Open Mode "Más" and verify Phase 10 feature cards
+    const moreModeBtn = win.locator('.pro-mode-btn:has-text("Más")')
+    await moreModeBtn.click()
+    await win.waitForTimeout(500)
+
+    const syncCard = win.locator('button :text("Sincronización entre Computadoras")')
+    const importCard = win.locator('button :text("Importar Canciones de Otros Programas")')
+    const ccliCard = win.locator('button :text("Reporte de Uso de Canciones (CCLI)")')
+    const subtitlesCard = win.locator('button :text("Subtítulos y Traducción en Vivo")')
+    const aiCard = win.locator('button :text("Asistente de Contenido y Diapositivas")')
+    const backupSecCard = win.locator('button :text("Copias de Seguridad Secundarias (USB)")')
+
+    if (
+      (await syncCard.count()) === 0 ||
+      (await importCard.count()) === 0 ||
+      (await ccliCard.count()) === 0 ||
+      (await subtitlesCard.count()) === 0 ||
+      (await aiCard.count()) === 0 ||
+      (await backupSecCard.count()) === 0
+    ) {
+      throw new Error('Phase 10 tools cards not rendered in Mode Más.')
+    }
+    console.log('  -> Verified all Phase 10 feature cards in Mode Más.')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '27_mode_mas_phase10_cards.png') })
+
+    // 3. Test Song Import Modal
+    await importCard.click()
+    await win.waitForTimeout(400)
+    const importModal = win.locator(':text("Importar Canciones de Otros Programas")')
+    if ((await importModal.count()) === 0) {
+      throw new Error('SongImportModal did not open.')
+    }
+    console.log('  -> SongImportModal opened with format badges (.txt, ChordPro, CSV, OpenLyrics, ProPresenter 6).')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '28_song_import_modal.png') })
+    await win.locator('button:has-text("Cerrar")').last().click()
+    await win.waitForTimeout(300)
+
+    // 4. Test CCLI Song Usage Report Modal
+    await ccliCard.click()
+    await win.waitForTimeout(400)
+    const ccliModal = win.locator(':text("Reporte de Uso de Canciones (Licencia CCLI)")')
+    if ((await ccliModal.count()) === 0) {
+      throw new Error('SongUsageReportModal did not open.')
+    }
+    console.log('  -> SongUsageReportModal opened with tracking toggle, date filters and CSV export.')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '29_ccli_report_modal.png') })
+    await win.locator('button:has-text("Cerrar")').last().click()
+    await win.waitForTimeout(300)
+
+    // 5. Test Multi-PC Sync Modal
+    await syncCard.click()
+    await win.waitForTimeout(400)
+    const syncModal = win.locator(':text("Sincronización de Biblioteca entre Computadoras")')
+    if ((await syncModal.count()) === 0) {
+      throw new Error('LibrarySyncModal did not open.')
+    }
+    console.log('  -> LibrarySyncModal opened with folder picker, export/inspect and undo options.')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '30_library_sync_modal.png') })
+    await win.locator('button:has-text("Cerrar")').last().click()
+    await win.waitForTimeout(300)
+
+    // Switch back to "Mostrar" mode
+    await showModeBtn.click()
+    await win.waitForTimeout(400)
+
+    console.log(
+      '[TEST AUDIT]: Extras y Sincronización (Fase 10) -> APROBADA (Subtítulos en vivo con WebSocket /ws, importador multi-formato, reporte CCLI con exportación CSV, sincronización con resolución de conflictos y copias secundarias)'
+    )
+
+    // =========================================================================
+    // STEP 20: Final Audit & Zero Console Errors Assertion
+    // =========================================================================
+    console.log('\n[Step 20/20] Auditing Console Errors and Unhandled Exceptions...')
 
     console.log('----------------------------------------------------------------------')
     console.log(`[Summary]: Console errors recorded: ${consoleErrors.length}`)

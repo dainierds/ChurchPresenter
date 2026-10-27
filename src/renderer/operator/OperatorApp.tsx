@@ -66,6 +66,12 @@ import { PropEditorModal } from './components/PropEditorModal'
 import { BroadcastStudioPanel } from './components/BroadcastStudioPanel'
 import { BroadcastSettingsModal } from './components/BroadcastSettingsModal'
 import { ObsBridgeModal } from './components/ObsBridgeModal'
+import { SongImportModal } from './components/SongImportModal'
+import { SongUsageReportModal } from './components/SongUsageReportModal'
+import { LibrarySyncModal } from './components/LibrarySyncModal'
+import { LiveSubtitlesModal } from './components/LiveSubtitlesModal'
+import { AiAssistantModal } from './components/AiAssistantModal'
+import { SecondaryBackupModal } from './components/SecondaryBackupModal'
 import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus, BroadcastStatus } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
@@ -556,6 +562,14 @@ export const OperatorApp: React.FC = () => {
   const [editingProp, setEditingProp] = useState<PropItem | null>(null)
   const [loopStatus, setLoopStatus] = useState<LoopStatus | null>(null)
 
+  // Phase 10: Extras Modals
+  const [isSongImportModalOpen, setIsSongImportModalOpen] = useState<boolean>(false)
+  const [isSongUsageModalOpen, setIsSongUsageModalOpen] = useState<boolean>(false)
+  const [isLibrarySyncModalOpen, setIsLibrarySyncModalOpen] = useState<boolean>(false)
+  const [isLiveSubtitlesModalOpen, setIsLiveSubtitlesModalOpen] = useState<boolean>(false)
+  const [isAiAssistantModalOpen, setIsAiAssistantModalOpen] = useState<boolean>(false)
+  const [isSecondaryBackupModalOpen, setIsSecondaryBackupModalOpen] = useState<boolean>(false)
+
   // Check if any modal is currently visible on screen
   const isAnyModalOpen = Boolean(
     isDisplaysModalOpen ||
@@ -580,7 +594,13 @@ export const OperatorApp: React.FC = () => {
     isOutputHealthModalOpen ||
     isRehearsalSummaryModalOpen ||
     isMacroEditorOpen ||
-    isPropEditorOpen
+    isPropEditorOpen ||
+    isSongImportModalOpen ||
+    isSongUsageModalOpen ||
+    isLibrarySyncModalOpen ||
+    isLiveSubtitlesModalOpen ||
+    isAiAssistantModalOpen ||
+    isSecondaryBackupModalOpen
   )
 
   // Prevent native WebContentsView (YouTube) from covering modal overlays
@@ -2905,6 +2925,12 @@ export const OperatorApp: React.FC = () => {
         onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
         onUndo={handleUndoSong}
         onRedo={handleRedoSong}
+        onOpenSongImport={() => setIsSongImportModalOpen(true)}
+        onOpenLibrarySync={() => setIsLibrarySyncModalOpen(true)}
+        onOpenSongUsage={() => setIsSongUsageModalOpen(true)}
+        onOpenSubtitles={() => setIsLiveSubtitlesModalOpen(true)}
+        onOpenAiAssistant={() => setIsAiAssistantModalOpen(true)}
+        onOpenSecondaryBackup={() => setIsSecondaryBackupModalOpen(true)}
       />
 
       {/* 2. ProPresenter Toolbar */}
@@ -3526,6 +3552,109 @@ export const OperatorApp: React.FC = () => {
                   >
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#22c55e' }}>Puente con OBS Studio</div>
                     <div style={{ fontSize: 12, color: '#9CA3AF' }}>Conexión obs-websocket v5 y fuentes de navegador transparentes</div>
+                  </button>
+
+                  {/* Phase 10: Extras Cards */}
+                  <button
+                    type="button"
+                    onClick={() => setIsLibrarySyncModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #38BDF8',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#38BDF8' }}>Sincronización entre Computadoras</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Sincronizar canciones, listas, temas y macros por carpeta compartida o USB sin nube obligatoria</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSongImportModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #FF7A00',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#FF7A00' }}>Importar Canciones de Otros Programas</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Texto plano, ChordPro, CSV por lotes, OpenLyrics XML y ProPresenter 6 (.pro6)</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSongUsageModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #22C55E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#22C55E' }}>Reporte de Uso de Canciones (CCLI)</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Registro de proyecciones en vivo, filtros de fecha y exportación a CSV oficial</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsLiveSubtitlesModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #38BDF8',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#38BDF8' }}>Subtítulos y Traducción en Vivo</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Capa de subtítulos en pantalla con servidor WebSocket /ws, transcriptor web y estilos</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAiAssistantModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #22C55E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#22C55E' }}>Asistente de Contenido y Diapositivas</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Armar bosquejos, sugerir pasajes bíblicos y dividir texto con estricta revisión humana</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSecondaryBackupModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #FF7A00',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#FF7A00' }}>Copias de Seguridad Secundarias (USB)</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Duplicación de respaldo a carpeta externa o memoria USB con verificación SHA-256</div>
                   </button>
                 </div>
               </div>
@@ -6291,6 +6420,66 @@ export const OperatorApp: React.FC = () => {
         isOpen={isObsBridgeOpen}
         onClose={() => setIsObsBridgeOpen(false)}
         remotePort={remoteStatus?.port || 8080}
+      />
+
+      {/* =========================================================
+          PHASE 10: EXTRAS MODALS (Sync, Import, CCLI, Subtitles, AI, Backups)
+          ========================================================= */}
+      <SongImportModal
+        isOpen={isSongImportModalOpen}
+        onClose={() => setIsSongImportModalOpen(false)}
+        libraries={userLibraries}
+        onImportComplete={() => {
+          loadAllData()
+        }}
+      />
+
+      <SongUsageReportModal
+        isOpen={isSongUsageModalOpen}
+        onClose={() => setIsSongUsageModalOpen(false)}
+      />
+
+      <LibrarySyncModal
+        isOpen={isLibrarySyncModalOpen}
+        onClose={() => setIsLibrarySyncModalOpen(false)}
+        onSyncCompleted={() => {
+          loadAllData()
+        }}
+      />
+
+      <LiveSubtitlesModal
+        isOpen={isLiveSubtitlesModalOpen}
+        onClose={() => setIsLiveSubtitlesModalOpen(false)}
+      />
+
+      <AiAssistantModal
+        isOpen={isAiAssistantModalOpen}
+        onClose={() => setIsAiAssistantModalOpen(false)}
+        onAddToLibrary={(slides) => {
+          // Add as a new presentation
+          const now = new Date().toISOString()
+          const newPresentation: GenericPresentation = {
+            id: `pres_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            title: slides[0]?.title || 'Presentación Generada',
+            description: 'Generada por Asistente de IA',
+            slides: slides.map((s, idx) => ({
+              id: `slide_${idx + 1}`,
+              title: s.title,
+              body: s.body
+            })),
+            createdAt: now,
+            updatedAt: now
+          }
+          window.churchPresenterApi.savePresentation(newPresentation).then(() => {
+            loadAllData()
+            setIsAiAssistantModalOpen(false)
+          })
+        }}
+      />
+
+      <SecondaryBackupModal
+        isOpen={isSecondaryBackupModalOpen}
+        onClose={() => setIsSecondaryBackupModalOpen(false)}
       />
 
       {/* Toast Notifications */}

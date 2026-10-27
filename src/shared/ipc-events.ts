@@ -265,5 +265,43 @@ export const IPC_CHANNELS = {
   BROADCAST_STATUS_CHANGED: 'broadcast:status-changed',
   BROADCAST_GET_AUDIO_MIXER: 'broadcast:get-audio-mixer',
   BROADCAST_SAVE_AUDIO_MIXER: 'broadcast:save-audio-mixer',
-  BROADCAST_LIST_DESKTOP_SOURCES: 'broadcast:list-desktop-sources'
+  BROADCAST_LIST_DESKTOP_SOURCES: 'broadcast:list-desktop-sources',
+
+  // Phase 10: Extras (Sync, Song Importers, CCLI Reports, Subtitles, AI, Backups)
+  // 1. Multi-PC Sync
+  SYNC_EXPORT_PACKAGE: 'sync:export-package',
+  SYNC_INSPECT_PACKAGE: 'sync:inspect-package',
+  SYNC_MERGE_PACKAGE: 'sync:merge-package',
+  SYNC_UNDO: 'sync:undo',
+  SYNC_GET_CONFIG: 'sync:get-config',
+  SYNC_SAVE_CONFIG: 'sync:save-config',
+
+  // 2. Song Importers
+  SONG_IMPORT_PARSE_FILE: 'song-import:parse-file',
+  SONG_IMPORT_EXECUTE: 'song-import:execute',
+
+  // 3. CCLI Song Usage
+  CCLI_RECORD_USAGE: 'ccli:record-usage',
+  CCLI_GET_REPORT: 'ccli:get-report',
+  CCLI_EXPORT_CSV: 'ccli:export-csv',
+  CCLI_CLEAR_HISTORY: 'ccli:clear-history',
+  CCLI_GET_CONFIG: 'ccli:get-config',
+  CCLI_SAVE_CONFIG: 'ccli:save-config',
+
+  // 4. Live Subtitles
+  SUBTITLES_GET_CONFIG: 'subtitles:get-config',
+  SUBTITLES_SAVE_CONFIG: 'subtitles:save-config',
+  SUBTITLES_SEND: 'subtitles:send',
+  SUBTITLES_CLEAR: 'subtitles:clear',
+  SUBTITLES_STATUS_CHANGED: 'subtitles:status-changed',
+
+  // 5. AI Assistant
+  AI_GET_CONFIG: 'ai:get-config',
+  AI_SAVE_CONFIG: 'ai:save-config',
+  AI_EXECUTE_TASK: 'ai:execute-task',
+
+  // 6. Secondary Backup
+  BACKUP_GET_SECONDARY_CONFIG: 'backup:get-secondary-config',
+  BACKUP_SAVE_SECONDARY_CONFIG: 'backup:save-secondary-config',
+  BACKUP_RUN_SECONDARY: 'backup:run-secondary'
 } as const

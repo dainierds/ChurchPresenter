@@ -881,4 +881,50 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
   5. **Cumplimiento Legal y Licenciamiento CCLI**:
      - Se incorpora una advertencia visual prominente en la interfaz del estudio y en los diálogos de configuración recordando al operador que transmitir alabanzas y música eclesiástica por internet requiere una licencia vigente (p. ej., CCLI Streaming License).
 
+---
+
+## 28. Sincronización entre Computadoras sin Nube Obligatoria, Importadores Multi-Formato Fuera de Línea, Registro CCLI, Subtítulos en Vivo y Asistente IA con Revisión Humana Estricta (Fase 10)
+
+- **Contexto**:
+  - Las iglesias a menudo operan en entornos donde el equipo de proyección no tiene acceso permanente a internet, o donde múltiples voluntarios preparan cultos en sus portátiles personales y necesitan transferir sus datos al equipo del templo sin pagar servicios de nube ni exponer datos privados.
+  - Al migrar desde otros programas (OpenLyrics, ChordPro, ProPresenter 6), se requiere importar cientos de canciones sin depender de internet ni de servicios de suscripción.
+  - El cumplimiento de licencias CCLI exige reportar con exactitud qué canciones fueron proyectadas en cada servicio.
+  - La subtitulación y traducción simultánea debe ser accesible a transcriptores voluntarios sin interrumpir la operación principal.
+  - La integración de Inteligencia Artificial debe respetar la soberanía de la iglesia: ningún dato debe enviarse a servidores externos sin autorización explícita previa, y las credenciales deben estar protegidas criptográficamente.
+
+- **Decisiones Técnicas**:
+  1. **Sincronización por Paquetes en Carpetas Locales o USB**:
+     - En lugar de forzar una base de datos centralizada en la nube, se implementa sincronización por paquetes portables (`manifest.json`, `songs.json`, `playlists.json`, `themes.json`, `macros.json`).
+     - Cada elemento posee un `id` UUID estable y fecha de modificación `updatedAt`.
+     - El motor compara y clasifica los elementos en idénticos, nuevos y conflictivos.
+     - Ante conflictos, el operador visualiza ambas versiones y elige entre conservar local, usar remoto o duplicar ambos.
+     - **Seguridad y Reversibilidad**: Se crea automáticamente una copia de seguridad SQLite antes de cualquier fusión (`pre_sync_<timestamp>.sqlite`), permitiendo deshacer (`undoSync`) con un solo clic.
+  2. **Importadores de Canciones 100% Fuera de Línea**:
+     - Se implementan analizadores nativos sin dependencias externas:
+       - **Texto plano**: extracción de títulos, autores, números CCLI y bloques `[Verso]`, `[Coro]`, `[Puente]`.
+       - **ChordPro**: eliminación de acordes entre corchetes para proyección limpia y extracción de directivas.
+       - **CSV**: soporte para comillas multilínea y mapeo automático de columnas.
+       - **OpenLyrics XML**: análisis conforme al estándar abierto internacional de canciones de alabanza.
+       - **ProPresenter 6 (.pro6)**: decodificación en memoria de fragmentos RTF codificados en base64, eliminando sintaxis de control RTF y extrayendo texto Unicode limpio.
+       - Detección de duplicados para evitar sobreescribir canciones existentes sin advertencia.
+  3. **Reporte de Uso de Canciones para Licencias CCLI**:
+     - Registro persistente en SQLite cada vez que una canción se proyecta en vivo (`song_usage_records`).
+     - Filtrado por rango de fechas y generación de archivos CSV conformes a la especificación de CCLI (Fecha/Hora, Título, Autor, Número CCLI, Copyright, Culto, Operador).
+     - Posibilidad de desactivar el registro y limpiar el historial previa confirmación del operador.
+  4. **Capa de Subtítulos y Traducción en Tiempo Real (`.output-subtitles-layer`)**:
+     - Capa visual flotante sobre el viewport de salida conectada vía WebSocket `/ws`.
+     - Servidor web ligero en `/subtitles` que permite a transcriptores en teléfonos o portátiles de la red local ingresar texto o traducciones.
+     - Temporizador de desvanecimiento suave y auto-limpieza tras N segundos de silencio (configurable, por defecto 5 segundos).
+     - Asignación configurable por roles (p. ej. activado en Audiencia y Transmisión, excluido del Escenario para no distraer a músicos o predicadores).
+  5. **Asistente de Contenido e IA con Control Humano Estricto**:
+     - Desactivado por defecto.
+     - Las claves de API se cifran en el almacén seguro de Windows DPAPI con `safeStorageService`.
+     - **Revisión Humana Obligatoria**: La interfaz muestra exactamente qué texto se procesará y requiere pulsar explícitamente un botón.
+     - El resultado de diapositivas o pasajes bíblicos se muestra en una tabla editable antes de ser agregado a la biblioteca.
+     - Si no hay conexión a internet o no se ha configurado clave API, el sistema ejecuta analizadores heurísticos locales (división de texto en 2-4 líneas, bosquejo de sermones, sugerencias bíblicas desde un índice teológico curado fuera de línea) sin interrumpir el funcionamiento de la aplicación.
+  6. **Copias de Seguridad Secundarias Automáticas en USB o Disco Externo**:
+     - Duplica las copias de seguridad de la base de datos hacia una ruta secundaria elegida por el usuario.
+     - Verifica la integridad mediante el cálculo de la suma de comprobación SHA-256 byte a byte de ambos archivos antes de confirmar el respaldo.
+
+
 

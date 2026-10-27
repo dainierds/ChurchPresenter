@@ -1297,6 +1297,85 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                   ))}
               </div>
             )}
+
+            {/* Phase 10: Real-Time Subtitles & Translation Layer */}
+            {visibility.showContent && !displayState?.controls?.black && displayState?.activeSubtitle && (() => {
+              const sub = displayState.activeSubtitle
+              const cfg = displayState.subtitlesConfig || {
+                enabled: true,
+                position: 'bottom',
+                fontSizeVmin: 3.5,
+                maxLines: 2,
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                textColor: '#FFFFFF',
+                fadeDurationMs: 300,
+                autoClearDelaySec: 5,
+                targetRoles: ['main', 'lobby', 'program', 'audience']
+              }
+              const isTargeted =
+                !cfg.targetRoles ||
+                cfg.targetRoles.length === 0 ||
+                cfg.targetRoles.includes(role) ||
+                (role === 'main' && cfg.targetRoles.includes('audience')) ||
+                (role === 'audience' && cfg.targetRoles.includes('main'))
+
+              if (!isTargeted) return null
+
+              return (
+                <div
+                  className={`output-subtitles-layer output-subtitles-${cfg.position || 'bottom'}`}
+                  style={{
+                    position: 'absolute',
+                    left: '4%',
+                    right: '4%',
+                    [cfg.position === 'top' ? 'top' : 'bottom']: '4%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 95,
+                    transition: `opacity ${cfg.fadeDurationMs || 300}ms ease`
+                  }}
+                >
+                  <div
+                    className="output-subtitle-bubble"
+                    style={{
+                      backgroundColor: cfg.backgroundColor || 'rgba(0, 0, 0, 0.85)',
+                      color: cfg.textColor || '#FFFFFF',
+                      fontSize: `${cfg.fontSizeVmin || 3.5}vmin`,
+                      lineHeight: 1.3,
+                      padding: '0.6em 1.4em',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+                      maxWidth: '92%',
+                      wordBreak: 'break-word',
+                      display: '-webkit-box',
+                      WebkitLineClamp: cfg.maxLines || 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div className="output-subtitle-text">{sub.text}</div>
+                    {sub.translation && (
+                      <div
+                        className="output-subtitle-translation"
+                        style={{
+                          color: '#38bdf8',
+                          fontSize: `${(cfg.fontSizeVmin || 3.5) * 0.85}vmin`,
+                          marginTop: '0.3em',
+                          fontStyle: 'italic'
+                        }}
+                      >
+                        {sub.translation}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
 

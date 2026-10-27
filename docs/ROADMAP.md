@@ -201,5 +201,32 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
   - Pruebas unitarias: `tests/ffmpeg-detection.test.ts`, `tests/obs-bridge.test.ts`, `tests/broadcast-engine.test.ts`, `tests/pipeline-benchmark.test.ts`.
   - Validación E2E automatizada con la app real de Electron (Paso 18 en `scripts/run-e2e.js`) con capturas de evidencia fotográfica en `docs/evidence/`.
 
-### Fase 10: Extras
-- Funcionalidades avanzadas de iglesia (anuncios rotativos de lobby, conteo regresivo previo al servicio, sincronización en nube de librerías).
+### Fase 10: Extras y Sincronización (Completada)
+- **Sincronización entre Computadoras sin Nube**:
+  - Motor de sincronización portable a cualquier carpeta elegida por el usuario (red local compartida, Google Drive/OneDrive mapeado, Syncthing o memoria USB).
+  - Paquetes estables con `manifest.json`, `songs.json`, `playlists.json`, `themes.json` y `macros.json`.
+  - Comparación de versiones, detección de conflictos y pantalla de resolución interactiva (`keep_local`, `keep_remote`, `duplicate_both`).
+  - Copia de seguridad obligatoria previa a la fusión y botón de reversión instantánea (`undoSync`).
+- **Importadores de Canciones Fuera de Línea (100% Offline)**:
+  - Analizadores nativos sin llamadas a internet para Texto plano (`.txt`), ChordPro (`.chordpro`), CSV por lotes (`.csv`), OpenLyrics XML (`.xml`) y ProPresenter 6 (`.pro6` con decodificación RTF base64 en memoria).
+  - Previsualización previa, detección de duplicados, extracción de estrofas (`Verso`, `Coro`, `Puente`) y reporte detallado de importación.
+- **Reporte de Uso de Canciones (CCLI)**:
+  - Registro de auditoría en SQLite de cada proyección en vivo de canciones (`song_usage_records`).
+  - Filtro por rango de fechas, resumen estadístico (total de reproducciones y canciones únicas) y exportación a CSV oficial con las columnas requeridas por CCLI.
+  - Opción de desactivación y borrado seguro del historial previa confirmación.
+- **Subtítulos y Traducción en Vivo**:
+  - Capa en tiempo real `.output-subtitles-layer` sobre las salidas físicas (`OutputApp.tsx`).
+  - Protocolo WebSocket autenticado `/ws` documentado en `docs/SUBTITLES_API.md`.
+  - Servidor web en `/subtitles` para transcriptores remotos con interfaz móvil y prueba de envío.
+  - Temporizador de auto-limpieza tras periodos de silencio y estilos configurables (posición, líneas, vmin, colores, fundido suave).
+  - Asignación por roles para excluir pantallas que no requieren subtítulos (como el monitor de escenario).
+- **Asistente de Contenido e IA (Opcional, desactivado por defecto)**:
+  - Generación de diapositivas a partir de bosquejos de sermones, sugerencias bíblicas y división de texto en pantallas legibles (2 a 4 líneas) sin cortar oraciones.
+  - Claves de API cifradas con Windows DPAPI mediante `safeStorageService`.
+  - **Revisión Humana Estricta**: Vista previa exacta del texto antes de enviar, confirmación obligatoria por botón y tabla editable de diapositivas antes de guardar en la biblioteca.
+  - Fallback local sin dependencias: si no hay conexión o no hay clave, ejecuta división y bosquejo localmente e indexa pasajes bíblicos desde una base de datos teológica fuera de línea sin interrumpir al usuario.
+- **Copias de Seguridad Secundarias (USB / Unidad Externa)**:
+  - Duplicación automática hacia una segunda unidad o carpeta con verificación de integridad byte a byte mediante suma de comprobación criptográfica SHA-256.
+- **Suite de Pruebas Unitarias y E2E Real**:
+  - Pruebas unitarias dedicadas: `tests/song-importers.test.ts`, `tests/library-sync.test.ts`, `tests/ccli-usage.test.ts`, `tests/live-subtitles.test.ts`, `tests/ai-assistant.test.ts`, `tests/secondary-backup.test.ts`.
+  - Validación E2E con la app real de Electron (Paso 19 en `scripts/run-e2e.js`) con capturas de pantalla de subtítulos en vivo en salidas y modales de extras en `docs/evidence/`.

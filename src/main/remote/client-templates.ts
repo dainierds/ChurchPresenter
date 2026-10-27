@@ -1197,3 +1197,304 @@ export function getObsBrowserSourceHtml(options: {
 </body>
 </html>`;
 }
+
+export function getSubtitlesSenderHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Transcriptor en Vivo - ChurchPresenter</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0A0A0A;
+      color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 650px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #262626;
+      padding-bottom: 12px;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #38BDF8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 600;
+      background: #262626;
+      color: #94A3B8;
+    }
+    .status-badge.connected {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22C55E;
+      border: 1px solid #22C55E;
+    }
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #94A3B8;
+    }
+    textarea, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #171717;
+      border: 1px solid #333333;
+      color: #FFFFFF;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus, input[type="text"]:focus, input[type="number"]:focus {
+      border-color: #38BDF8;
+    }
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+    .row > div {
+      flex: 1;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    button {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    .btn-send {
+      background: #22C55E;
+      color: #0A0A0A;
+    }
+    .btn-clear {
+      background: #FF7A00;
+      color: #0A0A0A;
+      flex: 0 0 140px;
+    }
+    .history-card {
+      background: #141414;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .history-item {
+      padding: 8px 10px;
+      background: #1E1E1E;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-left: 3px solid #38BDF8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-item:hover {
+      background: #262626;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span>💬</span> Transcriptor en Vivo</h1>
+      <span id="statusBadge" class="status-badge">Desconectado</span>
+    </header>
+
+    <div class="field-group">
+      <label for="subText">Texto del Subtítulo (Español u Original)</label>
+      <textarea id="subText" placeholder="Escriba el texto que se proyectará en vivo..." autofocus></textarea>
+    </div>
+
+    <div class="field-group">
+      <label for="subTrans">Traducción Simultánea (Opcional)</label>
+      <input type="text" id="subTrans" placeholder="Ej: For God so loved the world..." />
+    </div>
+
+    <div class="row">
+      <div class="field-group">
+        <label for="subDuration">Duración visible (segundos)</label>
+        <input type="number" id="subDuration" value="5" min="2" max="60" />
+      </div>
+      <div class="field-group">
+        <label>Destino de Pantallas</label>
+        <div style="display: flex; gap: 10px; padding-top: 8px; font-size: 0.85rem;">
+          <label><input type="checkbox" id="roleMain" checked /> Audiencia</label>
+          <label><input type="checkbox" id="roleProgram" checked /> Transmisión</label>
+          <label><input type="checkbox" id="roleStage" /> Escenario</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-send" id="btnSend">Enviar Subtítulo</button>
+      <button class="btn-clear" id="btnClear">Limpiar</button>
+    </div>
+
+    <div class="field-group" style="margin-top: 12px;">
+      <label>Historial de Frases Recientes (Tocar para re-enviar)</label>
+      <div class="history-card" id="historyList">
+        <div style="color: #64748B; font-size: 0.85rem; text-align: center; padding: 12px;">No hay frases enviadas recientemente</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token') || '';
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = protocol + '//' + window.location.host + '/ws' + (token ? '?token=' + encodeURIComponent(token) : '');
+
+    let ws = null;
+    const history = [];
+
+    function connect() {
+      const badge = document.getElementById('statusBadge');
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        badge.innerText = 'Error de conexión';
+        badge.className = 'status-badge';
+        return;
+      }
+
+      ws.onopen = () => {
+        badge.innerText = 'En Línea';
+        badge.className = 'status-badge connected';
+      };
+
+      ws.onclose = () => {
+        badge.innerText = 'Reconectando...';
+        badge.className = 'status-badge';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        badge.innerText = 'Error';
+        badge.className = 'status-badge';
+      };
+    }
+
+    function sendSubtitle() {
+      const text = document.getElementById('subText').value.trim();
+      const translation = document.getElementById('subTrans').value.trim();
+      const durationSec = parseInt(document.getElementById('subDuration').value, 10) || 5;
+
+      if (!text) return;
+
+      const targetRoles = [];
+      if (document.getElementById('roleMain').checked) targetRoles.push('main', 'audience');
+      if (document.getElementById('roleProgram').checked) targetRoles.push('program');
+      if (document.getElementById('roleStage').checked) targetRoles.push('stage');
+
+      const payload = {
+        type: 'subtitle',
+        text,
+        translation: translation || undefined,
+        targetRoles: targetRoles.length > 0 ? targetRoles : ['main', 'lobby'],
+        durationSec
+      };
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+      }
+
+      // Add to history
+      history.unshift({ text, translation });
+      if (history.length > 15) history.pop();
+      renderHistory();
+
+      // Clear input and focus
+      document.getElementById('subText').value = '';
+      document.getElementById('subTrans').value = '';
+      document.getElementById('subText').focus();
+    }
+
+    function clearSubtitle() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'clear_subtitle' }));
+      }
+    }
+
+    function renderHistory() {
+      const list = document.getElementById('historyList');
+      if (history.length === 0) return;
+      list.innerHTML = '';
+      history.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = '<span>' + item.text + (item.translation ? ' <small style="color: #38BDF8">(' + item.translation + ')</small>' : '') + '</span><span style="color:#64748B; font-size:0.75rem;">Re-enviar</span>';
+        div.onclick = () => {
+          document.getElementById('subText').value = item.text;
+          document.getElementById('subTrans').value = item.translation || '';
+          sendSubtitle();
+        };
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById('btnSend').onclick = sendSubtitle;
+    document.getElementById('btnClear').onclick = clearSubtitle;
+    document.getElementById('subText').onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendSubtitle();
+      }
+    };
+
+    connect();
+  </script>
+</body>
+</html>`;
+}

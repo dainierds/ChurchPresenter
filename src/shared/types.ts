@@ -829,6 +829,8 @@ export interface PresenterState {
   activeLoopStatus?: LoopStatus | null
   disableTransitions?: boolean
   macroExecutionState?: MacroExecutionState | null
+  activeSubtitle?: LiveSubtitleMessage | null
+  subtitlesConfig?: LiveSubtitlesConfig | null
   updatedAt: number
 }
 
@@ -1249,6 +1251,45 @@ export interface ChurchPresenterApi {
   stopBroadcastRecord: () => Promise<{ success: boolean; error?: string }>
   onBroadcastStatusChanged?: (callback: (status: BroadcastStatus) => void) => () => void
   listDesktopSources: () => Promise<DesktopCaptureSource[]>
+
+  // =========================================================================
+  // Phase 10: Extras (Sync, Song Importers, CCLI Reports, Subtitles, AI, Backups)
+  // =========================================================================
+  // 1. Multi-PC Sync
+  exportSyncPackage: (targetFolder: string) => Promise<{ success: boolean; packagePath?: string; manifest?: SyncPackageManifest; error?: string }>
+  inspectSyncPackage: (sourceFolder: string) => Promise<{ success: boolean; manifest?: SyncPackageManifest; conflicts: SyncConflictItem[]; newItemsCount: number; identicalCount: number; error?: string }>
+  mergeSyncPackage: (sourceFolder: string, resolutions: Record<string, 'keep_local' | 'keep_remote' | 'duplicate_both'>) => Promise<SyncMergeResult>
+  undoSync: () => Promise<{ success: boolean; restoredFrom?: string; error?: string }>
+  getSyncConfig: () => Promise<{ syncFolder?: string; lastSyncAt?: string }>
+  saveSyncConfig: (config: { syncFolder?: string }) => Promise<{ success: boolean }>
+
+  // 2. Song Importers
+  parseSongImportFile: (filePath: string) => Promise<{ success: boolean; previewSongs: ImportedSongPreview[]; formatDetected: string; errors: string[] }>
+  executeSongImport: (songs: ImportedSongPreview[], targetLibraryId?: string) => Promise<SongImportResult>
+
+  // 3. CCLI Song Usage
+  recordSongUsage: (songId: string, title: string, artist?: string, ccliNumber?: string, copyright?: string, serviceId?: string, serviceTitle?: string) => Promise<boolean>
+  getSongUsageReport: (from?: string, to?: string) => Promise<SongUsageReport>
+  exportSongUsageCsv: (from?: string, to?: string) => Promise<{ success: boolean; csvContent: string; recordCount: number }>
+  clearSongUsageHistory: () => Promise<boolean>
+  getCcliConfig: () => Promise<{ enabled: boolean }>
+  saveCcliConfig: (config: { enabled: boolean }) => Promise<{ enabled: boolean }>
+
+  // 4. Live Subtitles
+  getSubtitlesConfig: () => Promise<LiveSubtitlesConfig>
+  saveSubtitlesConfig: (config: Partial<LiveSubtitlesConfig>) => Promise<LiveSubtitlesConfig>
+  sendLiveSubtitle: (subtitle: { text: string; translation?: string; targetRoles?: string[]; durationSec?: number }) => Promise<LiveSubtitleMessage>
+  clearLiveSubtitle: () => Promise<boolean>
+
+  // 5. AI Assistant
+  getAiAssistantConfig: () => Promise<AiAssistantConfig>
+  saveAiAssistantConfig: (config: Partial<AiAssistantConfig>) => Promise<AiAssistantConfig>
+  executeAiTask: (request: AiAssistantRequest) => Promise<AiAssistantResponse>
+
+  // 6. Secondary Backup
+  getSecondaryBackupConfig: () => Promise<SecondaryBackupConfig>
+  saveSecondaryBackupConfig: (config: Partial<SecondaryBackupConfig>) => Promise<SecondaryBackupConfig>
+  runSecondaryBackup: () => Promise<SecondaryBackupStatus>
 }
 
 // =========================================================================
@@ -1658,6 +1699,151 @@ export interface DesktopCaptureSource {
   id: string
   name: string
   thumbnailDataUrl?: string
+}
+
+// =========================================================================
+// PHASE 10: EXTRAS (Sync, Importers, CCLI Reports, Subtitles, AI, Backups)
+// =========================================================================
+
+// 1. Multi-PC Sync
+export interface SyncPackageManifest {
+  packageId: string
+  generatedAt: string
+  sourceComputerId: string
+  version: number
+  counts: {
+    songs: number
+    playlists: number
+    themes: number
+    macros: number
+  }
+}
+
+export interface SyncConflictItem {
+  id: string
+  type: 'song' | 'playlist' | 'theme' | 'macro'
+  title: string
+  localUpdatedAt: string
+  remoteUpdatedAt: string
+  localSummary?: string
+  remoteSummary?: string
+}
+
+export interface SyncMergeResult {
+  success: boolean
+  importedCount: number
+  updatedCount: number
+  conflictCount: number
+  conflicts: SyncConflictItem[]
+  backupPath?: string
+  error?: string
+}
+
+// 2. Song Importers
+export interface ImportedSongPreview {
+  title: string
+  artist?: string
+  ccliNumber?: string
+  copyright?: string
+  groups: { name: string; content: string }[]
+  totalSlides: number
+  isDuplicate: boolean
+  existingSongId?: string
+  originalFormat: 'txt' | 'chordpro' | 'csv' | 'openlyrics' | 'pro6'
+  filename?: string
+}
+
+export interface SongImportResult {
+  success: boolean
+  totalProcessed: number
+  importedCount: number
+  skippedDuplicates: number
+  failedCount: number
+  errors: { filename: string; reason: string }[]
+  importedSongs: Song[]
+}
+
+// 3. CCLI Song Usage
+export interface SongUsageRecord {
+  id: string
+  songId: string
+  title: string
+  artist?: string
+  ccliNumber?: string
+  copyright?: string
+  projectedAt: string
+  serviceId?: string
+  serviceTitle?: string
+  projectedBy?: string
+}
+
+export interface SongUsageReport {
+  records: SongUsageRecord[]
+  totalPlays: number
+  uniqueSongs: number
+  dateRange: { from: string; to: string }
+}
+
+// 4. Live Subtitles
+export interface LiveSubtitleMessage {
+  id: string
+  text: string
+  translation?: string
+  targetRoles: string[]
+  timestamp: number
+  durationSec?: number
+}
+
+export interface LiveSubtitlesConfig {
+  enabled: boolean
+  position: 'top' | 'bottom'
+  fontSizeVmin: number
+  maxLines: number
+  backgroundColor: string
+  textColor: string
+  fadeDurationMs: number
+  autoClearDelaySec: number
+  targetRoles: string[]
+}
+
+// 5. AI Assistant
+export type AiTaskType = 'split_text' | 'sermon_to_slides' | 'suggest_scriptures'
+
+export interface AiAssistantConfig {
+  enabled: boolean
+  provider: 'openai' | 'gemini' | 'custom'
+  apiKey?: string
+  apiKeyEncrypted?: string
+  model?: string
+  customEndpoint?: string
+}
+
+export interface AiAssistantRequest {
+  task: AiTaskType
+  inputContent: string
+  instructions?: string
+}
+
+export interface AiAssistantResponse {
+  success: boolean
+  slides?: { title: string; body: string }[]
+  scriptureSuggestions?: { reference: string; text: string; explanation?: string }[]
+  error?: string
+}
+
+// 6. Secondary Backup
+export interface SecondaryBackupConfig {
+  enabled: boolean
+  targetDirectory: string
+  verifyIntegrity: boolean
+}
+
+export interface SecondaryBackupStatus {
+  lastBackupTime?: string
+  lastBackupFilename?: string
+  verified: boolean
+  success: boolean
+  errorMessage?: string
 }
 
 declare global {

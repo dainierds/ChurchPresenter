@@ -26,6 +26,12 @@ interface TopMenuBarProps {
   onOpenDiagnosticsModal?: () => void
   onUndo?: () => void
   onRedo?: () => void
+  onOpenSongImport?: () => void
+  onOpenLibrarySync?: () => void
+  onOpenSongUsage?: () => void
+  onOpenSubtitles?: () => void
+  onOpenAiAssistant?: () => void
+  onOpenSecondaryBackup?: () => void
 }
 
 export const TopMenuBar: React.FC<TopMenuBarProps> = ({
@@ -53,7 +59,13 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onOpenOutputHealthModal,
   onOpenDiagnosticsModal,
   onUndo,
-  onRedo
+  onRedo,
+  onOpenSongImport,
+  onOpenLibrarySync,
+  onOpenSongUsage,
+  onOpenSubtitles,
+  onOpenAiAssistant,
+  onOpenSecondaryBackup
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -134,6 +146,34 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 }}
               >
                 <span>Importar Carpeta de Medios...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSongImport?.()
+                }}
+              >
+                <span>Importar Canciones (Texto, ChordPro, CSV, OpenLyrics, Pro6)...</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenLibrarySync?.()
+                }}
+              >
+                <span>Sincronización de Biblioteca entre Computadoras...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSecondaryBackup?.()
+                }}
+              >
+                <span>Copia de Seguridad Secundaria (USB / Disco externo)...</span>
               </button>
               <div className="pro-dropdown-divider" />
               <button
@@ -279,6 +319,34 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 }}
               >
                 <span>Gestión de Temas y Tipografía...</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSubtitles?.()
+                }}
+              >
+                <span>Subtítulos y Traducción en Vivo...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSongUsage?.()
+                }}
+              >
+                <span>Reporte de Uso de Canciones (CCLI)...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenAiAssistant?.()
+                }}
+              >
+                <span>Asistente de Contenido y Diapositivas (IA)...</span>
               </button>
             </div>
           )}

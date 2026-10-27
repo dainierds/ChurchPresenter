@@ -959,7 +959,45 @@ const api: ChurchPresenterApi = {
     ipcRenderer.on(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
   },
-  listDesktopSources: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_LIST_DESKTOP_SOURCES)
+  listDesktopSources: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_LIST_DESKTOP_SOURCES),
+
+  // Phase 10: Extras (Sync, Song Importers, CCLI Reports, Subtitles, AI, Backups)
+  // 1. Multi-PC Sync
+  exportSyncPackage: (targetFolder: string) => ipcRenderer.invoke(IPC_CHANNELS.SYNC_EXPORT_PACKAGE, targetFolder),
+  inspectSyncPackage: (sourceFolder: string) => ipcRenderer.invoke(IPC_CHANNELS.SYNC_INSPECT_PACKAGE, sourceFolder),
+  mergeSyncPackage: (sourceFolder: string, resolutions: any) => ipcRenderer.invoke(IPC_CHANNELS.SYNC_MERGE_PACKAGE, sourceFolder, resolutions),
+  undoSync: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_UNDO),
+  getSyncConfig: () => ipcRenderer.invoke(IPC_CHANNELS.SYNC_GET_CONFIG),
+  saveSyncConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.SYNC_SAVE_CONFIG, config),
+
+  // 2. Song Importers
+  parseSongImportFile: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.SONG_IMPORT_PARSE_FILE, filePath),
+  executeSongImport: (songs: any[], targetLibraryId?: string) => ipcRenderer.invoke(IPC_CHANNELS.SONG_IMPORT_EXECUTE, songs, targetLibraryId),
+
+  // 3. CCLI Song Usage
+  recordSongUsage: (songId: string, title: string, artist?: string, ccliNumber?: string, copyright?: string, serviceId?: string, serviceTitle?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CCLI_RECORD_USAGE, songId, title, artist, ccliNumber, copyright, serviceId, serviceTitle),
+  getSongUsageReport: (from?: string, to?: string) => ipcRenderer.invoke(IPC_CHANNELS.CCLI_GET_REPORT, from, to),
+  exportSongUsageCsv: (from?: string, to?: string) => ipcRenderer.invoke(IPC_CHANNELS.CCLI_EXPORT_CSV, from, to),
+  clearSongUsageHistory: () => ipcRenderer.invoke(IPC_CHANNELS.CCLI_CLEAR_HISTORY),
+  getCcliConfig: () => ipcRenderer.invoke(IPC_CHANNELS.CCLI_GET_CONFIG),
+  saveCcliConfig: (config: { enabled: boolean }) => ipcRenderer.invoke(IPC_CHANNELS.CCLI_SAVE_CONFIG, config),
+
+  // 4. Live Subtitles
+  getSubtitlesConfig: () => ipcRenderer.invoke(IPC_CHANNELS.SUBTITLES_GET_CONFIG),
+  saveSubtitlesConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.SUBTITLES_SAVE_CONFIG, config),
+  sendLiveSubtitle: (subtitle: any) => ipcRenderer.invoke(IPC_CHANNELS.SUBTITLES_SEND, subtitle),
+  clearLiveSubtitle: () => ipcRenderer.invoke(IPC_CHANNELS.SUBTITLES_CLEAR),
+
+  // 5. AI Assistant
+  getAiAssistantConfig: () => ipcRenderer.invoke(IPC_CHANNELS.AI_GET_CONFIG),
+  saveAiAssistantConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.AI_SAVE_CONFIG, config),
+  executeAiTask: (request: any) => ipcRenderer.invoke(IPC_CHANNELS.AI_EXECUTE_TASK, request),
+
+  // 6. Secondary Backup
+  getSecondaryBackupConfig: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_GET_SECONDARY_CONFIG),
+  saveSecondaryBackupConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_SAVE_SECONDARY_CONFIG, config),
+  runSecondaryBackup: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RUN_SECONDARY)
 }
 
 try {

@@ -54,6 +54,12 @@ import { loopService } from './loop/loop-service'
 import { midiService } from './midi/midi-service'
 import { obsWebSocketService } from './broadcast/obs-websocket-service'
 import { broadcastEngine } from './broadcast/broadcast-engine'
+import { librarySyncService } from './extras/library-sync-service'
+import { songImporterService } from './extras/song-importer-service'
+import { ccliService } from './extras/ccli-service'
+import { liveSubtitlesService } from './extras/live-subtitles-service'
+import { aiAssistantService } from './extras/ai-assistant-service'
+import { secondaryBackupService } from './extras/secondary-backup-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -1348,6 +1354,132 @@ export function registerIpcHandlers(): void {
       logger.warn('[Broadcast] Error listing desktop sources:', err.message)
       return []
     }
+  })
+
+  // =========================================================================
+  // Phase 10: Extras (Sync, Importers, CCLI Reports, Subtitles, AI, Backups)
+  // =========================================================================
+
+  // 1. Multi-PC Sync
+  ipcMain.handle(IPC_CHANNELS.SYNC_EXPORT_PACKAGE, async (_event, targetFolder: string) => {
+    return librarySyncService.exportPackage(targetFolder)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_INSPECT_PACKAGE, async (_event, sourceFolder: string) => {
+    return librarySyncService.inspectPackage(sourceFolder)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_MERGE_PACKAGE, async (_event, sourceFolder: string, resolutions: any) => {
+    return librarySyncService.mergePackage(sourceFolder, resolutions)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_UNDO, async () => {
+    return librarySyncService.undoSync()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_GET_CONFIG, async () => {
+    return databaseService.getSyncConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_SAVE_CONFIG, async (_event, config: any) => {
+    return databaseService.saveSyncConfig(config)
+  })
+
+  // 2. Song Importers
+  ipcMain.handle(IPC_CHANNELS.SONG_IMPORT_PARSE_FILE, async (_event, filePath: string) => {
+    return songImporterService.parseFile(filePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SONG_IMPORT_EXECUTE, async (_event, songs: any[], targetLibraryId?: string) => {
+    return songImporterService.executeImport(songs, targetLibraryId)
+  })
+
+  // 3. CCLI Song Usage
+  ipcMain.handle(
+    IPC_CHANNELS.CCLI_RECORD_USAGE,
+    async (
+      _event,
+      songId: string,
+      title: string,
+      artist?: string,
+      ccliNumber?: string,
+      copyright?: string,
+      serviceId?: string,
+      serviceTitle?: string
+    ) => {
+      return ccliService.recordUsage({
+        songId,
+        title,
+        artist,
+        ccliNumber,
+        copyright,
+        serviceId,
+        serviceTitle
+      })
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.CCLI_GET_REPORT, async (_event, from?: string, to?: string) => {
+    return ccliService.getReport(from, to)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CCLI_EXPORT_CSV, async (_event, from?: string, to?: string) => {
+    return ccliService.exportCsv(from, to)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CCLI_CLEAR_HISTORY, async () => {
+    return ccliService.clearHistory()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CCLI_GET_CONFIG, async () => {
+    return ccliService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CCLI_SAVE_CONFIG, async (_event, config: { enabled: boolean }) => {
+    return ccliService.saveConfig(config)
+  })
+
+  // 4. Live Subtitles
+  ipcMain.handle(IPC_CHANNELS.SUBTITLES_GET_CONFIG, async () => {
+    return liveSubtitlesService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SUBTITLES_SAVE_CONFIG, async (_event, config: any) => {
+    return liveSubtitlesService.saveConfig(config)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SUBTITLES_SEND, async (_event, subtitle: any) => {
+    return liveSubtitlesService.sendSubtitle(subtitle)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SUBTITLES_CLEAR, async () => {
+    return liveSubtitlesService.clearSubtitle()
+  })
+
+  // 5. AI Assistant
+  ipcMain.handle(IPC_CHANNELS.AI_GET_CONFIG, async () => {
+    return aiAssistantService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_SAVE_CONFIG, async (_event, config: any) => {
+    return aiAssistantService.saveConfig(config)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_EXECUTE_TASK, async (_event, request: any) => {
+    return aiAssistantService.executeTask(request)
+  })
+
+  // 6. Secondary Backup
+  ipcMain.handle(IPC_CHANNELS.BACKUP_GET_SECONDARY_CONFIG, async () => {
+    return secondaryBackupService.getConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BACKUP_SAVE_SECONDARY_CONFIG, async (_event, config: any) => {
+    return secondaryBackupService.saveConfig(config)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BACKUP_RUN_SECONDARY, async () => {
+    return secondaryBackupService.runSecondaryBackup()
   })
 
   broadcastEngine.on('status-changed', (st) => {

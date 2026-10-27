@@ -708,6 +708,63 @@ graph TD
 4. **`MidiService`**: Interfaz de recepción MIDI basada en la Web MIDI API de Electron. Permite mapear eventos `noteon` y `controlchange` (CC) a macros o acciones de proyección directa. Incluye un asistente interactivo de aprendizaje ("Aprender MIDI") y panel guiado para operadores cuando no hay interfaces conectadas.
 5. **Transiciones entre Diapositivas sin Parpadeo**: Implementación por CSS Keyframes en la capa de contenido (`.anim-fade`, `.anim-slide_left`, `.anim-slide_right`, `.anim-slide_up`, `.anim-slide_down`, `.anim-zoom`) con duración configurable en milisegundos, asignable por tema o por diapositiva individual, y desactivable globalmente desde la barra de herramientas para equipos con hardware modesto.
 
+---
+
+## 9. Fase 10: Extras y Módulos de Operación Extendida
+
+```mermaid
+graph TD
+    subgraph MultiPCSync ["Sincronización Multi-PC (Offline/Local)"]
+        LocalDB[(SQLite Local)] -->|exportPackage| SyncFolder["Carpeta Sincronizada / USB\n(manifest.json, songs, playlists, themes, macros)"]
+        SyncFolder -->|inspectPackage| DiffEngine["Motor de Diferencias & Conflictos"]
+        DiffEngine -->|mergePackage con Resolución| LocalDB
+        LocalDB -->|Backup Pre-Sincronización| RollbackStore["Almacén de Respaldo Deshacer"]
+    end
+
+    subgraph SongImporters ["Importadores Multi-Formato (100% Offline)"]
+        TXT[".txt (Texto Plano)"] --> Parser["SongImporterService"]
+        ChordPro[".chordpro / .chopro / .crd"] --> Parser
+        CSV[".csv (Lotes)"] --> Parser
+        OpenLyrics[".xml (OpenLyrics)"] --> Parser
+        Pro6[".pro6 (ProPresenter 6 XML+RTF)"] --> Parser
+        Parser --> DuplicateDetect["Detección de Duplicados & Grupos"]
+        DuplicateDetect --> SaveLib["Guardado en Biblioteca"]
+    end
+
+    subgraph SubtitlesSystem ["Subtítulos y Traducción en Vivo"]
+        WebTranscriber["Transcriptor Web (/subtitles)"] -->|WebSocket /ws| SubtitleService["LiveSubtitlesService"]
+        OperatorUI["Modal Operador"] -->|IPC| SubtitleService
+        SubtitleService -->|activeSubtitle| StateManager["StateManager"]
+        StateManager -->|state-updated| SubLayer[".output-subtitles-layer\n(Audiencia & Programa)"]
+        SubtitleService -->|Silencio N seg| AutoClear["Limpieza Automática"]
+    end
+
+    subgraph CcliAndAi ["CCLI, Asistente IA & Respaldo USB"]
+        LiveProjection["Proyección en Vivo"] -->|ccli_reporting_enabled| CcliLog["Registro song_usage_records"]
+        CcliLog --> CcliCsv["Exportación CSV Oficial"]
+        AiInput["Bosquejo / Texto / Tema"] --> HumanReview["Revisión Humana Obligatoria"]
+        HumanReview --> AiEngine["AiAssistantService\n(safeStorage / Reglas Locales)"]
+        AiEngine --> EditableTable["Tabla Editable de Diapositivas"]
+        EditableTable --> SavePres["Guardar en Biblioteca"]
+        BackupsLocal["Copias de Seguridad Locales"] --> SecBackup["SecondaryBackupService"]
+        SecBackup -->|Verificación SHA-256| UsbTarget["Unidad Secundaria / USB"]
+    end
+```
+
+### Componentes de la Fase 10:
+1. **`LibrarySyncService`**: Motor de sincronización sin servicios de nube obligatorios. Exporta e inspecciona colecciones de datos (canciones, servicios, temas y macros) hacia cualquier carpeta elegida por el usuario. Identifica elementos nuevos, idénticos y en conflicto mediante identificadores estables y marcas de tiempo de modificación. Genera una copia de seguridad obligatoria antes de cualquier fusión para permitir deshacer (`undoSync`) de forma inmediata.
+2. **`SongImporterService`**: Motor de importación 100% fuera de línea con soporte para cinco formatos estándar:
+   - Texto plano (`.txt`): detección heurística de títulos, autores, estrofas (`Verso`, `Coro`, `Puente`) y separación por saltos de línea.
+   - ChordPro (`.chordpro`, `.chopro`, `.crd`, `.cho`, `.pro`): eliminación de acordes entre corchetes para proyección limpia y extracción de directivas `{title:}`, `{artist:}`, `{ccli:}`.
+   - CSV por lotes (`.csv`): análisis robusto con soporte para comillas multilínea y mapeo flexible de encabezados.
+   - OpenLyrics XML (`.xml`): extracción estructurada de títulos, autores, etiquetas de estrofas (`v1`, `c1`, `b1`) y saltos `<br/>`.
+   - ProPresenter 6 (`.pro6`): decodificación nativa de texto enriquecido RTF en base64 sin dependencias externas, eliminando caracteres de control y etiquetas binarias para producir diapositivas legibles.
+3. **`CcliService`**: Registro de derechos de autor y reproducciones de canciones. Registra en SQLite cada vez que una canción se envía a la pantalla en vivo (`song_usage_records`). Incluye filtrado por rango de fechas, generación de reportes CSV conformes con las directrices de CCLI, desactivación opcional y borrado seguro del historial.
+4. **`LiveSubtitlesService`**: Capa de subtítulos y traducción simultánea en vivo proyectada sobre las salidas asignadas (`.output-subtitles-layer`). Alimentada a través de WebSockets autenticados (`/ws`) y con interfaz web accesible en `/subtitles` para operadores de subtitulado remoto. Implementa temporizadores de limpieza automática tras periodos de silencio y estilos totalmente configurables (posición, fuentes, líneas máximas, colores y fundido suave).
+5. **`AiAssistantService`**: Asistente de productividad para el operador, desactivado por defecto. Ofrece división inteligente de párrafos en diapositivas legibles (2 a 4 líneas), estructuración de bosquejos de sermones en puntos principales y sugerencias de lecturas bíblicas mediante un índice teológico curado local. Implementa revisión humana estricta: ninguna llamada externa se ejecuta sin confirmación previa y el resultado se presenta en una tabla editable antes de guardarse en la biblioteca. Las credenciales de API se guardan cifradas con `safeStorageService`.
+6. **`SecondaryBackupService`**: Duplicación automática de copias de seguridad hacia medios extraíbles (memorias USB o discos duros externos) con verificación criptográfica SHA-256 byte a byte, garantizando la recuperación ante fallos de hardware o corrupción del disco principal.
+
+
 
 
 

@@ -20,7 +20,8 @@ import { messageService } from '../messages/message-service'
 import { stageLayoutService } from '../stage/stage-layout-service'
 import { macroEngine } from '../macros/macro-engine'
 import { remoteAuthService, REMOTE_CONFIG_KEY } from './remote-auth-service'
-import { getRemoteControlHtml, getStageViewerHtml, getObsBrowserSourceHtml } from './client-templates'
+import { getRemoteControlHtml, getStageViewerHtml, getObsBrowserSourceHtml, getSubtitlesSenderHtml } from './client-templates'
+import { liveSubtitlesService } from '../extras/live-subtitles-service'
 import { logger } from '../logger'
 
 export const DEFAULT_REMOTE_CONFIG: RemoteServerConfig = {
@@ -521,6 +522,22 @@ export class RemoteServer {
       return
     }
 
+    // 2.C. Live Subtitles Web Sender (/subtitles or /subtitles.html)
+    if (pathname === '/subtitles' || pathname === '/subtitles.html') {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'text/plain', Allow: 'GET' })
+        res.end('Método no permitido.')
+        return
+      }
+      const html = getSubtitlesSenderHtml()
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      })
+      res.end(html)
+      return
+    }
+
     // 3. API Status
     if (pathname === '/api/status') {
       if (req.method !== 'GET') {
@@ -987,6 +1004,23 @@ export class RemoteServer {
             logger.error(`Error running macro '${macroId}' via remote WebSocket:`, err)
           })
         }
+        break
+      }
+      case 'subtitle':
+      case 'send_subtitle': {
+        if (typeof msg.text === 'string' && msg.text.trim()) {
+          liveSubtitlesService.sendSubtitle({
+            text: msg.text,
+            translation: typeof msg.translation === 'string' ? msg.translation : undefined,
+            targetRoles: Array.isArray(msg.targetRoles) ? msg.targetRoles : undefined,
+            durationSec: typeof msg.durationSec === 'number' ? msg.durationSec : undefined
+          })
+        }
+        break
+      }
+      case 'clear_subtitle':
+      case 'clear-subtitle': {
+        liveSubtitlesService.clearSubtitle()
         break
       }
       default:

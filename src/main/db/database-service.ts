@@ -17,7 +17,11 @@ import {
   PropItem,
   BroadcastScene,
   BroadcastSettings,
-  BroadcastAudioMixerState
+  BroadcastAudioMixerState,
+  SongUsageRecord,
+  LiveSubtitlesConfig,
+  AiAssistantConfig,
+  SecondaryBackupConfig
 } from '../../shared/types'
 
 export interface Migration {
@@ -823,6 +827,43 @@ const MIGRATIONS: Migration[] = [
         // ignore
       }
     }
+  },
+  {
+    version: 12,
+    name: 'phase_10_extras_ccli_and_sync',
+    up: (db: Database) => {
+      // 1. Song Usage Records for CCLI Reporting
+      db.run(`
+        CREATE TABLE IF NOT EXISTS song_usage_records (
+          id TEXT PRIMARY KEY,
+          song_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          artist TEXT,
+          ccli_number TEXT,
+          copyright TEXT,
+          projected_at TEXT NOT NULL,
+          service_id TEXT,
+          service_title TEXT,
+          projected_by TEXT
+        );
+      `)
+      db.run(`CREATE INDEX IF NOT EXISTS idx_song_usage_projected_at ON song_usage_records (projected_at);`)
+      db.run(`CREATE INDEX IF NOT EXISTS idx_song_usage_song_id ON song_usage_records (song_id);`)
+
+      // 2. Sync History Table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS sync_history (
+          id TEXT PRIMARY KEY,
+          package_id TEXT,
+          action TEXT NOT NULL,
+          folder_path TEXT,
+          items_imported INTEGER DEFAULT 0,
+          items_conflicted INTEGER DEFAULT 0,
+          backup_path TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+    }
   }
 ]
 
@@ -1360,7 +1401,8 @@ export class DatabaseService {
 
   public run(sql: string, params: any[] = []): void {
     if (!this.db) return
-    this.db.run(sql, params)
+    const sanitizedParams = params.map((p) => (p === undefined ? null : p))
+    this.db.run(sql, sanitizedParams)
     this.isDirty = true
     this.schedulePersist()
   }
@@ -1370,7 +1412,8 @@ export class DatabaseService {
     const stmt = this.db.prepare(sql)
     const rows: T[] = []
     try {
-      stmt.bind(params)
+      const sanitizedParams = params.map((p) => (p === undefined ? null : p))
+      stmt.bind(sanitizedParams)
       while (stmt.step()) {
         rows.push(stmt.getAsObject() as T)
       }
@@ -2161,6 +2204,271 @@ export class DatabaseService {
   public saveAudioMixerConfig(config: BroadcastAudioMixerState): BroadcastAudioMixerState {
     this.setConfig('broadcast_audio_mixer_json', JSON.stringify(config))
     return config
+  }
+
+  private markDirty(): void {
+    this.isDirty = true
+    this.schedulePersist()
+  }
+
+  // =========================================================================
+  // PHASE 10: EXTRAS (CCLI Usage, Subtitles, AI, Backups, Sync)
+  // =========================================================================
+
+  // 1. CCLI Song Usage
+  public recordSongUsage(record: Omit<SongUsageRecord, 'id'>): boolean {
+    if (!this.db) return false
+    const id = `usage_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    try {
+      this.db.run(
+        `INSERT INTO song_usage_records (id, song_id, title, artist, ccli_number, copyright, projected_at, service_id, service_title, projected_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          id,
+          record.songId,
+          record.title,
+          record.artist || null,
+          record.ccliNumber || null,
+          record.copyright || null,
+          record.projectedAt,
+          record.serviceId || null,
+          record.serviceTitle || null,
+          record.projectedBy || 'operator'
+        ]
+      )
+      this.markDirty()
+      return true
+    } catch (err) {
+      logger.error('Failed to record song usage:', err)
+      return false
+    }
+  }
+
+  public getSongUsageRecords(from?: string, to?: string): SongUsageRecord[] {
+    if (!this.db) return []
+    let sql = 'SELECT * FROM song_usage_records'
+    const params: string[] = []
+
+    if (from && to) {
+      sql += ' WHERE projected_at >= ? AND projected_at <= ?'
+      params.push(from, to)
+    } else if (from) {
+      sql += ' WHERE projected_at >= ?'
+      params.push(from)
+    } else if (to) {
+      sql += ' WHERE projected_at <= ?'
+      params.push(to)
+    }
+
+    sql += ' ORDER BY projected_at DESC;'
+    const rows = this.query<{
+      id: string
+      song_id: string
+      title: string
+      artist: string
+      ccli_number: string
+      copyright: string
+      projected_at: string
+      service_id: string
+      service_title: string
+      projected_by: string
+    }>(sql, params)
+
+    return rows.map((r) => ({
+      id: r.id,
+      songId: r.song_id,
+      title: r.title,
+      artist: r.artist || undefined,
+      ccliNumber: r.ccli_number || undefined,
+      copyright: r.copyright || undefined,
+      projectedAt: r.projected_at,
+      serviceId: r.service_id || undefined,
+      serviceTitle: r.service_title || undefined,
+      projectedBy: r.projected_by || undefined
+    }))
+  }
+
+  public clearSongUsageHistory(): boolean {
+    if (!this.db) return false
+    try {
+      this.db.run('DELETE FROM song_usage_records;')
+      this.markDirty()
+      return true
+    } catch (err) {
+      logger.error('Failed to clear song usage history:', err)
+      return false
+    }
+  }
+
+  public getCcliConfig(): { enabled: boolean } {
+    const raw = this.getConfig('ccli_reporting_enabled')
+    return { enabled: raw !== 'false' } // default true
+  }
+
+  public saveCcliConfig(config: { enabled: boolean }): { enabled: boolean } {
+    this.setConfig('ccli_reporting_enabled', String(config.enabled))
+    return config
+  }
+
+  // 2. Live Subtitles Config
+  public getSubtitlesConfig(): LiveSubtitlesConfig {
+    const raw = this.getConfig('subtitles_config_json')
+    if (raw) {
+      try {
+        return JSON.parse(raw)
+      } catch {
+        // fallback
+      }
+    }
+    return {
+      enabled: false,
+      position: 'bottom',
+      fontSizeVmin: 3.5,
+      maxLines: 2,
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      textColor: '#FFFFFF',
+      fadeDurationMs: 300,
+      autoClearDelaySec: 5,
+      targetRoles: ['main', 'lobby']
+    }
+  }
+
+  public saveSubtitlesConfig(config: Partial<LiveSubtitlesConfig>): LiveSubtitlesConfig {
+    const cur = this.getSubtitlesConfig()
+    const merged: LiveSubtitlesConfig = { ...cur, ...config }
+    this.setConfig('subtitles_config_json', JSON.stringify(merged))
+    return merged
+  }
+
+  // 3. AI Assistant Config
+  public getAiAssistantConfig(): AiAssistantConfig {
+    const enabled = this.getConfig('ai_assistant_enabled') === 'true'
+    const provider = (this.getConfig('ai_assistant_provider') as any) || 'openai'
+    const apiKeyEncrypted = this.getConfig('ai_assistant_api_key_encrypted') || undefined
+    const model = this.getConfig('ai_assistant_model') || 'gpt-4o-mini'
+    const customEndpoint = this.getConfig('ai_assistant_custom_endpoint') || undefined
+
+    return {
+      enabled,
+      provider,
+      apiKeyEncrypted,
+      model,
+      customEndpoint
+    }
+  }
+
+  public saveAiAssistantConfig(config: Partial<AiAssistantConfig>): AiAssistantConfig {
+    if (config.enabled !== undefined) this.setConfig('ai_assistant_enabled', String(config.enabled))
+    if (config.provider) this.setConfig('ai_assistant_provider', config.provider)
+    if (config.apiKeyEncrypted !== undefined) this.setConfig('ai_assistant_api_key_encrypted', config.apiKeyEncrypted)
+    if (config.model) this.setConfig('ai_assistant_model', config.model)
+    if (config.customEndpoint !== undefined) this.setConfig('ai_assistant_custom_endpoint', config.customEndpoint)
+    return this.getAiAssistantConfig()
+  }
+
+  // 4. Secondary Backup Config
+  public getSecondaryBackupConfig(): SecondaryBackupConfig {
+    return {
+      enabled: this.getConfig('secondary_backup_enabled') === 'true',
+      targetDirectory: this.getConfig('secondary_backup_path') || '',
+      verifyIntegrity: this.getConfig('secondary_backup_verify') !== 'false'
+    }
+  }
+
+  public saveSecondaryBackupConfig(config: Partial<SecondaryBackupConfig>): SecondaryBackupConfig {
+    if (config.enabled !== undefined) this.setConfig('secondary_backup_enabled', String(config.enabled))
+    if (config.targetDirectory !== undefined) this.setConfig('secondary_backup_path', config.targetDirectory)
+    if (config.verifyIntegrity !== undefined) this.setConfig('secondary_backup_verify', String(config.verifyIntegrity))
+    return this.getSecondaryBackupConfig()
+  }
+
+  // 5. Sync Config & History
+  public getSyncConfig(): { syncFolder?: string; lastSyncAt?: string } {
+    return {
+      syncFolder: this.getConfig('sync_folder_path') || undefined,
+      lastSyncAt: this.getConfig('last_sync_at') || undefined
+    }
+  }
+
+  public saveSyncConfig(config: { syncFolder?: string; lastSyncAt?: string }): { success: boolean } {
+    if (config.syncFolder !== undefined) this.setConfig('sync_folder_path', config.syncFolder)
+    if (config.lastSyncAt !== undefined) this.setConfig('last_sync_at', config.lastSyncAt)
+    return { success: true }
+  }
+
+  public recordSyncHistory(entry: {
+    packageId?: string
+    action: string
+    folderPath?: string
+    itemsImported?: number
+    itemsConflicted?: number
+    backupPath?: string
+  }): void {
+    if (!this.db) return
+    const id = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    try {
+      this.db.run(
+        `INSERT INTO sync_history (id, package_id, action, folder_path, items_imported, items_conflicted, backup_path, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'));`,
+        [
+          id,
+          entry.packageId || null,
+          entry.action,
+          entry.folderPath || null,
+          entry.itemsImported || 0,
+          entry.itemsConflicted || 0,
+          entry.backupPath || null
+        ]
+      )
+      this.markDirty()
+    } catch (err) {
+      logger.error('Failed to record sync history:', err)
+    }
+  }
+
+  public getLastSyncBackupPath(): string | null {
+    if (!this.db) return null
+    try {
+      const rows = this.query<{ backup_path: string }>(
+        `SELECT backup_path FROM sync_history WHERE backup_path IS NOT NULL AND backup_path != '' ORDER BY created_at DESC LIMIT 1;`
+      )
+      return rows.length > 0 ? rows[0].backup_path : null
+    } catch {
+      return null
+    }
+  }
+
+  public restoreBackupFile(backupPath: string): boolean {
+    if (!fs.existsSync(backupPath)) {
+      logger.error(`Cannot restore database: backup file not found at ${backupPath}`)
+      return false
+    }
+    if (!this.SQL) {
+      logger.error('Cannot restore database: SQL engine not initialized')
+      return false
+    }
+    if (!this.verifyDatabaseFile(backupPath)) {
+      logger.error(`Cannot restore database: backup file integrity check failed for ${backupPath}`)
+      return false
+    }
+    try {
+      if (this.db) {
+        this.persist()
+        this.db.close()
+        this.db = null
+      }
+      fs.copyFileSync(backupPath, this.dbPath)
+      const fileBuffer = fs.readFileSync(this.dbPath)
+      this.db = new this.SQL.Database(new Uint8Array(fileBuffer))
+      this.runMigrations()
+      this.persist()
+      this.restoredFromBackup = true
+      logger.info(`Successfully restored SQLite database from ${backupPath}`)
+      return true
+    } catch (err) {
+      logger.error(`Failed to restore SQLite database from ${backupPath}:`, err)
+      return false
+    }
   }
 
   private schedulePersist(): void {

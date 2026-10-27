@@ -118,9 +118,22 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 
 ---
 
-## 10. Registro de Pruebas Automatizadas
+## 10. Fase 10: Extras (Sincronización, Importadores, CCLI, Subtítulos, Asistente IA y Respaldo USB)
 
-- **Total Archivos de Test**: 46 archivos de test unitarios
-- **Total Tests Automatizados**: 207 pruebas pasando limpiamente (`npm test` / `vitest run`)
+| Característica | Estado | Componente / Servicio | Verificación |
+|---|---|---|---|
+| **Sincronización entre Computadoras** | Operativo | `LibrarySyncService` + `LibrarySyncModal` | Sincronización portable sin nube forzada a carpetas compartidas/USB. Comparación por UUID y `updatedAt`, clasificación de idénticos, nuevos y conflictos. Pantalla de resolución interactiva y respaldo previo obligatorio con reversión (`undoSync`). Pruebas en `tests/library-sync.test.ts`. |
+| **Importador de Canciones (100% Offline)** | Operativo | `SongImporterService` + `SongImportModal` | Importador nativo para Texto plano (.txt), ChordPro (.chordpro), CSV por lotes (.csv), OpenLyrics XML (.xml) y ProPresenter 6 (.pro6 con decodificación RTF base64 en memoria). Detección de duplicados y resumen de importación. Pruebas en `tests/song-importers.test.ts`. |
+| **Reporte de Uso de Canciones (CCLI)** | Operativo | `CcliService` + `SongUsageReportModal` | Registro automático de proyecciones en vivo en tabla SQLite (`song_usage_records`). Filtro por fechas, estadísticas y exportación a CSV oficial conforme a estándares de CCLI. Opción de desactivación y borrado de historial. Pruebas en `tests/ccli-usage.test.ts`. |
+| **Subtítulos y Traducción en Vivo** | Operativo | `LiveSubtitlesService` + `LiveSubtitlesModal` + `OutputApp` | Capa visual `.output-subtitles-layer` con estilos configurables (posición, líneas, vmin, colores, fundido). Servidor WebSocket `/ws`, página web para transcriptor `/subtitles`, filtrado por roles de salida y auto-limpieza por silencio. Pruebas en `tests/live-subtitles.test.ts` y protocolo en `docs/SUBTITLES_API.md`. |
+| **Asistente de IA (Opcional, desactivado por defecto)** | Operativo | `AiAssistantService` + `AiAssistantModal` | División de texto en 2-4 líneas sin cortar frases, extracción de bosquejos de sermones a diapositivas y sugerencias bíblicas locales. Almacenamiento cifrado de API keys con `safeStorage`. Estricta revisión humana: confirmación obligatoria antes de enviar y tabla editable de diapositivas antes de guardar. Pruebas en `tests/ai-assistant.test.ts`. |
+| **Copias de Seguridad Secundarias (USB)** | Operativo | `SecondaryBackupService` + `SecondaryBackupModal` | Duplicación automática a carpeta o unidad USB externa con verificación de integridad byte a byte mediante suma de comprobación SHA-256. Pruebas en `tests/secondary-backup.test.ts`. |
+
+---
+
+## 11. Registro de Pruebas Automatizadas
+
+- **Total Archivos de Test**: 52 archivos de test unitarios
+- **Total Tests Automatizados**: 228 pruebas pasando limpiamente (`npm test` / `vitest run`)
 - **Compilación de Tipos**: TypeScript 5.7.2 (`tsc --noEmit`) con 0 errores.
-- **Pruebas E2E Reales**: 19 pasos ejecutados con la app real de Electron y Chromium en Playwright con capturas de evidencia completas en `docs/evidence/`.
+- **Pruebas E2E Reales**: 20 pasos ejecutados con la app real de Electron y Chromium en Playwright con capturas de evidencia completas en `docs/evidence/`.
