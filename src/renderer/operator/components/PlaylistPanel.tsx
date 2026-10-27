@@ -496,7 +496,19 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                   getItemIcon(item.type)
                 )}
                 <div className="pro-item-title-col">
-                  <span className="pro-item-name">{item.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="pro-item-name">{item.name}</span>
+                    {item.macroId && (
+                      <span style={{ fontSize: '9px', backgroundColor: '#FF7A00', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Tiene macro asignada">
+                        ⚡ M
+                      </span>
+                    )}
+                    {item.loopConfig?.enabled && (
+                      <span style={{ fontSize: '9px', backgroundColor: '#38bdf8', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Bucle automático activo">
+                        🔁 Bucle
+                      </span>
+                    )}
+                  </div>
                   {item.notes && item.type !== 'header' && (
                     <span className="pro-item-notes">{item.notes}</span>
                   )}

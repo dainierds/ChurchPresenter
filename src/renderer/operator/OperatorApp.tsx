@@ -61,7 +61,9 @@ import { ChecklistModal } from './components/ChecklistModal'
 import { DiagnosticsModal } from './components/DiagnosticsModal'
 import { OutputHealthModal } from './components/OutputHealthModal'
 import { RehearsalSummaryModal } from './components/RehearsalSummaryModal'
-import { SessionSnapshot, RehearsalSummary, SystemMetrics } from '../../shared/types'
+import { MacroEditorModal } from './components/MacroEditorModal'
+import { PropEditorModal } from './components/PropEditorModal'
+import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -526,6 +528,15 @@ export const OperatorApp: React.FC = () => {
   const [isSafeMode, setIsSafeMode] = useState<boolean>(false)
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
 
+  // Phase 8: Automation, Macros, Props, Loops & Transitions
+  const [macros, setMacros] = useState<MacroItem[]>([])
+  const [propsList, setPropsList] = useState<PropItem[]>([])
+  const [isMacroEditorOpen, setIsMacroEditorOpen] = useState<boolean>(false)
+  const [editingMacro, setEditingMacro] = useState<MacroItem | null>(null)
+  const [isPropEditorOpen, setIsPropEditorOpen] = useState<boolean>(false)
+  const [editingProp, setEditingProp] = useState<PropItem | null>(null)
+  const [loopStatus, setLoopStatus] = useState<LoopStatus | null>(null)
+
   // Check if any modal is currently visible on screen
   const isAnyModalOpen = Boolean(
     isDisplaysModalOpen ||
@@ -548,7 +559,9 @@ export const OperatorApp: React.FC = () => {
     isChecklistModalOpen ||
     isDiagnosticsModalOpen ||
     isOutputHealthModalOpen ||
-    isRehearsalSummaryModalOpen
+    isRehearsalSummaryModalOpen ||
+    isMacroEditorOpen ||
+    isPropEditorOpen
   )
 
   // Prevent native WebContentsView (YouTube) from covering modal overlays
@@ -733,6 +746,24 @@ export const OperatorApp: React.FC = () => {
         }
       }
 
+      if (window.churchPresenterApi.getMacros) {
+        try {
+          const m = await window.churchPresenterApi.getMacros()
+          setMacros(m || [])
+        } catch {
+          // ignore
+        }
+      }
+
+      if (window.churchPresenterApi.getProps) {
+        try {
+          const p = await window.churchPresenterApi.getProps()
+          setPropsList(p || [])
+        } catch {
+          // ignore
+        }
+      }
+
       if (servList.length > 0 && !currentService) {
         setCurrentService(servList[0])
       }
@@ -877,6 +908,32 @@ export const OperatorApp: React.FC = () => {
       unsubMetrics = window.churchPresenterApi.onSystemMetricsTick(setSystemMetrics)
     }
 
+    let unsubMacros: () => void = () => {}
+    if (window.churchPresenterApi?.onMacroStatusChanged) {
+      unsubMacros = window.churchPresenterApi.onMacroStatusChanged(() => {
+        window.churchPresenterApi.getMacros?.().then(setMacros).catch(() => {})
+      })
+    }
+
+    let unsubProps: () => void = () => {}
+    if (window.churchPresenterApi?.onPropsActiveChanged) {
+      unsubProps = window.churchPresenterApi.onPropsActiveChanged((activeList: any[]) => {
+        setPropsList((prev) =>
+          prev.map((p) => ({
+            ...p,
+            isActive: activeList.some((ap) => ap.id === p.id)
+          }))
+        )
+      })
+    }
+
+    let unsubLoop: () => void = () => {}
+    if (window.churchPresenterApi?.onLoopStatusChanged) {
+      unsubLoop = window.churchPresenterApi.onLoopStatusChanged((status: any) => {
+        setLoopStatus(status)
+      })
+    }
+
     return () => {
       unsubDisplays()
       unsubState()
@@ -885,6 +942,9 @@ export const OperatorApp: React.FC = () => {
       unsubFileWatcher()
       unsubRehearsal()
       unsubMetrics()
+      unsubMacros()
+      unsubProps()
+      unsubLoop()
       navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }
   }, [loadAllData, audioDeviceVideo, audioDeviceAmbient])
@@ -1291,6 +1351,11 @@ export const OperatorApp: React.FC = () => {
       setLiveSlideId(slide.id)
       setLiveSourceId(slide.sourceId)
       setIsLiveDirty(false)
+
+      // Phase 8: Trigger Macro on Slide Enter
+      if (slide.macroTrigger?.onEnterMacroId) {
+        window.churchPresenterApi.runMacro?.(slide.macroTrigger.onEnterMacroId).catch(() => {})
+      }
     },
     [currentServiceItem, mediaItems, videoLoop, videoVolume, videoInPoint, videoOutPoint, videoFadeInSec, videoFadeOutSec, videoEndAction, audioOutputRole]
   )
@@ -1369,7 +1434,7 @@ export const OperatorApp: React.FC = () => {
   }, [currentService, selectedServiceItemIndex])
 
   const handleClearLayer = useCallback(
-    (layer: 'audio' | 'background' | 'slide' | 'message' | 'media' | 'all') => {
+    (layer: 'audio' | 'background' | 'slide' | 'message' | 'media' | 'all' | 'props') => {
       if (layer === 'all') {
         window.churchPresenterApi.toggleGlobalControl('clear')
       } else if (layer === 'background') {
@@ -1386,6 +1451,10 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.controlIndependentAudio('stop')
       } else if (layer === 'media') {
         window.churchPresenterApi.controlVideo('stop')
+      } else if (layer === 'props') {
+        window.churchPresenterApi.getActiveProps?.().then((activeProps) => {
+          activeProps.forEach((p) => window.churchPresenterApi.toggleProp(p.id, false))
+        })
       } else if (layer === 'message') {
         window.churchPresenterApi.setOutputMessage('stage', '', false)
         window.churchPresenterApi.setOutputMessage('main', '', false)
@@ -1396,11 +1465,98 @@ export const OperatorApp: React.FC = () => {
     []
   )
 
+  // Phase 8: Macro & Prop Handlers
+  const handleRunMacro = useCallback(async (id: string) => {
+    try {
+      const res = await window.churchPresenterApi.runMacro(id)
+      if (!res.success) {
+        setToasts((prev) => [...prev, { id: `err_${Date.now()}`, type: 'error', title: 'Error en Macro', message: res.error || 'Error desconocido', timestamp: Date.now() }])
+      }
+    } catch (err: any) {
+      setToasts((prev) => [...prev, { id: `err_${Date.now()}`, type: 'error', title: 'Fallo al Ejecutar Macro', message: err?.message || String(err), timestamp: Date.now() }])
+    }
+  }, [])
+
+  const handleRunMacroStep = useCallback(async (id: string, stepIdx: number) => {
+    try {
+      const res = await window.churchPresenterApi.runMacroStep(id, stepIdx)
+      if (!res.success) {
+        setToasts((prev) => [...prev, { id: `err_${Date.now()}`, type: 'error', title: 'Error en Paso de Macro', message: res.error || 'Error desconocido', timestamp: Date.now() }])
+      }
+    } catch (err: any) {
+      setToasts((prev) => [...prev, { id: `err_${Date.now()}`, type: 'error', title: 'Fallo en Paso', message: err?.message || String(err), timestamp: Date.now() }])
+    }
+  }, [])
+
+  const handleStopAllMacros = useCallback(async () => {
+    await window.churchPresenterApi.stopAllMacros()
+    setToasts((prev) => [...prev, { id: `stop_${Date.now()}`, type: 'info', title: 'Macros Detenidas', message: 'Se detuvieron todas las ejecuciones de macros', timestamp: Date.now() }])
+  }, [])
+
+  const handleSaveMacro = useCallback(async (macro: MacroItem) => {
+    await window.churchPresenterApi.saveMacro(macro)
+    const updated = await window.churchPresenterApi.getMacros()
+    setMacros(updated || [])
+    setIsMacroEditorOpen(false)
+  }, [])
+
+  const handleDeleteMacro = useCallback(async (id: string) => {
+    await window.churchPresenterApi.deleteMacro(id)
+    const updated = await window.churchPresenterApi.getMacros()
+    setMacros(updated || [])
+  }, [])
+
+  const handleDuplicateMacro = useCallback(async (id: string) => {
+    await window.churchPresenterApi.duplicateMacro(id)
+    const updated = await window.churchPresenterApi.getMacros()
+    setMacros(updated || [])
+  }, [])
+
+  const handleToggleProp = useCallback(async (id: string, active?: boolean) => {
+    await window.churchPresenterApi.toggleProp(id, active)
+    const updated = await window.churchPresenterApi.getProps()
+    setPropsList(updated || [])
+  }, [])
+
+  const handleSaveProp = useCallback(async (prop: PropItem) => {
+    await window.churchPresenterApi.saveProp(prop)
+    const updated = await window.churchPresenterApi.getProps()
+    setPropsList(updated || [])
+    setIsPropEditorOpen(false)
+  }, [])
+
+  const handleDeleteProp = useCallback(async (id: string) => {
+    await window.churchPresenterApi.deleteProp(id)
+    const updated = await window.churchPresenterApi.getProps()
+    setPropsList(updated || [])
+  }, [])
+
+  const handleClearProps = useCallback(async () => {
+    const active = propsList.filter((p) => p.isActive)
+    for (const p of active) {
+      await window.churchPresenterApi.toggleProp(p.id, false)
+    }
+    const updated = await window.churchPresenterApi.getProps()
+    setPropsList(updated || [])
+  }, [propsList])
+
   // Global Keyboard Shortcuts (Strict: Window Focus Only)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
+      }
+
+      // Phase 8: Check Macro Shortcuts first
+      for (const m of macros) {
+        if (m.shortcut && m.shortcut.trim()) {
+          const combo = `${e.ctrlKey ? 'CTRL+' : ''}${e.shiftKey ? 'SHIFT+' : ''}${e.altKey ? 'ALT+' : ''}${e.key.toUpperCase()}`
+          if (combo === m.shortcut.trim().toUpperCase()) {
+            e.preventDefault()
+            window.churchPresenterApi.runMacro(m.id).catch(() => {})
+            return
+          }
+        }
       }
 
       const key = e.key.toUpperCase()
@@ -2763,6 +2919,8 @@ export const OperatorApp: React.FC = () => {
         }}
         remoteStatus={remoteStatus}
         onOpenRemoteSettings={() => setIsSettingsOpen(true)}
+        loopStatus={loopStatus}
+        onStopLoop={() => window.churchPresenterApi.stopPresentationLoop?.()}
       />
 
       {/* Phase 7: Safe Mode Diagnostic Warning Banner */}
@@ -3526,6 +3684,24 @@ export const OperatorApp: React.FC = () => {
                   state={state}
                   currentSlide={activeSlides[previewSlideIndex] || null}
                   timers={presentationTimers}
+                  macros={macros}
+                  propsList={propsList}
+                  onRunMacro={handleRunMacro}
+                  onRunMacroStep={handleRunMacroStep}
+                  onStopAllMacros={handleStopAllMacros}
+                  onOpenMacroEditor={(m) => {
+                    setEditingMacro(m || null)
+                    setIsMacroEditorOpen(true)
+                  }}
+                  onDeleteMacro={handleDeleteMacro}
+                  onDuplicateMacro={handleDuplicateMacro}
+                  onToggleProp={handleToggleProp}
+                  onOpenPropEditor={(p) => {
+                    setEditingProp(p || null)
+                    setIsPropEditorOpen(true)
+                  }}
+                  onDeleteProp={handleDeleteProp}
+                  onClearProps={handleClearProps}
                   panelLabels={panelLabels}
                   previewHeight={previewHeight}
                   onResizePreview={handleMouseDownH3}
@@ -6005,6 +6181,30 @@ export const OperatorApp: React.FC = () => {
         summary={rehearsalSummary}
         onClose={() => setIsRehearsalSummaryModalOpen(false)}
       />
+
+      {/* =========================================================
+          PHASE 8: AUTOMATION, MACROS & PROPS MODALS
+          ========================================================= */}
+      {/* 1. Macro Editor Modal */}
+      {isMacroEditorOpen && (
+        <MacroEditorModal
+          macro={editingMacro}
+          timers={presentationTimers}
+          propsList={propsList}
+          allMacros={macros}
+          onSave={handleSaveMacro}
+          onClose={() => setIsMacroEditorOpen(false)}
+        />
+      )}
+
+      {/* 2. Prop Editor Modal */}
+      {isPropEditorOpen && (
+        <PropEditorModal
+          prop={editingProp}
+          onSave={handleSaveProp}
+          onClose={() => setIsPropEditorOpen(false)}
+        />
+      )}
 
       {/* Toast Notifications */}
       <div className="toasts-container">

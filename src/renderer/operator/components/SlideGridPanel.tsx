@@ -196,7 +196,14 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                     >
                       {slide.groupLabel || `Diapositiva ${idx + 1}`}
                     </span>
-                    <span className="pro-slide-index-number">{idx + 1}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {(slide.macroTrigger?.onEnterMacroId || slide.macroTrigger?.onExitMacroId) && (
+                        <span style={{ fontSize: '9px', backgroundColor: '#FF7A00', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Tiene macro asignada">
+                          ⚡ M
+                        </span>
+                      )}
+                      <span className="pro-slide-index-number">{idx + 1}</span>
+                    </div>
                   </div>
 
                   {/* 16:9 Thumbnail Body */}
@@ -258,6 +265,11 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                   onDoubleClick={() => onGoLive(slide, slides[idx + 1])}
                 >
                   <span className="pro-list-idx">{idx + 1}</span>
+                  {(slide.macroTrigger?.onEnterMacroId || slide.macroTrigger?.onExitMacroId) && (
+                    <span style={{ fontSize: '9px', backgroundColor: '#FF7A00', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Tiene macro asignada">
+                      ⚡ M
+                    </span>
+                  )}
                   <span
                     className={`pro-slide-badge ${badgeClass}`}
                     title={slide.groupLabel || 'Diapositiva'}

@@ -969,7 +969,8 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                         </div>
                       ) : content ? (
                         <div
-                          className="layer-content"
+                          className={`layer-content ${displayState?.disableTransitions ? '' : `anim-${effectiveTheme?.slideTransition?.type || 'fade'}`}`}
+                          key={content.id}
                           ref={contentBoxRef}
                           style={{
                             paddingTop: `${effectiveTheme.safeMarginsPercent.top * 10.8}px`,
@@ -1149,6 +1150,115 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                 >
                   {displayState.activeMessage.text}
                 </div>
+              </div>
+            )}
+
+            {/* Phase 8: Active Props Layer (Superpuestos encima de contenidos) */}
+            {visibility.showContent && !displayState?.controls?.black && displayState?.activeProps && displayState.activeProps.length > 0 && (
+              <div className="output-props-layer">
+                {displayState.activeProps
+                  .filter((p) => p.isActive && p.targetRoles.includes(role))
+                  .map((prop) => (
+                    <div
+                      key={prop.id}
+                      className={`output-prop-item output-prop-${prop.type} ${prop.transition?.inType === 'cut' ? '' : `anim-${prop.transition?.inType || 'fade'}`}`}
+                      style={{
+                        position: 'absolute',
+                        left: `${prop.position.x}%`,
+                        top: `${prop.position.y}%`,
+                        width: `${prop.position.width}%`,
+                        height: `${prop.position.height}%`,
+                        opacity: prop.style.opacity ?? 1,
+                        backgroundColor: prop.style.backgroundColor || 'transparent',
+                        borderRadius: `${prop.style.borderRadiusPx || 0}px`,
+                        padding: `${prop.style.paddingPx || 0}px`,
+                        color: prop.style.fontColor || '#ffffff',
+                        zIndex: 48,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: prop.position.alignment.includes('bottom')
+                          ? 'flex-end'
+                          : prop.position.alignment.includes('center')
+                            ? 'center'
+                            : 'flex-start',
+                        alignItems: prop.position.alignment.includes('right')
+                          ? 'flex-end'
+                          : prop.position.alignment.includes('center')
+                            ? 'center'
+                            : 'flex-start',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        pointerEvents: 'none'
+                      }}
+                    >
+                      {prop.type === 'logo' && (
+                        <div className="output-prop-logo-content" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {prop.content.imageUrl ? (
+                            <img src={toMediaUrl(prop.content.imageUrl)} alt={prop.name} style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+                          ) : (
+                            <div style={{ fontSize: `${prop.style.fontSizeVmin || 2.5}vmin`, fontWeight: 800, letterSpacing: '2px', color: prop.style.fontColor || '#FF7A00' }}>
+                              {prop.content.text || 'CHURCH'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {prop.type === 'lower_third' && (
+                        <div
+                          className="output-prop-lower-third-card"
+                          style={{
+                            width: '100%',
+                            backgroundColor: prop.style.backgroundColor || '#181818',
+                            borderLeft: '5px solid #FF7A00',
+                            borderRadius: `${prop.style.borderRadiusPx || 6}px`,
+                            padding: '12px 24px',
+                            boxShadow: '0 8px 30px rgba(0,0,0,0.85)'
+                          }}
+                        >
+                          <div style={{ fontSize: `${prop.style.fontSizeVmin || 3}vmin`, fontWeight: 700, color: prop.style.fontColor || '#ffffff', lineHeight: 1.2 }}>
+                            {prop.content.text}
+                          </div>
+                          {prop.content.subtitle && (
+                            <div style={{ fontSize: `${(prop.style.fontSizeVmin || 3) * 0.65}vmin`, color: '#94a3b8', marginTop: '4px' }}>
+                              {prop.content.subtitle}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {prop.type === 'countdown' && (
+                        <div
+                          className="output-prop-countdown-card"
+                          style={{
+                            backgroundColor: prop.style.backgroundColor || 'rgba(0,0,0,0.8)',
+                            borderRadius: `${prop.style.borderRadiusPx || 6}px`,
+                            padding: '8px 16px',
+                            border: '1px solid #38bdf8',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {prop.content.text && (
+                            <div style={{ fontSize: `${(prop.style.fontSizeVmin || 2.5) * 0.6}vmin`, color: '#94a3b8' }}>
+                              {prop.content.text}
+                            </div>
+                          )}
+                          <div style={{ fontSize: `${prop.style.fontSizeVmin || 3.2}vmin`, fontWeight: 800, color: '#38bdf8', letterSpacing: '1px' }}>
+                            {formatSeconds(prop.content.countdownSeconds || 300)}
+                          </div>
+                        </div>
+                      )}
+
+                      {prop.type === 'text' && (
+                        <div style={{ fontSize: `${prop.style.fontSizeVmin || 3.5}vmin`, fontWeight: 600, color: prop.style.fontColor || '#ffffff' }}>
+                          {prop.content.text}
+                        </div>
+                      )}
+
+                      {prop.type === 'image' && prop.content.imageUrl && (
+                        <img src={toMediaUrl(prop.content.imageUrl)} alt={prop.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      )}
+                    </div>
+                  ))}
               </div>
             )}
 

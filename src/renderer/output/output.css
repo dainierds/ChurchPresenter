@@ -506,3 +506,81 @@
   font-family: 'Consolas', 'Courier New', monospace;
   color: #38bdf8;
 }
+
+/* =========================================================================
+   PHASE 8: Slide Transitions & Props Layer Animations
+   ========================================================================= */
+
+@keyframes animFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes animSlideLeft {
+  from { transform: translateX(50px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes animSlideRight {
+  from { transform: translateX(-50px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes animSlideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes animSlideDown {
+  from { transform: translateY(-40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes animZoom {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.anim-fade {
+  animation: animFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-slide_left {
+  animation: animSlideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-slide_right {
+  animation: animSlideRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-slide_up {
+  animation: animSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-slide_down {
+  animation: animSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-zoom {
+  animation: animZoom 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Props Layer */
+.output-props-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 45;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.output-prop-item {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.output-prop-lower_third {
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+}

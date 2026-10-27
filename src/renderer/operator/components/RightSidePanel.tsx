@@ -13,14 +13,19 @@ import {
   Music,
   Film,
   Snowflake,
-  Maximize2
+  Maximize2,
+  Zap,
+  Copy,
+  Edit2
 } from 'lucide-react'
 import {
   PresenterState,
   PresentationTimer,
   SlideItem,
   TimerType,
-  YouTubeSyncTick
+  YouTubeSyncTick,
+  MacroItem,
+  PropItem
 } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 
@@ -47,6 +52,18 @@ interface RightSidePanelProps {
   onDeleteTimer: (id: string) => void
   onClearLayer: (layer: 'audio' | 'background' | 'slide' | 'message' | 'media' | 'all') => void
   onControlVideo: (action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => void
+  macros?: MacroItem[]
+  propsList?: PropItem[]
+  onRunMacro?: (id: string) => void
+  onRunMacroStep?: (id: string, stepIndex: number) => void
+  onStopAllMacros?: () => void
+  onOpenMacroEditor?: (macro?: MacroItem) => void
+  onDeleteMacro?: (id: string) => void
+  onDuplicateMacro?: (id: string) => void
+  onToggleProp?: (id: string, active?: boolean) => void
+  onOpenPropEditor?: (prop?: PropItem) => void
+  onDeleteProp?: (id: string) => void
+  onClearProps?: () => void
   panelLabels?: {
     library: string
     playlist: string
@@ -68,6 +85,18 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   onDeleteTimer,
   onClearLayer,
   onControlVideo,
+  macros = [],
+  propsList = [],
+  onRunMacro,
+  onRunMacroStep,
+  onStopAllMacros,
+  onOpenMacroEditor,
+  onDeleteMacro,
+  onDuplicateMacro,
+  onToggleProp,
+  onOpenPropEditor,
+  onDeleteProp,
+  onClearProps,
   panelLabels,
   previewHeight,
   onResizePreview,
@@ -940,124 +969,381 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             <span>TEMPORIZADORES</span>
           </button>
           <button
-            className="pro-tab-trigger disabled"
-            disabled
-            title="Próximamente en Fase Futura"
+            className={`pro-tab-trigger ${activeBottomTab === 'props' ? 'active' : ''}`}
+            onClick={() => setActiveBottomTab('props')}
           >
-            <span>Props</span>
-            <span className="pro-badge-soon">Próx.</span>
+            <Layers size={12} />
+            <span>PROPS</span>
+            {propsList.filter((p) => p.isActive).length > 0 && (
+              <span style={{ fontSize: '10px', backgroundColor: '#10b981', color: '#fff', borderRadius: '8px', padding: '1px 5px', marginLeft: '4px' }}>
+                {propsList.filter((p) => p.isActive).length}
+              </span>
+            )}
           </button>
           <button
-            className="pro-tab-trigger disabled"
-            disabled
-            title="Próximamente en Fase Futura"
+            className={`pro-tab-trigger ${activeBottomTab === 'macros' ? 'active' : ''}`}
+            onClick={() => setActiveBottomTab('macros')}
           >
-            <span>Macros</span>
-            <span className="pro-badge-soon">Próx.</span>
+            <Zap size={12} />
+            <span>MACROS</span>
+            {macros.length > 0 && (
+              <span style={{ fontSize: '10px', backgroundColor: '#FF7A00', color: '#fff', borderRadius: '8px', padding: '1px 5px', marginLeft: '4px' }}>
+                {macros.length}
+              </span>
+            )}
           </button>
 
-          <button
-            className="pro-btn-add-timer"
-            onClick={() => setIsCreatingTimer(!isCreatingTimer)}
-            title="Nuevo Temporizador"
-          >
-            <Plus size={11} />
-          </button>
-        </div>
+          {activeBottomTab === 'timers' && (
+            <button
+              className="pro-btn-add-timer"
+              onClick={() => setIsCreatingTimer(!isCreatingTimer)}
+              title="Nuevo Temporizador"
+            >
+              <Plus size={11} />
+            </button>
+          )}
 
-        {/* Create Timer Form */}
-        {isCreatingTimer && (
-          <form onSubmit={handleCreateTimer} className="pro-timer-create-form">
-            <input
-              type="text"
-              className="pro-timer-input"
-              placeholder="Nombre (ej. Predicación)..."
-              value={newTimerName}
-              onChange={(e) => setNewTimerName(e.target.value)}
-              autoFocus
-            />
-            <div className="pro-timer-form-row">
-              <input
-                type="number"
-                className="pro-timer-input dur"
-                placeholder="Segundos (300)"
-                value={newTimerDuration}
-                onChange={(e) => setNewTimerDuration(e.target.value)}
-              />
-              <button type="submit" className="pro-btn-save-timer">
-                Guardar
+          {activeBottomTab === 'props' && (
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={onClearProps}
+                style={{ padding: '3px 6px', fontSize: '10px', backgroundColor: '#27272a', color: '#94a3b8', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                title="Limpiar todos los props activos"
+              >
+                Limpiar
+              </button>
+              <button
+                className="pro-btn-add-timer"
+                onClick={() => onOpenPropEditor?.()}
+                title="Nuevo Prop"
+              >
+                <Plus size={11} />
               </button>
             </div>
-          </form>
-        )}
+          )}
 
-        {/* Timers List (Requirement 5) */}
-        <div className="pro-timers-list-scroll">
-          {timers.map((t) => (
-            <div key={t.id} className={`pro-timer-item-card ${t.isRunning ? 'running' : ''}`}>
-              <div className="pro-timer-row-top">
-                <span className="pro-timer-name" title={t.name}>
-                  {t.name}
-                </span>
-                <span className={`pro-timer-display-digits ${t.isOverrun ? 'overtime' : ''}`}>
-                  {formatTimerDigits(t.currentSeconds, t.isOverrun)}
-                </span>
-                <div className="pro-timer-actions-inline">
-                  <button
-                    type="button"
-                    className="pro-timer-action-btn"
-                    onClick={() => onControlTimer(t.id, t.isRunning ? 'pause' : 'start')}
-                    title={t.isRunning ? 'Pausar' : 'Iniciar'}
-                  >
-                    {t.isRunning ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="pro-timer-action-btn"
-                    onClick={() => onControlTimer(t.id, 'reset')}
-                    title="Reiniciar a duración original"
-                  >
-                    <RotateCcw size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    className="pro-timer-action-btn danger"
-                    onClick={() => onDeleteTimer(t.id)}
-                    title="Eliminar temporizador"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Audience and Stage check pills aligned horizontally below */}
-              <div className="pro-timer-row-bottom">
-                <label className="pro-timer-checkbox-label" title="Mostrar en Audiencia (Sala Principal)">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(t.showOnAudience)}
-                    onChange={(e) => onSaveTimer({ ...t, showOnAudience: e.target.checked })}
-                  />
-                  <span>{panelLabels?.audience || 'Audiencia'}</span>
-                </label>
-                <label className="pro-timer-checkbox-label" title="Mostrar en Monitor de Escenario">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(t.showOnStage)}
-                    onChange={(e) => onSaveTimer({ ...t, showOnStage: e.target.checked })}
-                  />
-                  <span>{panelLabels?.stage || 'Escenario'}</span>
-                </label>
-              </div>
-            </div>
-          ))}
-
-          {timers.length === 0 && (
-            <div className="pro-timers-empty">
-              <span>Sin temporizadores creados. Haga clic en + para agregar uno.</span>
+          {activeBottomTab === 'macros' && (
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={onStopAllMacros}
+                style={{ padding: '3px 6px', fontSize: '10px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 700 }}
+                title="Detener todas las macros activas inmediatamente"
+              >
+                Detener
+              </button>
+              <button
+                className="pro-btn-add-timer"
+                onClick={() => onOpenMacroEditor?.()}
+                title="Nueva Macro"
+              >
+                <Plus size={11} />
+              </button>
             </div>
           )}
         </div>
+
+        {/* 3.A Timers Content */}
+        {activeBottomTab === 'timers' && (
+          <>
+            {isCreatingTimer && (
+              <form onSubmit={handleCreateTimer} className="pro-timer-create-form">
+                <input
+                  type="text"
+                  className="pro-timer-input"
+                  placeholder="Nombre (ej. Predicación)..."
+                  value={newTimerName}
+                  onChange={(e) => setNewTimerName(e.target.value)}
+                  autoFocus
+                />
+                <div className="pro-timer-form-row">
+                  <input
+                    type="number"
+                    className="pro-timer-input dur"
+                    placeholder="Segundos (300)"
+                    value={newTimerDuration}
+                    onChange={(e) => setNewTimerDuration(e.target.value)}
+                  />
+                  <button type="submit" className="pro-btn-save-timer">
+                    Guardar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="pro-timers-list-scroll">
+              {timers.map((t) => (
+                <div key={t.id} className={`pro-timer-item-card ${t.isRunning ? 'running' : ''}`}>
+                  <div className="pro-timer-row-top">
+                    <span className="pro-timer-name" title={t.name}>
+                      {t.name}
+                    </span>
+                    <span className={`pro-timer-display-digits ${t.isOverrun ? 'overtime' : ''}`}>
+                      {formatTimerDigits(t.currentSeconds, t.isOverrun)}
+                    </span>
+                    <div className="pro-timer-actions-inline">
+                      <button
+                        type="button"
+                        className="pro-timer-action-btn"
+                        onClick={() => onControlTimer(t.id, t.isRunning ? 'pause' : 'start')}
+                        title={t.isRunning ? 'Pausar' : 'Iniciar'}
+                      >
+                        {t.isRunning ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
+                      </button>
+                      <button
+                        type="button"
+                        className="pro-timer-action-btn"
+                        onClick={() => onControlTimer(t.id, 'reset')}
+                        title="Reiniciar a duración original"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="pro-timer-action-btn danger"
+                        onClick={() => onDeleteTimer(t.id)}
+                        title="Eliminar temporizador"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pro-timer-row-bottom">
+                    <label className="pro-timer-checkbox-label" title="Mostrar en Audiencia (Sala Principal)">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(t.showOnAudience)}
+                        onChange={(e) => onSaveTimer({ ...t, showOnAudience: e.target.checked })}
+                      />
+                      <span>{panelLabels?.audience || 'Audiencia'}</span>
+                    </label>
+                    <label className="pro-timer-checkbox-label" title="Mostrar en Monitor de Escenario">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(t.showOnStage)}
+                        onChange={(e) => onSaveTimer({ ...t, showOnStage: e.target.checked })}
+                      />
+                      <span>{panelLabels?.stage || 'Escenario'}</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+
+              {timers.length === 0 && (
+                <div className="pro-timers-empty">
+                  <span>Sin temporizadores creados. Haga clic en + para agregar uno.</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* 3.B Props Tab Content */}
+        {activeBottomTab === 'props' && (
+          <div className="pro-timers-list-scroll">
+            {propsList.map((p) => (
+              <div
+                key={p.id}
+                style={{
+                  backgroundColor: '#181818',
+                  border: p.isActive ? '1px solid #10b981' : '1px solid #27272a',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  marginBottom: '8px',
+                  boxShadow: p.isActive ? '0 0 10px rgba(16, 185, 129, 0.2)' : 'none'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        backgroundColor: '#27272a',
+                        color: '#38bdf8',
+                        padding: '2px 5px',
+                        borderRadius: '3px',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {p.type === 'lower_third' ? 'Tercio Inf.' : p.type === 'countdown' ? 'Conteo' : p.type}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>
+                      {p.name}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleProp?.(p.id)}
+                    style={{
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      backgroundColor: p.isActive ? '#10b981' : '#27272a',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {p.isActive ? 'EN VIVO' : 'ACTIVAR'}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {p.targetRoles.map((r) => (
+                      <span key={r} style={{ fontSize: '9px', color: '#94a3b8', backgroundColor: '#0a0a0a', padding: '1px 4px', borderRadius: '3px' }}>
+                        {r === 'main' ? 'SALA' : r === 'lobby' ? 'LOBBY' : 'ESC'}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPropEditor?.(p)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      title="Editar prop"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteProp?.(p.id)}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                      title="Eliminar prop"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {propsList.length === 0 && (
+              <div className="pro-timers-empty">
+                <span>Sin props creados. Haga clic en + para agregar uno.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3.C Macros Tab Content */}
+        {activeBottomTab === 'macros' && (
+          <div className="pro-timers-list-scroll">
+            {macros.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  backgroundColor: '#181818',
+                  border: '1px solid #27272a',
+                  borderLeft: `4px solid ${m.color || '#FF7A00'}`,
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  marginBottom: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>
+                      {m.name}
+                    </span>
+                    {m.shortcut && (
+                      <span style={{ fontSize: '10px', backgroundColor: '#0a0a0a', border: '1px solid #27272a', color: '#38bdf8', padding: '1px 5px', borderRadius: '3px' }}>
+                        {m.shortcut}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() => onRunMacro?.(m.id)}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        backgroundColor: '#FF7A00',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Ejecutar macro completa"
+                    >
+                      <Play size={10} fill="currentColor" />
+                      <span>EJECUTAR</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRunMacroStep?.(m.id, 0)}
+                      style={{
+                        padding: '4px 6px',
+                        fontSize: '10px',
+                        backgroundColor: '#27272a',
+                        color: '#94a3b8',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                      title="Probar paso a paso (primer paso)"
+                    >
+                      Paso 1
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                    {m.actions.length} {m.actions.length === 1 ? 'acción' : 'acciones'}
+                  </span>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => onDuplicateMacro?.(m.id)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      title="Duplicar macro"
+                    >
+                      <Copy size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenMacroEditor?.(m)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      title="Editar macro"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    {!m.isBuiltIn && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteMacro?.(m.id)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                        title="Eliminar macro"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {macros.length === 0 && (
+              <div className="pro-timers-empty">
+                <span>Sin macros configuradas. Haga clic en + para crear una.</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -16,9 +16,10 @@ import {
   Smartphone,
   CheckCircle2,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react'
-import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics } from '../../../shared/types'
+import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics, LoopStatus } from '../../../shared/types'
 
 interface ProToolbarProps {
   searchQuery: string
@@ -58,6 +59,8 @@ interface ProToolbarProps {
   onOpenDisplaysModal?: () => void
   remoteStatus?: RemoteServerStatus | null
   onOpenRemoteSettings?: () => void
+  loopStatus?: LoopStatus | null
+  onStopLoop?: () => void
 }
 
 export const ProToolbar: React.FC<ProToolbarProps> = ({
@@ -85,7 +88,9 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   onOpenOutputPreviewOrSettings,
   onOpenDisplaysModal,
   remoteStatus,
-  onOpenRemoteSettings
+  onOpenRemoteSettings,
+  loopStatus,
+  onStopLoop
 }) => {
   const isMainAssigned = Boolean(assignments.main)
   const isMainConnected =
@@ -294,6 +299,28 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             <span className="pro-status-dot dot-green" />
             <Smartphone size={12} style={{ marginRight: 2 }} />
             <span>Remoto: {remoteStatus.connectedClients?.length || 0}</span>
+          </button>
+        )}
+
+        {/* Phase 8: Loop Presentation Status Badge */}
+        {loopStatus?.isActive && (
+          <button
+            type="button"
+            className="pro-status-pill-btn pro-loop-status-pill"
+            onClick={onStopLoop}
+            title="Presentación en bucle automático activa. Clic para detener con transición suave."
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              borderColor: '#38bdf8',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              color: '#38bdf8',
+              fontWeight: 700
+            }}
+          >
+            <RotateCcw size={12} />
+            <span>Bucle ({loopStatus.nextAdvanceInSeconds}s) [Detener]</span>
           </button>
         )}
 
