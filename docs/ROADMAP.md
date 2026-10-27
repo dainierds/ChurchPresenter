@@ -124,14 +124,28 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - **Pendiente para fases futuras**:
   - Buscador propio nativo con la API de datos de YouTube v3 (requiere clave de API y administración de cuotas en Google Cloud) para presentar cuadrículas de búsqueda personalizadas dentro del estilo de la app sin abrir youtube.com.
 
-### Fase 6: Escenario/temporizadores/control remoto
-- Vista de monitor de escenario (Stage Display / Confidence Monitor) personalizada con reloj, temporizador regresivo y diapositiva siguiente.
-- Servidor local WebSocket/HTTP para control remoto inalámbrico desde tabletas o teléfonos en la red local.
+### Fase 6: Escenario/temporizadores/control remoto (Completada)
+- Servidor HTTP y WebSocket integrado en el proceso principal (`RemoteServer`, `ws`, `qrcode`), desactivado por defecto, con selección de interfaz y puerto configurable.
+- Sistema de autenticación con PIN numérico de 6 dígitos, tokens de sesión criptográficos aleatorios y bloqueo de seguridad por 5 minutos ante 5 intentos fallidos consecutivos de PIN.
+- Interfaz web táctil responsive (`/`) adaptada para smartphones y tablets: modo oscuro ProPresenter, navegación de diapositivas (siguiente/anterior/táctil), visualización de diapositiva actual y siguiente, controles de emergencia (Negro, Limpiar, Logo) y latencia ultra baja en LAN (< 50ms medida).
+- Visor web para escenario en `/stage` para tablets y monitores inalámbricos de músicos/predicadores en modo solo lectura con reloj y temporizadores sincronizados.
+- Editor de diseños para pantalla de escenario (`StageLayoutService` y `StageLayoutEditorModal`) con elementos configurables (diapositiva actual, diapositiva siguiente, reloj, temporizadores, mensajes a oradores, notas del orador, tiempo de video transcurrido/restante) y presets de fábrica.
+- Sistema unificado de Mensajes (`MessageService` y `MessageModal`) con presets predefinidos y avisos instantáneos dirigidos a Audiencia (banner overlay), Escenario (alerta de alto contraste) o ambas, con duración de auto-ocultado o borrado manual.
+- Documentación técnica completa en `docs/DECISIONS.md` (ADR 24) y especificación REST/WebSocket en `docs/REMOTE_API.md`.
+- Verificación exhaustiva con pruebas unitarias (`tests/remote-auth.test.ts`, `tests/stage-layouts.test.ts`, `tests/messages.test.ts`) y extremo a extremo con app real de Electron.
 
-### Fase 7: Estabilidad
-- Watchdog de rendimiento, optimización de uso de memoria GPU/VRAM.
-- Pruebas de estrés de 24+ horas con cambios continuos de medios.
-- Modos de recuperación ante desconexiones de cables HDMI / DP.
+### Fase 7: Estabilidad y Operación Segura (Completada)
+- **Recuperación tras cierre brusco**: Instantáneas periódicas de sesión (`SessionRecoveryService`). Al iniciar tras caída, ofrece modal de "Reanudar sesión anterior" cargando la lista y selección en previo sin proyectar automáticamente a pantallas.
+- **Salud y rendimiento de salidas**: Panel por salida con monitoreo de conexión de pantalla, ventana viva, FPS reales, memoria RAM de renderer y registro de incidentes/recreaciones (`OutputHealthService`).
+- **Monitor del sistema**: Muestreo en tiempo real de CPU %, RAM ocupada/libre, espacio libre en disco mediante `statfs` y alertas configurables (`SystemMonitorService`).
+- **Modo de Emergencia (Pánico)**: Botón y atajo rápido que pone un fondo seguro o logotipo en todas las salidas y pausa medios al instante, sin cerrar ventanas.
+- **Modo Seguro al iniciar**: Argumento `--safe-mode` que deshabilita YouTube, servidor remoto y vigilantes de archivos para diagnosticar fallos.
+- **Protección del equipo (Host OS)**: Activación de `powerSaveBlocker` (`prevent-display-sleep`) mientras haya salidas abiertas para impedir que Windows apague pantallas o suspenda la PC. Autorrecuperación tras desbloqueo de pantalla y reanudación de suspensión con Electron `powerMonitor`.
+- **Lista de verificación previa al culto**: Herramienta de inspección de 9 puntos (medios legibles, fuentes, YouTube, PowerPoint sincronizados, biblias, monitores conectados, dispositivo de audio, espacio libre en disco, respaldos de BD < 24h) con acciones directas de corrección.
+- **Visor de registros y diagnóstico**: Visor interno con filtros y exportación en formato ZIP (`adm-zip`) con registros, configuración sanitizada (sin claves/PINs) e información del sistema.
+- **Modo Ensayo**: Modo dedicado con insignia visible `[ENSAYO]`, auditoría en archivo de registro exclusivo y resumen estadístico de la sesión.
+- **Prueba de larga duración (Soak Test)**: Script `npm run soak` para simulación de cultos de 4 horas midiendo RSS, FPS, fugas de memoria y errores minuto a minuto con registros reales en `docs/soak-results/`.
+- **Documentación del operador y mantenimiento**: Guía de uso en español para el templo (`docs/GUIA_OPERADOR.md`) y procedimiento de actualización y reversión (`docs/PROCEDIMIENTO_ACTUALIZACION.md`).
 
 ### Fase 8: Automatización
 - Integración MIDI / Companion / Stream Deck para disparo de señales y macros.

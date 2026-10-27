@@ -20,6 +20,12 @@ interface TopMenuBarProps {
   onToggleRightPanel?: () => void
   onOpenFloatingPreview?: () => void
   onOpenDisplaysModal?: () => void
+  onOpenThemeModal?: () => void
+  onOpenChecklistModal?: () => void
+  onOpenOutputHealthModal?: () => void
+  onOpenDiagnosticsModal?: () => void
+  onUndo?: () => void
+  onRedo?: () => void
 }
 
 export const TopMenuBar: React.FC<TopMenuBarProps> = ({
@@ -41,7 +47,13 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onToggleLeftPanel,
   onToggleRightPanel,
   onOpenFloatingPreview,
-  onOpenDisplaysModal
+  onOpenDisplaysModal,
+  onOpenThemeModal,
+  onOpenChecklistModal,
+  onOpenOutputHealthModal,
+  onOpenDiagnosticsModal,
+  onUndo,
+  onRedo
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -178,11 +190,27 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
           </button>
           {activeMenu === 'edit' && (
             <div className="pro-dropdown-menu">
-              <button className="pro-dropdown-item" onClick={closeMenu}>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  if (onUndo) onUndo()
+                  else alert('Deshacer está disponible al editar canciones en el Editor (Ctrl+Z)')
+                }}
+                title="Deshacer última acción"
+              >
                 <span>Deshacer</span>
                 <span className="pro-dropdown-shortcut">Ctrl+Z</span>
               </button>
-              <button className="pro-dropdown-item" onClick={closeMenu}>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  if (onRedo) onRedo()
+                  else alert('Rehacer está disponible al editar canciones en el Editor (Ctrl+Y)')
+                }}
+                title="Rehacer última acción"
+              >
                 <span>Rehacer</span>
                 <span className="pro-dropdown-shortcut">Ctrl+Y</span>
               </button>
@@ -241,6 +269,16 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
               >
                 <span>Congelar Pantalla</span>
                 <span className="pro-dropdown-shortcut">F4</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  if (onOpenThemeModal) onOpenThemeModal()
+                }}
+              >
+                <span>Gestión de Temas y Tipografía...</span>
               </button>
             </div>
           )}
@@ -383,6 +421,15 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
               >
                 <span><strong>Abrir Vista Previa Flotante...</strong></span>
               </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenOutputHealthModal?.()
+                }}
+              >
+                <span>Salud y Rendimiento de Salidas...</span>
+              </button>
               <div className="pro-dropdown-divider" />
               <button
                 className="pro-dropdown-item"
@@ -412,6 +459,25 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 className="pro-dropdown-item"
                 onClick={() => {
                   closeMenu()
+                  onOpenChecklistModal?.()
+                }}
+              >
+                <span><strong>Verificar Servicio Previo al Culto...</strong></span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenDiagnosticsModal?.()
+                }}
+              >
+                <span>Visor de Registros y Diagnóstico...</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
                   onOpenShortcutsHelp()
                 }}
               >
@@ -422,7 +488,7 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 className="pro-dropdown-item"
                 onClick={() => {
                   closeMenu()
-                  alert('ChurchPresenter - Software Profesional de Presentación para Iglesias\nVersión 1.0.0 ProPresenter 7 Redesign')
+                  alert('ChurchPresenter - Software Profesional de Presentación para Iglesias\nVersión 1.1.0 (Fase 7: Estabilidad y Operación Segura)')
                 }}
               >
                 <span>Acerca de ChurchPresenter</span>

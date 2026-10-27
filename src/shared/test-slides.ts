@@ -8,7 +8,7 @@ export const INITIAL_TEST_SLIDES: TestSlide[] = [
     subtitle: 'Mateo 18:20',
     background: {
       type: 'gradient',
-      value: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)'
+      value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
     }
   },
   {

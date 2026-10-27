@@ -90,6 +90,15 @@ export interface LayerContent {
     formattedTime: string
     isOverrun?: boolean
   }
+  scripturePayload?: {
+    reference: string
+    bookNumber: number
+    chapter: number
+    verseStart: number
+    verseEnd: number
+    primaryText: string
+    secondaryText?: string
+  }
 }
 
 export interface LayerBackground {
@@ -216,6 +225,7 @@ export interface Song {
   groups: SongGroup[]
   arrangements: SongArrangement[]
   linesPerSlide?: number
+  themeId?: string
   isDemo?: boolean
   createdAt: string
   updatedAt: string
@@ -234,45 +244,126 @@ export interface GenericPresentation {
   title: string
   description: string
   slides: PresentationSlide[]
+  themeId?: string
   isDemo?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export type ThemeContentType = 'songs' | 'bible' | 'announcements' | 'messages' | 'timer'
+
+export type TypeDefaultThemesMap = Record<ThemeContentType, string>
+
+export interface CustomFontItem {
+  id: string
+  name: string
+  fileName: string
+  format: 'truetype' | 'opentype' | 'woff' | 'woff2'
+  filePath: string
+  url: string
+  createdAt: string
+}
+
+export interface ThemeExportOptions {
+  themeId: string
+  includeFonts?: boolean
+  targetPath?: string
+}
+
+export interface ThemeImportResult {
+  success: boolean
+  theme?: ThemeConfig
+  warnings?: string[]
+  error?: string
 }
 
 export interface ThemeConfig {
   id: string
   name: string
   isDefault: boolean
+  isBuiltIn?: boolean
+  targetContentType?: 'all' | ThemeContentType
+
+  // Typography
   fontFamily: string
   fontSizeVmin: number
+  autoFit?: boolean
+  fontWeight?: '300' | '400' | '600' | '700' | 'normal' | 'bold'
+  fontStyle?: 'normal' | 'italic'
   color: string
-  outlineColor: string
-  outlineWidthPx: number
-  shadowBlurPx: number
-  shadowColor: string
-  alignment: 'left' | 'center' | 'right'
+  textTransform?: 'none' | 'uppercase' | 'lowercase'
+  lineHeight?: number
+  letterSpacing?: number
+  alignment: 'left' | 'center' | 'right' | 'justify'
+  verticalAlign?: 'top' | 'middle' | 'bottom'
+  maxLinesPerSlide?: number
+
+  // Safe Margins
   safeMarginsPercent: {
     top: number
     bottom: number
     left: number
     right: number
   }
+
+  // Outline & Shadow
+  outlineColor: string
+  outlineWidthPx: number
+  outlineBlurPx?: number
+  shadowColor: string
+  shadowBlurPx: number
+  shadowOffsetX?: number
+  shadowOffsetY?: number
+
+  // Background & Overlay
   background: LayerBackground
+  overlayColor?: string
+  overlayOpacity?: number // 0.0 to 1.0
+
+  // Bible-Specific
+  bibleRefPosition?: 'top' | 'bottom'
+  bibleRefFontSizeVmin?: number
+  bibleShowVersionTag?: boolean
+  bibleShowVerseNumbers?: boolean
+
+  // Song-Specific
+  songShowTitleOnFirstSlide?: boolean
+  songShowCopyrightOnLastSlide?: boolean
+
+  // Watermark / Logo
+  watermarkUrl?: string
+  watermarkPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  watermarkSizePercent?: number
+  watermarkOpacity?: number
+
   roleOverrides?: Record<string, Partial<ThemeConfig>>
 }
 
 export const DEFAULT_THEME: ThemeConfig = {
   id: 'default-theme',
-  name: 'Predeterminado Elegante',
+  name: 'Predeterminado Carbón Elegante',
   isDefault: true,
+  isBuiltIn: true,
+  targetContentType: 'all',
   fontFamily: 'Inter, system-ui, sans-serif',
   fontSizeVmin: 4.8,
+  autoFit: true,
+  fontWeight: 'normal',
+  fontStyle: 'normal',
   color: '#ffffff',
+  textTransform: 'none',
+  lineHeight: 1.25,
+  letterSpacing: 0,
   outlineColor: '#000000',
   outlineWidthPx: 2,
+  outlineBlurPx: 0,
   shadowBlurPx: 12,
   shadowColor: 'rgba(0,0,0,0.85)',
+  shadowOffsetX: 0,
+  shadowOffsetY: 4,
   alignment: 'center',
+  verticalAlign: 'middle',
+  maxLinesPerSlide: 4,
   safeMarginsPercent: {
     top: 6,
     bottom: 6,
@@ -281,12 +372,20 @@ export const DEFAULT_THEME: ThemeConfig = {
   },
   background: {
     type: 'gradient',
-    value: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)'
+    value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
   },
+  overlayColor: '#000000',
+  overlayOpacity: 0.25,
+  bibleRefPosition: 'bottom',
+  bibleRefFontSizeVmin: 3.4,
+  bibleShowVersionTag: true,
+  bibleShowVerseNumbers: true,
+  songShowTitleOnFirstSlide: true,
+  songShowCopyrightOnLastSlide: true,
   roleOverrides: {
     stage: {
       fontSizeVmin: 5.5,
-      color: '#fbbf24',
+      color: '#f97316',
       alignment: 'left',
       background: {
         type: 'color',
@@ -375,6 +474,7 @@ export interface ServiceItem {
   scriptureRef?: string
   bibleTranslation?: string
   mediaId?: string
+  themeId?: string
   videoConfig?: VideoItemConfig
   pdfConfig?: PdfItemConfig
   imageConfig?: ImagePresentationConfig
@@ -585,6 +685,7 @@ export interface SlideItem {
   id: string
   sourceId: string
   sourceType: 'song' | 'presentation' | 'blank' | 'scripture' | 'video' | 'pdf' | 'image' | 'powerpoint'
+  contentType?: ThemeContentType
   groupLabel?: string
   slideIndex: number
   totalSlidesInGroup: number
@@ -592,6 +693,8 @@ export interface SlideItem {
   body: string
   subtitle?: string
   background?: LayerBackground
+  themeId?: string
+  theme?: ThemeConfig
   mediaUrl?: string
   mediaType?: string
   youtubeId?: string
@@ -658,6 +761,18 @@ export interface BibleTranslationMeta {
   isDefault?: boolean
 }
 
+export interface BibleImportResult {
+  success: boolean
+  translation: BibleTranslationMeta
+  bookCount: number
+  verseCount: number
+  missingBooks: string[]
+  sampleVerses: {
+    reference: string
+    text: string
+  }[]
+}
+
 export interface BibleReferenceParsed {
   rawInput: string
   bookNumber: number
@@ -700,6 +815,8 @@ export interface PresenterState {
   mediaSyncTick?: MediaSyncTick | null
   independentAudio?: IndependentAudioState
   roleBibleConfigs?: RoleBibleConfigsMap
+  activeMessage?: PresentationMessage | null
+  activeStageLayout?: StageLayoutConfig | null
   updatedAt: number
 }
 
@@ -720,6 +837,88 @@ export interface AppNotification {
   message: string
   type: 'info' | 'warn' | 'success' | 'error'
   timestamp: number
+}
+
+// =========================================================================
+// PHASE 6: Remote Control, Stage Layouts & Messages
+// =========================================================================
+
+export interface PresentationMessage {
+  id: string
+  text: string
+  target: 'stage' | 'audience' | 'both'
+  durationSeconds?: number
+  active: boolean
+  createdAt: string
+  expiresAt?: string
+}
+
+export type StageElementType = 'current-slide' | 'next-slide' | 'clock' | 'timers' | 'messages' | 'notes' | 'video-time'
+
+export interface StageLayoutElement {
+  id: string
+  type: StageElementType
+  x: number // percent 0-100
+  y: number // percent 0-100
+  width: number // percent 0-100
+  height: number // percent 0-100
+  visible: boolean
+  fontSizeVmin?: number
+  fontColor?: string
+  fontWeight?: string
+  alignment?: 'left' | 'center' | 'right'
+  showLabel?: boolean
+  label?: string
+}
+
+export interface StageLayoutConfig {
+  id: string
+  name: string
+  isBuiltIn: boolean
+  backgroundColor: string
+  elements: StageLayoutElement[]
+}
+
+export interface RemoteServerConfig {
+  enabled: boolean
+  port: number
+  selectedIp: string // '0.0.0.0' or specific IP
+  pin: string
+  allowReadOnlyWithoutPin: boolean
+}
+
+export interface RemoteClientSession {
+  id: string
+  name: string
+  role: 'operator' | 'stage-viewer'
+  ip: string
+  connectedAt: string
+  lastActiveAt: string
+}
+
+export interface RemoteNetworkInterface {
+  name: string
+  ip: string
+  isDefault?: boolean
+}
+
+export interface RemoteServerAddress {
+  interfaceName: string
+  ip: string
+  url: string
+  qrDataUrl: string
+  stageUrl?: string
+  stageQrDataUrl?: string
+}
+
+export interface RemoteServerStatus {
+  running: boolean
+  port: number
+  pin: string
+  addresses: RemoteServerAddress[]
+  connectedClients: RemoteClientSession[]
+  portConflictWarning?: string | null
+  isWindowsPublicNetwork?: boolean
 }
 
 /**
@@ -759,10 +958,22 @@ export interface ChurchPresenterApi {
   savePresentation: (presentation: GenericPresentation) => Promise<GenericPresentation>
   deletePresentation: (id: string) => Promise<boolean>
 
-  // Phase 3: Themes
+  // Phase 3 & Complete Theme System
   getThemes: () => Promise<ThemeConfig[]>
   saveTheme: (theme: ThemeConfig) => Promise<ThemeConfig>
+  deleteTheme: (id: string, reassignToThemeId?: string) => Promise<{ success: boolean; reassignedCount: number }>
+  duplicateTheme: (id: string, newName?: string) => Promise<ThemeConfig>
   setDefaultTheme: (id: string) => Promise<boolean>
+  getTypeDefaultThemes: () => Promise<TypeDefaultThemesMap>
+  setTypeDefaultTheme: (contentType: ThemeContentType, themeId: string) => Promise<boolean>
+  applyThemeToScope: (themeId: string, scope: 'playlist' | 'library' | 'all_songs', playlistId?: string) => Promise<{ affectedItems: number }>
+  exportTheme: (themeId: string, targetPath?: string, includeFonts?: boolean) => Promise<{ success: boolean; filePath?: string; error?: string }>
+  importThemePackage: (filePath?: string) => Promise<ThemeImportResult>
+  uploadThemeBackground: (filePath?: string) => Promise<BackgroundImageItem | null>
+  getCustomFonts: () => Promise<CustomFontItem[]>
+  importCustomFont: (filePath?: string) => Promise<CustomFontItem | null>
+  deleteCustomFont: (id: string) => Promise<boolean>
+  onFontsChanged: (callback: (fonts: CustomFontItem[]) => void) => () => void
 
   // Phase 3: Background Images
   getBackgroundImages: () => Promise<BackgroundImageItem[]>
@@ -788,11 +999,16 @@ export interface ChurchPresenterApi {
   // Phase 4: Bible
   getBibleTranslations: () => Promise<BibleTranslationMeta[]>
   importBibleTranslation: (
-    format: 'zefania' | 'osis' | 'usfm' | 'json',
+    format: 'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite',
     rawContent: string,
     meta: Partial<BibleTranslationMeta>
-  ) => Promise<BibleTranslationMeta>
+  ) => Promise<BibleImportResult>
+  importBibleFile: (
+    filePath: string,
+    metaOverrides?: Partial<BibleTranslationMeta>
+  ) => Promise<BibleImportResult>
   deleteBibleTranslation: (id: string) => Promise<boolean>
+  setBibleDefault: (abbrev: string) => Promise<boolean>
   parseBibleReference: (input: string) => Promise<BibleReferenceParsed | null>
   getVersesByReference: (
     reference: string,
@@ -830,6 +1046,7 @@ export interface ChurchPresenterApi {
 
   // Phase 5B: PowerPoint & Video Conversion
   detectPptConverters: () => Promise<PptConverterInfo[]>
+  detectPowerPointConverters?: () => Promise<PptConverterInfo[]>
   importPowerPoint: (filePath: string) => Promise<PptPresentationManifest>
   editInPowerPoint: (filePath: string) => Promise<string>
   checkPowerPointModified: (originalPath: string, recordedHash: string) => Promise<boolean>
@@ -892,7 +1109,7 @@ export interface ChurchPresenterApi {
   setYouTubeBrowserVisible: (visible: boolean) => Promise<boolean>
   clearYouTubeSession: () => Promise<boolean>
   controlYouTube: (
-    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute' | 'status',
     payload?: any
   ) => Promise<any>
   downloadYouTubeVideo: (youtubeUrl: string) => Promise<{ success: boolean; item?: MediaItem; error?: string }>
@@ -913,6 +1130,170 @@ export interface ChurchPresenterApi {
   openFloatingPreview: (initialRole?: string) => Promise<boolean>
   setFloatingPreviewAlwaysOnTop: (alwaysOnTop: boolean) => Promise<boolean>
   closeFloatingPreview: () => Promise<boolean>
+
+  // Phase 6: Remote Control
+  getRemoteConfig: () => Promise<RemoteServerConfig>
+  remoteGetConfig?: () => Promise<RemoteServerConfig>
+  saveRemoteConfig: (config: Partial<RemoteServerConfig>) => Promise<RemoteServerConfig>
+  remoteSaveConfig?: (config: Partial<RemoteServerConfig>) => Promise<RemoteServerConfig>
+  getRemoteStatus: () => Promise<RemoteServerStatus>
+  remoteGetStatus?: () => Promise<RemoteServerStatus>
+  regenerateRemotePin: () => Promise<string>
+  remoteRegeneratePin?: () => Promise<string>
+  kickRemoteClient: (clientId: string) => Promise<boolean>
+  remoteKickClient?: (clientId: string) => Promise<boolean>
+  getNetworkInterfaces: () => Promise<RemoteNetworkInterface[]>
+  onRemoteActionDispatch?: (callback: (action: { type: string; payload?: any }) => void) => () => void
+
+  // Phase 6: Stage Layouts
+  getStageLayouts: () => Promise<StageLayoutConfig[]>
+  saveStageLayout: (layout: StageLayoutConfig) => Promise<StageLayoutConfig>
+  deleteStageLayout: (layoutId: string) => Promise<boolean>
+  getAssignedStageLayout: (role?: string) => Promise<StageLayoutConfig>
+  setAssignedStageLayout: (layoutId: string, role?: string) => Promise<boolean>
+
+  // Phase 6: Messages
+  getActiveMessage: () => Promise<PresentationMessage | null>
+  sendMessage: (message: { text: string; target: 'stage' | 'audience' | 'both'; durationSeconds?: number }) => Promise<PresentationMessage>
+  clearMessage: () => Promise<boolean>
+  getMessagePresets: () => Promise<string[]>
+  saveMessagePreset: (text: string) => Promise<string[]>
+  deleteMessagePreset: (text: string) => Promise<string[]>
+
+  // Phase 7: Stability, Diagnostics, Checklist & Rehearsal
+  checkSessionRecovery: () => Promise<SessionRecoveryCheckResult>
+  dismissSessionRecovery: () => Promise<boolean>
+  getSessionRecoverySnapshot: () => Promise<SessionSnapshot | null>
+  getOutputHealthStatuses: () => Promise<Record<string, OutputHealthStatus>>
+  onOutputHealthChanged?: (callback: (statuses: Record<string, OutputHealthStatus>) => void) => () => void
+  sendOutputHeartbeat: (heartbeat: { role: string; fps: number; timestamp: number; lastError?: string }) => void
+  getSystemMetrics: () => Promise<SystemMetrics>
+  onSystemMetricsTick?: (callback: (metrics: SystemMetrics) => void) => () => void
+  runPreServiceChecklist: (plan?: ServicePlan | null) => Promise<ServiceChecklistResult>
+  fixChecklistItem?: (itemId: string, actionType: string) => Promise<boolean>
+  getDiagnosticsLogs: (options?: { filterLevel?: string; query?: string; limit?: number }) => Promise<LogEntry[]>
+  exportDiagnosticsZip: () => Promise<{ success: boolean; filePath?: string; error?: string }>
+  setRehearsalMode: (enabled: boolean) => Promise<boolean>
+  getRehearsalStatus: () => Promise<{ active: boolean; sessionStartedAt?: number; incidentsCount: number }>
+  getRehearsalSummary: () => Promise<RehearsalSummary | null>
+  onRehearsalModeChanged?: (callback: (active: boolean) => void) => () => void
+  activateEmergencyMode: () => Promise<boolean>
+  deactivateEmergencyMode: () => Promise<boolean>
+  isEmergencyModeActive: () => Promise<boolean>
+  isSafeModeActive: () => Promise<boolean>
+}
+
+// =========================================================================
+// PHASE 7: Stability, System Monitor, Checklist, Diagnostics & Rehearsal
+// =========================================================================
+
+export interface SessionSnapshot {
+  activePlanId?: string | null
+  activePlanTitle?: string | null
+  activeItemIndex: number
+  activeSlideIndex: number
+  currentSlide: LayerContent | null
+  activeLayers: Record<string, OutputLayersState>
+  controls: GlobalControls
+  timers: PresentationTimer[]
+  videoPosition?: {
+    mediaUrl?: string
+    currentTime: number
+    isPlaying: boolean
+  }
+  timestamp: number
+  cleanShutdown: boolean
+}
+
+export interface SessionRecoveryCheckResult {
+  hasPendingRecovery: boolean
+  snapshot: SessionSnapshot | null
+}
+
+export interface OutputIncident {
+  timestamp: number
+  type: 'crash' | 'disconnect' | 'fps_drop' | 'recreation' | 'error'
+  details: string
+}
+
+export interface OutputHealthStatus {
+  role: string
+  displayConnected: boolean
+  windowAlive: boolean
+  fps: number
+  lastFrameTimestamp: number
+  memoryUsageMb: number
+  recentErrors: Array<{ timestamp: number; message: string }>
+  incidents: OutputIncident[]
+  status: 'healthy' | 'warning' | 'error'
+}
+
+export interface SystemMetrics {
+  cpuPercent: number
+  memory: {
+    totalMb: number
+    freeMb: number
+    usedMb: number
+    percentUsed: number
+  }
+  disk: {
+    totalGb: number
+    freeGb: number
+    usedGb: number
+    percentUsed: number
+  }
+  gpu: {
+    featureStatus: any
+    info?: string
+  }
+  alerts: Array<{
+    id: string
+    type: 'memory' | 'disk' | 'cpu'
+    level: 'warning' | 'critical'
+    message: string
+  }>
+  timestamp: number
+}
+
+export type ChecklistStatus = 'ok' | 'warning' | 'error'
+
+export interface ChecklistItem {
+  id: string
+  category: 'media' | 'fonts' | 'youtube' | 'powerpoint' | 'bible' | 'displays' | 'audio' | 'disk' | 'backup'
+  title: string
+  status: ChecklistStatus
+  details: string
+  actionType?: 'reconnect_display' | 'convert_powerpoint' | 'import_bible' | 'create_backup' | 'refresh' | string
+  actionLabel?: string
+}
+
+export interface ServiceChecklistResult {
+  overallStatus: ChecklistStatus
+  checkedAt: number
+  items: ChecklistItem[]
+  summary: {
+    total: number
+    ok: number
+    warning: number
+    error: number
+  }
+}
+
+export interface RehearsalSummary {
+  startedAt: number
+  endedAt: number
+  durationSeconds: number
+  slidesCount: number
+  mediaPlaysCount: number
+  incidentsCount: number
+  incidents: Array<{ timestamp: number; message: string }>
+  logFilePath: string
+}
+
+export interface LogEntry {
+  timestamp: string
+  level: 'info' | 'warn' | 'error' | 'debug'
+  message: string
 }
 
 declare global {

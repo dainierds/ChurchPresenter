@@ -80,7 +80,28 @@ export class YouTubeService {
       (ses as any).setDevicePermissionHandler(() => false)
     }
 
-    // 3. Implement ad-blocking via WebRequest API
+    // 3. Inject Referer and Origin headers to prevent Error 153 "Video Player configuration error"
+    try {
+      ses.webRequest.onBeforeSendHeaders(
+        {
+          urls: [
+            '*://*.youtube.com/*',
+            '*://*.youtube-nocookie.com/*',
+            '*://*.googlevideo.com/*'
+          ]
+        },
+        (details, callback) => {
+          const requestHeaders = { ...details.requestHeaders }
+          requestHeaders['Referer'] = 'https://www.youtube.com/'
+          requestHeaders['Origin'] = 'https://www.youtube.com'
+          callback({ requestHeaders })
+        }
+      )
+    } catch (err) {
+      logger.warn('Failed to configure YouTube header injection:', err)
+    }
+
+    // 4. Implement ad-blocking via WebRequest API
     try {
       ses.webRequest.onBeforeRequest(
         { urls: YouTubeService.AD_BLOCK_PATTERNS },

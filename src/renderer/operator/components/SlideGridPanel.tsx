@@ -25,6 +25,9 @@ interface SlideGridPanelProps {
   onAddSlide: () => void
   onOpenEditor: () => void
   theme: ThemeConfig
+  allThemes?: ThemeConfig[]
+  elementThemeId?: string
+  onSelectTheme?: (themeId: string) => void
   arrangements?: { id: string; name: string }[]
   selectedArrangementId?: string
   onSelectArrangement?: (id: string) => void
@@ -45,6 +48,9 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
   onAddSlide,
   onOpenEditor,
   theme,
+  allThemes,
+  elementThemeId,
+  onSelectTheme,
   arrangements,
   selectedArrangementId,
   onSelectArrangement
@@ -93,6 +99,26 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
               {arrangements.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Element Theme Selector */}
+        {allThemes && allThemes.length > 0 && onSelectTheme && (
+          <div className="pro-arrangement-selector" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span className="pro-arr-label" style={{ color: '#f97316', fontWeight: 600 }}>Tema:</span>
+            <select
+              value={elementThemeId || ''}
+              onChange={(e) => onSelectTheme(e.target.value)}
+              className="pro-arr-select"
+              title="Tema asignado a este elemento específico"
+            >
+              <option value="">(Predeterminado del tipo)</option>
+              {allThemes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -178,13 +204,29 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                     className="pro-slide-thumbnail-box"
                     style={{
                       height: cardHeight,
-                      fontFamily: theme.fontFamily || 'sans-serif'
+                      fontFamily: theme.fontFamily || 'sans-serif',
+                      background:
+                        slide.background?.type === 'image'
+                          ? `url(${slide.background.value}) center/cover no-repeat`
+                          : slide.background?.value ||
+                            (theme.background?.type === 'image'
+                              ? `url(${theme.background.value}) center/cover no-repeat`
+                              : theme.background?.value || '#181818')
                     }}
                   >
                     {slide.mediaUrl && slide.mediaType === 'image' && (
                       <img src={slide.mediaUrl} alt="" className="pro-slide-thumb-img" />
                     )}
-                    <div className="pro-slide-text-preview">{slide.body}</div>
+                    <div
+                      className="pro-slide-text-preview"
+                      style={{
+                        fontFamily: theme.fontFamily || 'sans-serif',
+                        color: theme.color || '#ffffff',
+                        textAlign: (theme.alignment || 'center') as any
+                      }}
+                    >
+                      {slide.body}
+                    </div>
 
                     {isLive && (
                       <div className="pro-slide-live-overlay">

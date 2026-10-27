@@ -7,6 +7,9 @@ import { displayManager } from './display-manager'
 import { stateManager } from './state-manager'
 import { logger } from './logger'
 import { IPC_CHANNELS } from '../shared/ipc-events'
+import { outputHealthService } from './health/output-health-service'
+import { rehearsalService } from './rehearsal/rehearsal-service'
+import { powerProtectionService } from './power/power-protection-service'
 
 export class WindowManager {
   private operatorWindow: BrowserWindow | null = null
@@ -182,7 +185,6 @@ export class WindowManager {
       autoHideMenuBar: true,
       backgroundColor: '#000000',
       hasShadow: false,
-      focusable: false,
       webPreferences: {
         preload: this.getPreloadPath(),
         contextIsolation: true,
@@ -211,15 +213,21 @@ export class WindowManager {
       logger.error(
         `Output window for role '${role}' crashed! Reason: ${details.reason}, exitCode: ${details.exitCode}. Auto-recreating...`
       )
+      outputHealthService.recordIncident(role, 'crash', `Proceso renderer caído: ${details.reason} (código ${details.exitCode})`)
+      rehearsalService.recordIncident(`Fallo crítico en salida '${role}': ${details.reason}`)
       this.outputWindows.delete(role)
+      powerProtectionService.updateOutputsState(this.outputWindows.size)
       this.scheduleRecreation(role)
     })
 
     // Auto-recreation on unexpected window closure
     win.on('closed', () => {
       this.outputWindows.delete(role)
+      powerProtectionService.updateOutputsState(this.outputWindows.size)
       if (!this.intentionallyClosedOutputs.has(role)) {
         logger.warn(`Output window for role '${role}' closed unexpectedly. Auto-recreating in 1s...`)
+        outputHealthService.recordIncident(role, 'recreation', `Cierre anómalo de ventana de salida '${role}'. Recreando...`)
+        rehearsalService.recordIncident(`Cierre inesperado en salida '${role}'`)
         this.scheduleRecreation(role)
       } else {
         this.intentionallyClosedOutputs.delete(role)
@@ -227,16 +235,25 @@ export class WindowManager {
     })
 
     this.outputWindows.set(role, win)
+    powerProtectionService.updateOutputsState(this.outputWindows.size)
     return win
   }
 
   public closeOutputWindow(role: string): void {
+    if (this.recreationTimeouts.has(role)) {
+      clearTimeout(this.recreationTimeouts.get(role)!)
+      this.recreationTimeouts.delete(role)
+    }
     const win = this.outputWindows.get(role)
     if (win && !win.isDestroyed()) {
       this.intentionallyClosedOutputs.add(role)
       win.close()
       this.outputWindows.delete(role)
+      powerProtectionService.updateOutputsState(this.outputWindows.size)
       logger.info(`Output window for role '${role}' intentionally closed via UI close button.`)
+    }
+    if (this.operatorWindow && !this.operatorWindow.isDestroyed()) {
+      this.operatorWindow.focus()
     }
   }
 
@@ -474,6 +491,7 @@ export class WindowManager {
       }
     }
     this.outputWindows.clear()
+    powerProtectionService.updateOutputsState(0)
   }
 }
 

@@ -65,9 +65,27 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 
 ---
 
-## 6. Registro de Pruebas Automatizadas
+## 7. Fase 7: Estabilidad y Operación Segura
 
-- **Total Archivos de Test**: 28 archivos
-- **Total Tests Automatizados**: 135 pruebas pasando limpiamente (`npm test`)
-- **Compilación de Tipos**: TypeScript 5.7.2 (`tsc --noEmit`) sin errores.
-- **Linter**: ESLint 8.57.1 sin errores.
+| Característica | Estado | Componente / Servicio | Verificación |
+|---|---|---|---|
+| **Recuperación tras Cierre Brusco** | Operativo | `SessionRecoveryService` + `SessionRecoveryModal` | Guarda snapshots continuos. Al abrir tras cierre anormal, muestra "Reanudar sesión anterior" sin proyectar en vivo automáticamente. Pruebas en `tests/session-recovery.test.ts`. |
+| **Salud de Salidas en Vivo** | Operativo | `OutputHealthService` + `OutputHealthModal` | Reporte por salida de conexión de pantalla, ventana activa, FPS reales, memoria de renderer e historial de incidentes. Pruebas en `tests/output-health.test.ts`. |
+| **Monitor del Sistema** | Operativo | `SystemMonitorService` | Muestreo de CPU %, RAM ocupada/libre, espacio libre en disco con `statfs` y alertas configurables. Pruebas en `tests/system-monitor.test.ts`. |
+| **Modo de Emergencia (Pánico)** | Operativo | `EmergencyService` + Botón en ProToolbar | Botón rojo que congela medios y muestra fondo/logo seguro en todas las pantallas sin cerrar la sesión. |
+| **Modo Seguro al Iniciar** | Operativo | `--safe-mode` / `CHURCH_PRESENTER_SAFE_MODE=1` | Desactiva YouTube, servidor remoto y vigilantes de archivos para diagnosticar fallos. |
+| **Protección del Equipo Windows** | Operativo | `PowerProtectionService` (`powerSaveBlocker`) | Impide que Windows suspenda el equipo o apague pantallas mientras haya salidas activas. Recupera ventanas tras reanudación de suspensión o desbloqueo de pantalla. |
+| **Lista de Verificación Previa al Culto** | Operativo | `ChecklistService` + `ChecklistModal` | Inspección de 9 puntos (medios, fuentes, YouTube, PowerPoint, biblias, pantallas, audio, disco, backup) con badges Verde/Ámbar/Rojo y botones de acción. |
+| **Visor de Registros y Diagnóstico** | Operativo | `DiagnosticsService` + `DiagnosticsModal` | Visor con filtros y botón "Exportar diagnóstico (.ZIP)" con logs, estado de pantallas y configuración sanitizada (sin credenciales). |
+| **Modo Ensayo** | Operativo | `RehearsalService` + `RehearsalSummaryModal` | Insignia visible `[ENSAYO]`, registro de operaciones en archivo dedicado (`logs/rehearsal-*.log`) y modal con resumen de sesión. Pruebas en `tests/rehearsal-mode.test.ts`. |
+| **Prueba de Larga Duración (Soak Test)** | Operativo | `scripts/run-soak.js` (`npm run soak`) | Simulación configurable (default 4 horas) midiendo memoria RSS, FPS, fugas y errores minuto a minuto en `docs/soak-results/`. |
+| **Documentación Operativa y Mantenimiento** | Operativo | `docs/GUIA_OPERADOR.md` + `docs/PROCEDIMIENTO_ACTUALIZACION.md` | Manual de uso en español para el templo y guía paso a paso de actualización y reversión. |
+| **Cifrado de Ajustes Sensibles** | Operativo | `SafeStorageService` | Cifrado con `safeStorage` (DPAPI en Windows) de tokens y claves sin guardarlos en texto plano. Pruebas en `tests/safe-storage.test.ts`. |
+
+---
+
+## 8. Registro de Pruebas Automatizadas
+
+- **Total Archivos de Test**: 39 archivos
+- **Total Tests Automatizados**: 182 pruebas pasando limpiamente (`npm test`)
+- **Compilación de Tipos**: TypeScript 5.7.2 (`tsc --noEmit`) con 0 errores.

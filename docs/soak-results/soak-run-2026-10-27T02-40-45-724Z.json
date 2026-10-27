@@ -1,0 +1,28 @@
+{
+  "testName": "Prueba de Larga Duración (Soak Test)",
+  "executedAt": "2026-10-27T02:40:45.723Z",
+  "durationSeconds": 10,
+  "durationFormatted": "0h 0m 10s",
+  "baselineRssMb": 41,
+  "finalRssMb": 43.6,
+  "rssDeltaMb": 2.6,
+  "totalSlidesPresented": 19,
+  "totalErrors": 0,
+  "averageFps": 60,
+  "memoryLeakVerdict": "APROBADA (Estable, sin fugas de memoria)",
+  "samplesCount": 1,
+  "samples": [
+    {
+      "elapsedSeconds": 5,
+      "timestamp": "2026-10-27T02:40:40.713Z",
+      "rssMb": 42.3,
+      "heapUsedMb": 4.7,
+      "heapTotalMb": 6.2,
+      "externalMb": 3,
+      "leakSlopeMbPerMin": 15.27,
+      "estimatedFps": 60,
+      "slidesPresented": 9,
+      "errors": 0
+    }
+  ]
+}

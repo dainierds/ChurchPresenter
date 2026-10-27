@@ -20,16 +20,16 @@ import {
   Palette,
   Film
 } from 'lucide-react'
-import { ServicePlan, ServiceItem } from '../../../shared/types'
+import { ServicePlan, ServiceItem, ThemeConfig } from '../../../shared/types'
 
 const HEADER_PRESET_COLORS = [
-  '#FF7A00', // Orange (Primary)
-  '#22C55E', // Green (Live)
-  '#2D9CFF', // Light Vivid Blue (Preview)
-  '#A855F7', // Purple
-  '#EAB308', // Amber / Gold
+  '#2D9CFF', // Light Vivid Blue (Preludio / Bienvenida)
+  '#FF7A00', // Orange (Adoración)
+  '#22C55E', // Green (Ofrenda / Gratitud)
+  '#A855F7', // Purple (Mensaje / Palabra)
+  '#EAB308', // Amber / Gold (Ministración / Despedida)
   '#EC4899', // Pink
-  '#94A3B8'  // Light Gray
+  '#14B8A6'  // Teal
 ]
 
 interface PlaylistPanelProps {
@@ -50,6 +50,9 @@ interface PlaylistPanelProps {
   onRenameHeader?: (index: number, newTitle: string, newColor?: string) => void
   onAddBlankItem: () => void
   onVerifyPlaylist?: () => void
+  allThemes?: ThemeConfig[]
+  onAssignItemTheme?: (itemIndex: number, themeId: string | null) => void
+  onApplyThemeToScope?: (themeId: string, scope: 'playlist' | 'library' | 'all_songs') => void
   panelLabels?: {
     library: string
     playlist: string
@@ -77,6 +80,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onRenameHeader,
   onAddBlankItem,
   onVerifyPlaylist,
+  allThemes,
+  onAssignItemTheme,
+  onApplyThemeToScope,
   panelLabels
 }) => {
   const [showAddMenu, setShowAddMenu] = useState(false)
@@ -90,6 +96,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [isEditingServiceName, setIsEditingServiceName] = useState(false)
   const [serviceNameInput, setServiceNameInput] = useState('')
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    itemIndex: number
+    item: ServiceItem
+  } | null>(null)
 
   const items = currentService?.items || []
 
@@ -118,7 +131,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
   const cycleHeaderColor = (idx: number, currentItem: ServiceItem) => {
     if (!onRenameHeader) return
-    const curColor = currentItem.notes || '#3b82f6'
+    const curColor = (currentItem.notes && currentItem.notes.startsWith('#'))
+      ? currentItem.notes
+      : HEADER_PRESET_COLORS[0]
     const curIndex = HEADER_PRESET_COLORS.indexOf(curColor)
     const nextColor = HEADER_PRESET_COLORS[(curIndex + 1) % HEADER_PRESET_COLORS.length]
     onRenameHeader(idx, currentItem.name, nextColor)
@@ -170,6 +185,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
   // Calculate items under headers for collapsible logic
   let isCurrentHeaderCollapsed = false
+  let headerSectionCounter = 0
 
   return (
     <div className="pro-playlist-panel zone-service-playlist">
@@ -362,14 +378,21 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
           if (isHeader) {
             isCurrentHeaderCollapsed = Boolean(collapsedHeaders[item.id])
-            const headerColorTag = item.notes || '#3b82f6'
+            const fallbackColor = HEADER_PRESET_COLORS[headerSectionCounter % HEADER_PRESET_COLORS.length]
+            headerSectionCounter++
+            const headerColorTag = (item.notes && item.notes.startsWith('#')) ? item.notes : fallbackColor
             const isEditing = editingHeaderIndex === index
 
             return (
               <div
                 key={item.id}
                 className={`pro-playlist-header-row ${isSelected ? 'selected' : ''}`}
-                style={{ borderLeft: `3px solid ${headerColorTag}` }}
+                style={{
+                  borderLeft: `4px solid ${headerColorTag}`,
+                  background: isSelected
+                    ? 'var(--bg-card-selected)'
+                    : `linear-gradient(90deg, ${headerColorTag}18 0%, rgba(23, 24, 29, 0.95) 75%)`
+                }}
                 onClick={() => {
                   toggleHeader(item.id)
                   onSelectItemIndex(index)
@@ -377,9 +400,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
               >
                 <div className="pro-header-title-row">
                   {collapsedHeaders[item.id] ? (
-                    <ChevronRight size={13} />
+                    <ChevronRight size={13} style={{ color: headerColorTag }} />
                   ) : (
-                    <ChevronDown size={13} />
+                    <ChevronDown size={13} style={{ color: headerColorTag }} />
                   )}
                   {isEditing ? (
                     <input
@@ -396,7 +419,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                       onBlur={() => handleHeaderRenameSubmit(index, item)}
                     />
                   ) : (
-                    <span className="pro-header-text">{item.name}</span>
+                    <span className="pro-header-text" style={{ color: headerColorTag }}>{item.name}</span>
                   )}
                 </div>
 
@@ -451,6 +474,16 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 }
               }}
               onClick={() => onSelectItemIndex(index)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setContextMenu({
+                  visible: true,
+                  x: e.clientX,
+                  y: e.clientY,
+                  itemIndex: index,
+                  item
+                })
+              }}
             >
               <div className="pro-item-left">
                 {item.type === 'youtube' && item.youtubeConfig?.thumbnailUrl ? (
@@ -580,6 +613,200 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           </button>
         )}
       </div>
+      {/* Item Context Menu Popover */}
+      {contextMenu?.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999
+          }}
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setContextMenu(null)
+          }}
+        >
+          <div
+            style={{
+              position: 'fixed',
+              top: Math.min(contextMenu.y, window.innerHeight - 250),
+              left: Math.min(contextMenu.x, window.innerWidth - 260),
+              backgroundColor: '#181818',
+              border: '1px solid #333333',
+              borderRadius: '6px',
+              padding: '6px',
+              minWidth: '240px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.8)',
+              fontSize: '12px',
+              color: '#f3f4f6'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '4px 8px', fontSize: '11px', color: '#9ca3af', borderBottom: '1px solid #282828' }}>
+              Elemento: <strong style={{ color: '#ffffff' }}>{contextMenu.item.name}</strong>
+            </div>
+
+            {/* Change Theme */}
+            {allThemes && allThemes.length > 0 && onAssignItemTheme && (
+              <div style={{ padding: '6px 8px' }}>
+                <span style={{ display: 'block', fontSize: '11px', color: '#f97316', marginBottom: '4px', fontWeight: 600 }}>
+                  Tema Específico:
+                </span>
+                <select
+                  value={contextMenu.item.themeId || ''}
+                  onChange={(e) => {
+                    const chosen = e.target.value || null
+                    onAssignItemTheme(contextMenu.itemIndex, chosen)
+                    setContextMenu(null)
+                  }}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#1f1f1f',
+                    border: '1px solid #383838',
+                    color: '#ffffff',
+                    padding: '4px 6px',
+                    borderRadius: '4px',
+                    fontSize: '11px'
+                  }}
+                >
+                  <option value="">(Usar predeterminado de tipo)</option>
+                  {allThemes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {contextMenu.item.themeId && onAssignItemTheme && (
+              <button
+                onClick={() => {
+                  onAssignItemTheme(contextMenu.itemIndex, null)
+                  setContextMenu(null)
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  padding: '6px 8px',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#262626')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                Quitar tema específico
+              </button>
+            )}
+
+            {allThemes && onApplyThemeToScope && (
+              <>
+                <div style={{ height: '1px', backgroundColor: '#282828', margin: '4px 0' }} />
+                <button
+                  onClick={() => {
+                    const themeToApply = contextMenu.item.themeId || (allThemes[0] ? allThemes[0].id : '')
+                    if (confirm(`¿Aplicar este tema a todos los elementos de la playlist actual?`)) {
+                      onApplyThemeToScope(themeToApply, 'playlist')
+                    }
+                    setContextMenu(null)
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: '6px 8px',
+                    color: '#e5e7eb',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '11px'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#262626')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  Aplicar tema a toda la playlist...
+                </button>
+
+                <button
+                  onClick={() => {
+                    const themeToApply = contextMenu.item.themeId || (allThemes[0] ? allThemes[0].id : '')
+                    if (confirm(`¿Aplicar este tema a TODAS las canciones de la biblioteca?`)) {
+                      onApplyThemeToScope(themeToApply, 'all_songs')
+                    }
+                    setContextMenu(null)
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: '6px 8px',
+                    color: '#e5e7eb',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '11px'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#262626')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  Aplicar a toda la biblioteca de canciones...
+                </button>
+              </>
+            )}
+
+            <div style={{ height: '1px', backgroundColor: '#282828', margin: '4px 0' }} />
+
+            <button
+              onClick={() => {
+                onDuplicateItem(contextMenu.itemIndex)
+                setContextMenu(null)
+              }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                background: 'none',
+                border: 'none',
+                padding: '6px 8px',
+                color: '#e5e7eb',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontSize: '11px'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#262626')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              Duplicar elemento
+            </button>
+
+            <button
+              onClick={() => {
+                onDeleteItem(contextMenu.itemIndex)
+                setContextMenu(null)
+              }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                background: 'none',
+                border: 'none',
+                padding: '6px 8px',
+                color: '#f87171',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontSize: '11px'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3b1212')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              Eliminar de la playlist
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -742,4 +742,76 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
      - Acentos configurables en Configuración -> Apariencia con valores por defecto ProPresenter: Naranja Pro (`#FF7A00`), Verde En Vivo (`#22C55E`), Azul Vista Previa (`#2D9CFF`), Rojo Peligro (`#EF4444`).
      - Todos los controles nativos (`input`, `select`, `checkbox`, `range`, `button`, barras de desplazamiento delgadas) recibieron estilos oscuros personalizados.
 
+---
 
+## 23. Jerarquía de Prioridad de Temas por Tipo de Contenido y Salidas (v1.1.0)
+
+- **Contexto**:
+  - Anteriormente, ChurchPresenter contaba con un único tema global activo. No existía forma de que las canciones tuvieran una tipografía e imagen de fondo específica, mientras que la Biblia utilizara un degradado sobrio y los anuncios un texto ampliado de alto contraste.
+  - Además, se requería poder asociar un tema propio a un elemento individual (una canción especial, un anuncio relevante) sin afectar a todo el servicio ni al resto de la biblioteca.
+- **Decisión**:
+  - Implementar una resolución en cascada estricta y determinista de 4 niveles (`resolveEffectiveTheme`):
+    1. **Prioridad 1 (Elemento concreto)**: Tema asignado específicamente al ítem actual (`item.themeId` en la playlist, `song.themeId` o `presentation.themeId`).
+    2. **Prioridad 2 (Predeterminado del tipo de contenido)**: Si el elemento no tiene tema propio asignado, se busca el tema predeterminado configurado para su categoría (`songs`, `bible`, `announcements`, `messages`, `timer`).
+    3. **Prioridad 3 (Tema general por defecto)**: Si la categoría no tiene un tema asignado o no se encuentra, se utiliza el tema general predeterminado del sistema (`theme.isDefault === true`).
+    4. **Prioridad 4 (Sobrescritura por Rol de Salida / Output Role Override)**: Sobre el tema resultante de los pasos 1 a 3, se aplican encima las adaptaciones de hardware específicas de cada pantalla (por ejemplo, `roleOverrides.stage` para monitor de confianza de escenario con fondo negro puro `#000000`, letras amarillas/naranjas `#f97316` de gran tamaño y alineación izquierda).
+  - **Comportamiento en Vivo**:
+    - Un cambio de tema en un elemento que no está en vivo se refleja inmediatamente en la cuadrícula de diapositivas del operador.
+    - Un cambio de tema en un elemento actualmente proyectándose en vivo **no altera la proyección física** hasta que el operador pulse explícitamente "Actualizar en vivo", protegiendo la experiencia de la congregación de cambios visuales bruscos durante el culto.
+  - **Paquetes Portables (.cptheme)**:
+    - Archivo ZIP autocontenido con `manifest.json`, carpeta `assets/` (fondos de imagen o video sin audio con verificación hash SHA-256) y carpeta opcional `fonts/` (con confirmación de licencia por parte del usuario). Incluye validación estricta contra ataques de Directory Traversal (`..`).
+
+---
+
+## 24. Servidor de Control Remoto Local, Seguridad por PIN y Protocolo WebSocket (Fase 6)
+
+- **Contexto**:
+  - Se requiere permitir el control de presentaciones desde dispositivos móviles (smartphones de líderes o predicadores) y monitores de confianza portátiles en tablets sin cables ni hardware especializado, operando en la red local (LAN / Wi-Fi) del templo.
+  - La solución debe funcionar de forma autónoma sin depender de servidores en la nube ni conexión activa a Internet.
+- **Decisión**:
+  - Integrar un servidor HTTP y WebSocket nativo (`http` + `ws`) directamente en el proceso principal de Node.js en Electron, desactivado por defecto (`enabled: false`).
+  - Utilizar un protocolo de emparejamiento basado en PIN numérico de 6 dígitos aleatorio o personalizable por el operador, junto con tokens de sesión en memoria (`Bearer tokens`).
+  - Servir clientes web adaptativos (Responsive Touch HTML/CSS/JS) directamente desde memoria para `GET /` (controlador táctil) y `GET /stage` (monitor de confianza para tablets).
+  - Adoptar comunicación bidireccional continua vía WebSocket (`/ws`) para actualizaciones instantáneas de estado y latencia ultra baja.
+- **Riesgos Identificados de no Cifrar con HTTPS/WSS en Red Local**:
+  - En redes Wi-Fi abiertas o compartidas, un atacante local con un analizador de paquetes (sniffer) podría interceptar el tráfico HTTP/WS sin cifrar.
+  - El uso de HTTPS con certificados autofirmados en entornos locales sin dominio oficial provoca que navegadores móviles modernos (iOS Safari, Android Chrome) muestren advertencias rojas alarmantes ("Conexión no segura"), requiriendo la instalación manual de perfiles de confianza o certificados raíz en cada teléfono móvil, lo cual resulta inviable para operadores voluntarios y miembros de la congregación.
+- **Mitigaciones Técnicas Adoptadas**:
+  1. **Activación Voluntaria y Puerto Configurable**: El servidor permanece cerrado por defecto. El operador decide cuándo activarlo, en qué interfaz de red (ej. adapter Wi-Fi privado vs Ethernet) y en qué puerto (por defecto 8080).
+  2. **Tolerancia a Ataques de Fuerza Bruta (Rate Limiting y Bloqueo)**: Un mecanismo en memoria registra intentos de autenticación fallidos por dirección IP. Al acumular 5 intentos consecutivos erróneos, la IP queda bloqueada automáticamente durante 5 minutos (300 segundos).
+  3. **Aislamiento de Roles y Sesiones Revocables**:
+     - Las sesiones de controlador (`role: "controller"`) requieren PIN válido.
+     - Las sesiones de visor de escenario (`role: "stage"`) están restringidas a modo solo lectura y sus comandos de control son rechazados por el servidor.
+     - La interfaz del operador lista en tiempo real los clientes conectados (IP, User-Agent, fecha/hora de conexión) y permite expulsar / revocar cualquier sesión con un clic.
+  4. **Protección Estricta contra Directory Traversal (`..`)**:
+     - El servidor HTTP no expone el sistema de archivos del sistema operativo; sirve exclusivamente plantillas HTML autocontenidas en memoria generadas dinámicamente y previene cualquier lectura de rutas del disco duro.
+  5. **Recomendación de Segmentación de Red en UI**:
+     - En el panel de configuración se incluye un aviso recomendando conectar el PC y los dispositivos de control a una red Wi-Fi privada o VLAN técnica de la iglesia con contraseña WPA2/WPA3, separada de la red Wi-Fi de invitados.
+  6. **Rendimiento y Latencia**:
+     - El protocolo WebSocket ligero garantiza tiempos de respuesta inferiores a 50 ms en red local (cumpliendo con creces el objetivo de latencia < 200 ms).
+
+
+
+
+---
+
+## 25. Arquitectura de Estabilidad, Recuperación tras Crash y Protección de Energía (Fase 7)
+
+- **Contexto**:
+  - En un servicio eclesiástico en vivo, los fallos de energía, tirones accidentales de cables HDMI o congelamientos del sistema operativo representan un riesgo inaceptable.
+  - Se requiere que el software guarde continuamente el estado de la sesión, no proyecte contenido en vivo automáticamente sin confirmación humana tras un reinicio, monitorice la salud de cada salida física, prevenga la suspensión de Windows y provea un botón de pánico / emergencia instantáneo.
+- **Decisiones Técnicas**:
+  1. **Persistencia de Sesión Desacoplada de Salidas Físicas (`SessionRecoveryService`)**:
+     - Las instantáneas se guardan periódicamente en `session-snapshot.json` con el campo `cleanShutdown: false`.
+     - Si la app termina de forma inesperada (corte de luz, `SIGKILL`, crash), en el siguiente inicio se detecta `cleanShutdown === false` y se despliega el diálogo interactivo de recuperación.
+     - **Regla estricta de seguridad**: La recuperación restaura la lista de servicio abierta, el elemento y la diapositiva seleccionada en el monitor de previo del operador, pero **nunca** proyecta a las salidas físicas sin acción explícita del operador (pulsar Espacio o En Vivo), evitando que se proyecten letras o medios desfasados ante la congregación.
+  2. **Prevención de Suspensión de Pantallas con Electron `powerSaveBlocker`**:
+     - Windows suele tener configurado el apagado de pantallas o suspensión tras 10 o 15 minutos de inactividad de teclado/ratón. Durante una prédica prolongada, el operador puede no tocar el ratón por 45 minutos.
+     - `PowerProtectionService` ejecuta `powerSaveBlocker.start('prevent-display-sleep')` en cuanto hay cualquier salida de proyección abierta, liberando el bloqueo cuando todas las salidas se cierran.
+     - Se integran los eventos `powerMonitor.on('resume')`, `suspend` y `unlock-screen` para pausar medios con seguridad y reconciliar/reubicar automáticamente las ventanas de salida sin intervención del operador.
+  3. **Medición Fiable de Recursos con `fs.promises.statfs`**:
+     - Para calcular el espacio libre en disco en Windows de forma 100% nativa y sin librerías externas ni comandos de PowerShell que bloqueen el event loop, se utiliza la llamada POSIX nativa `fs.promises.statfs(app.getPath('userData'))` incorporada en Node.js 18+.
+  4. **Modo de Emergencia (Pánico) de Nivel Superior**:
+     - Permite con un solo clic o atajo congelar y silenciar medios instantáneamente mientras se superpone el logotipo institucional o fondo seguro en todas las salidas físicas, conservando intacto el flujo de trabajo del operador para reanudar cuando el incidente sea superado.
+  5. **Cifrado de Ajustes Sensibles con `safeStorage`**:
+     - Los datos confidenciales (como claves o configuraciones privadas) se cifran en disco utilizando la DPAPI de Windows a través de `safeStorage.encryptString()`, garantizando que no se almacenen credenciales en texto plano en la base de datos o archivos JSON.

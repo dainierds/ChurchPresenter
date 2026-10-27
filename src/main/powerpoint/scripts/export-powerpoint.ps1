@@ -115,6 +115,7 @@ try {
             file = $outFileName
             path = $outFilePath
         }
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($slide) | Out-Null
     }
 
     $result.slides = $slideList

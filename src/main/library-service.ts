@@ -9,12 +9,12 @@ import {
   Song,
   SongArrangement,
   SongGroup,
-  ThemeConfig,
-  DEFAULT_THEME
+  ThemeConfig
 } from '../shared/types'
 import { parseLyricsToGroups } from '../shared/song-parser'
 import { parseAndValidateLibraryJson, serializeLibraryToJson } from '../shared/backup-export-utils'
 import { databaseService } from './db/database-service'
+import { themeService } from './theme/theme-service'
 import { logger } from './logger'
 
 export class LibraryService {
@@ -33,31 +33,7 @@ export class LibraryService {
   }
 
   public initialize(): void {
-    // Seed default themes only if none exist (database starts clean of songs/services)
-    const existingThemes = this.getThemes()
-    if (existingThemes.length === 0) {
-      this.saveTheme(DEFAULT_THEME)
-      this.saveTheme({
-        ...DEFAULT_THEME,
-        id: 'theme-warm-gold',
-        name: 'Dorado Cálido',
-        isDefault: false,
-        background: {
-          type: 'gradient',
-          value: 'linear-gradient(135deg, #3a1c71 0%, #d76d77 50%, #ffaf7b 100%)'
-        }
-      })
-      this.saveTheme({
-        ...DEFAULT_THEME,
-        id: 'theme-forest-green',
-        name: 'Paz Profunda',
-        isDefault: false,
-        background: {
-          type: 'gradient',
-          value: 'linear-gradient(135deg, #134e5e 0%, #71b280 100%)'
-        }
-      })
-    }
+    themeService.initialize()
   }
 
   // --- SONGS ---
@@ -229,51 +205,15 @@ export class LibraryService {
   // --- THEMES ---
 
   public getThemes(): ThemeConfig[] {
-    const rows = databaseService.query('SELECT * FROM themes ORDER BY is_default DESC, name ASC;')
-    return rows.map((r) => {
-      try {
-        const parsed = JSON.parse(String(r.config_json))
-        return {
-          ...parsed,
-          id: String(r.id),
-          name: String(r.name),
-          isDefault: Boolean(r.is_default)
-        }
-      } catch {
-        return {
-          ...DEFAULT_THEME,
-          id: String(r.id),
-          name: String(r.name),
-          isDefault: Boolean(r.is_default)
-        }
-      }
-    })
+    return themeService.getThemes()
   }
 
   public saveTheme(theme: ThemeConfig): ThemeConfig {
-    if (theme.isDefault) {
-      databaseService.run('UPDATE themes SET is_default = 0;')
-    }
-
-    databaseService.run(
-      `INSERT INTO themes (id, name, is_default, config_json, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         name = excluded.name,
-         is_default = excluded.is_default,
-         config_json = excluded.config_json,
-         updated_at = datetime('now');`,
-      [theme.id, theme.name, theme.isDefault ? 1 : 0, JSON.stringify(theme)]
-    )
-    logger.info(`Saved theme '${theme.name}' (${theme.id})`)
-    return theme
+    return themeService.saveTheme(theme)
   }
 
   public setDefaultTheme(id: string): boolean {
-    databaseService.run('UPDATE themes SET is_default = 0;')
-    databaseService.run('UPDATE themes SET is_default = 1 WHERE id = ?;', [id])
-    logger.info(`Set theme ${id} as default`)
-    return true
+    return themeService.setDefaultTheme(id)
   }
 
   // --- BACKGROUND IMAGES ---
@@ -376,8 +316,8 @@ export class LibraryService {
       [
         service.id,
         service.name,
-        service.date,
-        JSON.stringify(service.items),
+        service.date || new Date().toISOString(),
+        JSON.stringify(service.items || []),
         service.isTemplate ? 1 : 0,
         service.isDemo ? 1 : 0
       ]
@@ -708,18 +648,18 @@ El perdón de Jesús alcanzará al instante.`
       isTemplate: true,
       isDemo: true,
       items: [
-        { id: 'item_1', type: 'header', name: 'PRELUDIO Y BIENVENIDA' },
+        { id: 'item_1', type: 'header', name: 'PRELUDIO Y BIENVENIDA', notes: '#2D9CFF' },
         { id: 'item_2', type: 'presentation', name: announcements.title, presentationId: presId },
         { id: 'item_3', type: 'blank', name: 'Pausa en Blanco' },
-        { id: 'item_4', type: 'header', name: 'BLOQUE DE ADORACIÓN' },
+        { id: 'item_4', type: 'header', name: 'BLOQUE DE ADORACIÓN', notes: '#FF7A00' },
         { id: 'item_5', type: 'song', name: createdSongs[0].title, songId: createdSongs[0].id, arrangementId: createdSongs[0].arrangements[0].id },
         { id: 'item_6', type: 'song', name: createdSongs[1].title, songId: createdSongs[1].id, arrangementId: createdSongs[1].arrangements[0].id },
         { id: 'item_7', type: 'song', name: createdSongs[2].title, songId: createdSongs[2].id, arrangementId: createdSongs[2].arrangements[0].id },
-        { id: 'item_8', type: 'header', name: 'OFRENDA Y GRATITUD' },
+        { id: 'item_8', type: 'header', name: 'OFRENDA Y GRATITUD', notes: '#22C55E' },
         { id: 'item_9', type: 'song', name: createdSongs[3].title, songId: createdSongs[3].id, arrangementId: createdSongs[3].arrangements[0].id },
-        { id: 'item_10', type: 'header', name: 'MENSAJE DE LA PALABRA' },
+        { id: 'item_10', type: 'header', name: 'MENSAJE DE LA PALABRA', notes: '#A855F7' },
         { id: 'item_11', type: 'blank', name: 'Pantalla en Blanco (Predicación)' },
-        { id: 'item_12', type: 'header', name: 'MINISTRACIÓN Y DESPEDIDA' },
+        { id: 'item_12', type: 'header', name: 'MINISTRACIÓN Y DESPEDIDA', notes: '#EAB308' },
         { id: 'item_13', type: 'song', name: createdSongs[4].title, songId: createdSongs[4].id, arrangementId: createdSongs[4].arrangements[0].id },
         { id: 'item_14', type: 'song', name: createdSongs[5].title, songId: createdSongs[5].id, arrangementId: createdSongs[5].arrangements[0].id }
       ],

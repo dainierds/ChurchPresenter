@@ -343,6 +343,90 @@ const MIGRATIONS: Migration[] = [
         // user_libraries may not exist in minimal test environments
       }
     }
+  },
+  {
+    version: 8,
+    name: 'complete_theme_system_and_fonts',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS custom_fonts (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          file_name TEXT NOT NULL,
+          format TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_fonts_name ON custom_fonts(name);
+      `)
+
+      try {
+        db.run('ALTER TABLE songs ADD COLUMN theme_id TEXT;')
+      } catch {
+        // column may already exist
+      }
+
+      try {
+        db.run('ALTER TABLE generic_presentations ADD COLUMN theme_id TEXT;')
+      } catch {
+        // column may already exist
+      }
+    }
+  },
+  {
+    version: 9,
+    name: 'phase_6_stage_layouts_and_messages',
+    up: (db: Database) => {
+      // Stage Layouts table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS stage_layouts (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          is_builtin INTEGER DEFAULT 0,
+          background_color TEXT DEFAULT '#000000',
+          config_json TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Message Presets table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS message_presets (
+          id TEXT PRIMARY KEY,
+          text TEXT NOT NULL,
+          sort_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Seed default message presets
+      try {
+        const stmt = db.prepare('SELECT COUNT(*) as cnt FROM message_presets;')
+        if (stmt.step()) {
+          const row = stmt.getAsObject()
+          if (Number(row.cnt || 0) === 0) {
+            const defaults = [
+              'Baja el volumen',
+              'Falta 1 minuto',
+              'Pastores a la sala pastoral',
+              'Tiempo de ofrenda y anuncios',
+              'Fin del servicio, gracias por acompañarnos'
+            ]
+            defaults.forEach((txt, idx) => {
+              db.run('INSERT INTO message_presets (id, text, sort_order) VALUES (?, ?, ?);', [
+                `preset_${idx + 1}`,
+                txt,
+                idx
+              ])
+            })
+          }
+        }
+        stmt.free()
+      } catch {
+        // ignore
+      }
+    }
   }
 ]
 

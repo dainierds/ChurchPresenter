@@ -6,7 +6,9 @@ import {
   ThemeConfig,
   LayerBackground,
   PresentationTimer,
-  YouTubeSyncTick
+  YouTubeSyncTick,
+  CustomFontItem,
+  StageLayoutConfig
 } from '../../shared/types'
 import { computeLayerVisibility } from '../../shared/state-utils'
 import { parseYouTubeUrl } from '../../shared/youtube-utils'
@@ -186,12 +188,31 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   }
 
   const handleCloseWindow = async () => {
-    if (window.churchPresenterApi?.closeOutputWindow) {
-      await window.churchPresenterApi.closeOutputWindow(role)
-    } else {
-      window.close()
+    try {
+      if (window.churchPresenterApi?.closeOutputWindow) {
+        await window.churchPresenterApi.closeOutputWindow(role)
+      }
+    } catch (err) {
+      console.error('Error closing output window via API:', err)
+    } finally {
+      try {
+        window.close()
+      } catch {
+        // ignore
+      }
     }
   }
+
+  // Keyboard shortcut to close output window on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseWindow()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [role])
   const lastFpsDropLogRef = useRef<number>(0)
   const framesRenderedRef = useRef<number>(0)
 
@@ -224,6 +245,20 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     return () => clearInterval(timer)
   }, [])
 
+  // Phase 7: Periodic Health Heartbeat to Main Process
+  useEffect(() => {
+    const heartbeatTimer = setInterval(() => {
+      if (window.churchPresenterApi?.sendOutputHeartbeat) {
+        window.churchPresenterApi.sendOutputHeartbeat({
+          role,
+          fps: Math.round(fps || 60),
+          timestamp: Date.now()
+        })
+      }
+    }, 1500)
+    return () => clearInterval(heartbeatTimer)
+  }, [role, fps])
+
   // Load state and subscribe
   useEffect(() => {
     window.churchPresenterApi.getState().then((s) => {
@@ -246,6 +281,14 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
 
   // Presentation Timers synchronization
   const [timers, setTimers] = useState<PresentationTimer[]>([])
+  const [assignedStageLayout, setAssignedStageLayout] = useState<StageLayoutConfig | null>(null)
+
+  useEffect(() => {
+    if (role === 'stage' && window.churchPresenterApi?.getAssignedStageLayout) {
+      window.churchPresenterApi.getAssignedStageLayout(role).then((l) => setAssignedStageLayout(l)).catch(() => {})
+    }
+  }, [role, displayState?.activeStageLayout])
+
   useEffect(() => {
     if (window.churchPresenterApi?.getTimers) {
       window.churchPresenterApi.getTimers().then((t) => setTimers(t || [])).catch(() => {})
@@ -253,6 +296,40 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     if (window.churchPresenterApi?.onTimersTick) {
       const unsubTimers = window.churchPresenterApi.onTimersTick((t) => setTimers(t || []))
       return () => unsubTimers()
+    }
+    return undefined
+  }, [])
+
+  // Dynamic Font Registration for Output Windows
+  useEffect(() => {
+    const updateFontStyles = (fonts: CustomFontItem[]) => {
+      let styleTag = document.getElementById('cp-injected-fonts') as HTMLStyleElement | null
+      if (!styleTag) {
+        styleTag = document.createElement('style')
+        styleTag.id = 'cp-injected-fonts'
+        document.head.appendChild(styleTag)
+      }
+      const cssRules = (fonts || [])
+        .map(
+          (f) => `
+        @font-face {
+          font-family: '${f.name}';
+          src: url('${f.url}') format('${f.format}');
+          font-weight: normal;
+          font-style: normal;
+        }
+      `
+        )
+        .join('\n')
+      styleTag.textContent = cssRules
+    }
+
+    if (window.churchPresenterApi?.getCustomFonts) {
+      window.churchPresenterApi.getCustomFonts().then(updateFontStyles).catch(() => {})
+    }
+    if (window.churchPresenterApi?.onFontsChanged) {
+      const unsubFonts = window.churchPresenterApi.onFontsChanged(updateFontStyles)
+      return () => unsubFonts()
     }
     return undefined
   }, [])
@@ -356,7 +433,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   const content = roleLayerState?.content || displayState.currentSlide
 
   // Resolve Effective Theme with Role Overrides
-  const baseTheme: ThemeConfig = displayState.currentTheme || DEFAULT_THEME
+  const baseTheme: ThemeConfig = roleLayerState?.theme || displayState.currentTheme || DEFAULT_THEME
   const roleOverride = baseTheme.roleOverrides?.[role] || {}
   const effectiveTheme: ThemeConfig = {
     ...baseTheme,
@@ -370,7 +447,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   const background: LayerBackground =
     roleLayerState?.background || effectiveTheme.background || {
       type: 'gradient',
-      value: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)'
+      value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
     }
 
   const getBackgroundStyle = (bg: LayerBackground): React.CSSProperties => {
@@ -397,6 +474,12 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
         onMouseLeave={handleMouseLeave}
       >
         <div
+          onMouseEnter={() => {
+            setShowCloseButton(true)
+            if (hideCloseTimerRef.current) {
+              clearTimeout(hideCloseTimerRef.current)
+            }
+          }}
           style={{
             position: 'fixed',
             top: 14,
@@ -410,26 +493,41 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
         >
           <button
             type="button"
-            onClick={handleCloseWindow}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCloseWindow()
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              handleCloseWindow()
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation()
+              handleCloseWindow()
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation()
+              handleCloseWindow()
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              backgroundColor: 'rgba(18, 18, 18, 0.88)',
+              backgroundColor: 'rgba(18, 18, 18, 0.92)',
               backdropFilter: 'blur(10px)',
               color: '#F3F4F6',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              padding: '6px 14px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              padding: '8px 16px',
               borderRadius: 20,
               cursor: 'pointer',
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: 600,
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.7)',
               userSelect: 'none'
             }}
             title={`Cerrar pantalla de salida (${role === 'stage' ? 'Retorno / Escenario' : 'Audiencia'})`}
           >
-            <X size={14} color="#EF4444" />
+            <X size={15} color="#EF4444" />
             <span>Cerrar</span>
           </button>
         </div>
@@ -447,6 +545,12 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     >
       {/* Floating Hover Close Button in Top-Right Corner */}
       <div
+        onMouseEnter={() => {
+          setShowCloseButton(true)
+          if (hideCloseTimerRef.current) {
+            clearTimeout(hideCloseTimerRef.current)
+          }
+        }}
         style={{
           position: 'fixed',
           top: 14,
@@ -460,26 +564,41 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
       >
         <button
           type="button"
-          onClick={handleCloseWindow}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCloseWindow()
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            handleCloseWindow()
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation()
+            handleCloseWindow()
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation()
+            handleCloseWindow()
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            backgroundColor: 'rgba(18, 18, 18, 0.88)',
+            backgroundColor: 'rgba(18, 18, 18, 0.92)',
             backdropFilter: 'blur(10px)',
             color: '#F3F4F6',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '6px 14px',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            padding: '8px 16px',
             borderRadius: 20,
             cursor: 'pointer',
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 600,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.7)',
             userSelect: 'none'
           }}
           title={`Cerrar pantalla de salida (${role === 'stage' ? 'Retorno / Escenario' : 'Audiencia'})`}
         >
-          <X size={14} color="#EF4444" />
+          <X size={15} color="#EF4444" />
           <span>Cerrar</span>
         </button>
       </div>
@@ -520,9 +639,76 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
           )
         )}
 
+        {/* Layer 1.5: Theme Darkening Overlay for Contrast & Readability */}
+        {visibility.showBackground && !isStage && effectiveTheme.overlayColor && (effectiveTheme.overlayOpacity || 0) > 0 && (
+          <div
+            className="layer-theme-overlay"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              backgroundColor: effectiveTheme.overlayColor,
+              opacity: effectiveTheme.overlayOpacity,
+              pointerEvents: 'none',
+              zIndex: 3
+            }}
+          />
+        )}
+
+        {/* Watermark / Logo */}
+        {!isStage && effectiveTheme.watermarkUrl && (effectiveTheme.watermarkOpacity || 0) > 0 && (
+          <div
+            className="layer-theme-watermark"
+            style={{
+              position: 'absolute',
+              top: effectiveTheme.watermarkPosition?.startsWith('top') ? '5%' : undefined,
+              bottom: effectiveTheme.watermarkPosition?.startsWith('bottom') ? '5%' : undefined,
+              left: effectiveTheme.watermarkPosition?.endsWith('left') ? '5%' : undefined,
+              right: effectiveTheme.watermarkPosition?.endsWith('right') ? '5%' : undefined,
+              width: `${effectiveTheme.watermarkSizePercent || 10}%`,
+              opacity: effectiveTheme.watermarkOpacity,
+              pointerEvents: 'none',
+              zIndex: 4
+            }}
+          >
+            <img src={effectiveTheme.watermarkUrl} alt="Watermark" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+          </div>
+        )}
+
         {/* STAGE MONITOR VIEW */}
         {isStage ? (
-          <div className="stage-monitor-container">
+          <div className="stage-monitor-container" data-layout-id={assignedStageLayout?.id || 'classic'}>
+            {/* Stage Active Message Banner */}
+            {displayState?.activeMessage && (displayState.activeMessage.target === 'stage' || displayState.activeMessage.target === 'both') && (
+              <div
+                className="stage-active-message-banner"
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '4%',
+                  right: '4%',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  padding: '12px 24px',
+                  borderRadius: '10px',
+                  boxShadow: '0 12px 30px rgba(0,0,0,0.85)',
+                  zIndex: 9999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px'
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 900, backgroundColor: '#ffffff', color: '#dc2626', padding: '4px 10px', borderRadius: '4px' }}>
+                  AVISO
+                </div>
+                <div style={{ fontSize: '30px', fontWeight: 800, flex: 1, textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}>
+                  {displayState.activeMessage.text}
+                </div>
+              </div>
+            )}
+
             {/* Stage Header: Clock, Song Title & Operator Alert */}
             <div className="stage-header-bar">
               <div className="stage-badge">RETORNO / ESCENARIO</div>
@@ -549,7 +735,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 24,
-                  backgroundColor: '#0f172a',
+                  backgroundColor: '#181818',
                   border: '2px solid #334155',
                   borderRadius: 12,
                   margin: 20,
@@ -655,159 +841,245 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
         ) : (
           /* STANDARD AUDIENCE VIEW (Main / Lobby) */
           <>
-            {visibility.showContent && (content || liveYtSync?.videoId) && (
-              content?.mediaType === 'video' && content?.mediaUrl && !hasMediaError ? (
-                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', overflow: 'hidden' }}>
-                  <video
-                    ref={videoRef}
-                    src={toMediaUrl(content.mediaUrl)}
-                    autoPlay
-                    playsInline
-                    muted={role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: (content.fitMode as any) || 'contain'
-                    }}
-                    onError={() => {
-                      setHasMediaError(true)
-                      window.churchPresenterApi.logMediaError(
-                        role,
-                        content.mediaUrl || '',
-                        'Error al decodificar formato de video'
-                      )
-                    }}
-                  />
-                </div>
-              ) : (content?.mediaType === 'youtube' || Boolean(liveYtSync?.videoId)) ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    zIndex: 20,
-                    backgroundColor: '#000000',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {(() => {
-                    const ytId =
-                      liveYtSync?.videoId ||
-                      content?.youtubeId ||
-                      (content?.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
-                    if (!ytId) return null
-                    const isMuted = liveYtSync?.isBrowserSource || role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')
-                    return (
-                      <iframe
-                        ref={ytIframeRef}
-                        key={ytId}
-                        src={`https://www.youtube-nocookie.com/embed/${ytId}?enablejsapi=1&autoplay=1&mute=${
-                          isMuted ? '1' : '0'
-                        }&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`}
-                        title="YouTube Output"
-                        allow="autoplay; encrypted-media"
+            {(() => {
+              const isMediaVideo =
+                content?.mediaType === 'video' && content?.mediaUrl && !hasMediaError
+              const isMediaYouTube =
+                ((content as any)?.mediaType === 'youtube' ||
+                  (Boolean(liveYtSync?.videoId) && (!content || (content as any).mediaType === 'youtube'))) &&
+                Boolean(
+                  liveYtSync?.videoId ||
+                    content?.youtubeId ||
+                    (content?.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
+                )
+
+              return (
+                <>
+                  {/* Local Video Layer: persistently mounted, visibility toggled via display */}
+                  {isMediaVideo && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundColor: '#000000',
+                        overflow: 'hidden',
+                        display: visibility.showContent ? 'block' : 'none'
+                      }}
+                    >
+                      <video
+                        ref={videoRef}
+                        src={toMediaUrl(content.mediaUrl)}
+                        autoPlay
+                        playsInline
+                        muted={role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')}
                         style={{
-                          position: 'absolute',
-                          inset: 0,
                           width: '100%',
                           height: '100%',
-                          border: 'none',
-                          pointerEvents: 'none'
+                          objectFit: (content.fitMode as any) || 'contain'
+                        }}
+                        onError={() => {
+                          setHasMediaError(true)
+                          window.churchPresenterApi.logMediaError(
+                            role,
+                            content.mediaUrl || '',
+                            'Error al decodificar formato de video'
+                          )
                         }}
                       />
-                    )
-                  })()}
-                </div>
-              ) : content?.mediaType === 'pdf' && content?.mediaUrl ? (
-                <PdfPageView
-                  pdfUrl={content.mediaUrl}
-                  pageNumber={content.pdfPage || 1}
-                  fitMode={content.fitMode || 'contain'}
-                />
-              ) : content && (content.mediaType === 'image' || content.mediaType === 'powerpoint') && content.mediaUrl ? (
-                <div style={{ width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img
-                    src={toMediaUrl(content.mediaUrl)}
-                    alt={content.title || ''}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: (content.fitMode as any) || 'contain'
-                    }}
-                  />
-                </div>
-              ) : content ? (
-                <div
-                  className="layer-content"
-                  ref={contentBoxRef}
-                  style={{
-                    paddingTop: `${effectiveTheme.safeMarginsPercent.top * 10.8}px`,
-                    paddingBottom: `${effectiveTheme.safeMarginsPercent.bottom * 10.8}px`,
-                    paddingLeft: `${effectiveTheme.safeMarginsPercent.left * 19.2}px`,
-                    paddingRight: `${effectiveTheme.safeMarginsPercent.right * 19.2}px`,
-                    textAlign: effectiveTheme.alignment
-                  }}
-                >
-                  <div
-                    ref={textBoxRef}
-                    className="content-inner-box"
-                    style={{
-                      transform: autoScale < 1 ? `scale(${autoScale})` : 'none',
-                      transformOrigin:
-                        effectiveTheme.alignment === 'center'
-                          ? 'center center'
-                          : effectiveTheme.alignment === 'left'
-                            ? 'left center'
-                            : 'right center'
-                    }}
-                  >
-                    {content.title && (
-                      <div
-                        className="content-title"
-                        style={{
-                          fontFamily: effectiveTheme.fontFamily,
-                          color: effectiveTheme.color
-                        }}
-                      >
-                        {content.title}
-                      </div>
-                    )}
+                    </div>
+                  )}
 
-                    {content.body && (
-                      <div
-                        className="content-body"
-                        style={{
-                          fontFamily: effectiveTheme.fontFamily,
-                          color: effectiveTheme.color,
-                          WebkitTextStroke:
-                            effectiveTheme.outlineWidthPx > 0
-                              ? `${effectiveTheme.outlineWidthPx}px ${effectiveTheme.outlineColor}`
-                              : 'none',
-                          textShadow:
-                            effectiveTheme.shadowBlurPx > 0
-                              ? `0 4px ${effectiveTheme.shadowBlurPx}px ${effectiveTheme.shadowColor}`
-                              : 'none'
-                        }}
-                      >
-                        {content.body}
-                      </div>
-                    )}
+                  {/* YouTube Live Player Layer: persistently mounted, visibility toggled via display */}
+                  {isMediaYouTube && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        zIndex: 20,
+                        backgroundColor: '#000000',
+                        overflow: 'hidden',
+                        display: visibility.showContent ? 'block' : 'none'
+                      }}
+                    >
+                      {(() => {
+                        const ytId =
+                          liveYtSync?.videoId ||
+                          content?.youtubeId ||
+                          (content?.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
+                        if (!ytId) return null
+                        const isMuted =
+                          liveYtSync?.isBrowserSource ||
+                          role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')
+                        return (
+                          <iframe
+                            ref={ytIframeRef}
+                            key={ytId}
+                            src={`https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&mute=${
+                              isMuted ? '1' : '0'
+                            }&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
+                            title="YouTube Output"
+                            allow="autoplay; encrypted-media; picture-in-picture"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                              pointerEvents: 'none'
+                            }}
+                          />
+                        )
+                      })()}
+                    </div>
+                  )}
 
-                    {content.subtitle && (
-                      <div
-                        className="content-subtitle"
-                        style={{
-                          fontFamily: effectiveTheme.fontFamily
-                        }}
-                      >
-                        {content.subtitle}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null
-            )}
+                  {visibility.showContent && !isMediaVideo && !isMediaYouTube && (
+                    <>
+                      {content?.mediaType === 'pdf' && content?.mediaUrl ? (
+                        <PdfPageView
+                          pdfUrl={content.mediaUrl}
+                          pageNumber={content.pdfPage || 1}
+                          fitMode={content.fitMode || 'contain'}
+                        />
+                      ) : content &&
+                        (content.mediaType === 'image' || content.mediaType === 'powerpoint') &&
+                        content.mediaUrl ? (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            backgroundColor: '#000000',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <img
+                            src={toMediaUrl(content.mediaUrl)}
+                            alt={content.title || ''}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: (content.fitMode as any) || 'contain'
+                            }}
+                          />
+                        </div>
+                      ) : content ? (
+                        <div
+                          className="layer-content"
+                          ref={contentBoxRef}
+                          style={{
+                            paddingTop: `${effectiveTheme.safeMarginsPercent.top * 10.8}px`,
+                            paddingBottom: `${effectiveTheme.safeMarginsPercent.bottom * 10.8}px`,
+                            paddingLeft: `${effectiveTheme.safeMarginsPercent.left * 19.2}px`,
+                            paddingRight: `${effectiveTheme.safeMarginsPercent.right * 19.2}px`,
+                            textAlign: effectiveTheme.alignment,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent:
+                              effectiveTheme.verticalAlign === 'top'
+                                ? 'flex-start'
+                                : effectiveTheme.verticalAlign === 'bottom'
+                                  ? 'flex-end'
+                                  : 'center'
+                          }}
+                        >
+                          <div
+                            ref={textBoxRef}
+                            className="content-inner-box"
+                            style={{
+                              transform: autoScale < 1 ? `scale(${autoScale})` : 'none',
+                              transformOrigin:
+                                effectiveTheme.alignment === 'center'
+                                  ? 'center center'
+                                  : effectiveTheme.alignment === 'left'
+                                    ? 'left center'
+                                    : 'right center'
+                            }}
+                          >
+                            {/* If Bible and refPosition === 'top', show reference on top */}
+                            {content.scripturePayload &&
+                              effectiveTheme.bibleRefPosition === 'top' && (
+                                <div
+                                  className="content-bible-ref-top"
+                                  style={{
+                                    fontFamily: effectiveTheme.fontFamily,
+                                    color: effectiveTheme.color,
+                                    fontSize: `${effectiveTheme.bibleRefFontSizeVmin || 3.4}vmin`,
+                                    fontWeight: 700,
+                                    marginBottom: '1.2vmin',
+                                    opacity: 0.95
+                                  }}
+                                >
+                                  {content.subtitle || content.scripturePayload.reference}
+                                </div>
+                              )}
+
+                            {content.title &&
+                              effectiveTheme.songShowTitleOnFirstSlide !== false && (
+                                <div
+                                  className="content-title"
+                                  style={{
+                                    fontFamily: effectiveTheme.fontFamily,
+                                    color: effectiveTheme.color,
+                                    textTransform: effectiveTheme.textTransform || 'none'
+                                  }}
+                                >
+                                  {content.title}
+                                </div>
+                              )}
+
+                            {content.body && (
+                              <div
+                                className="content-body"
+                                style={{
+                                  fontFamily: effectiveTheme.fontFamily,
+                                  color: effectiveTheme.color,
+                                  fontWeight: effectiveTheme.fontWeight || 'normal',
+                                  fontStyle: effectiveTheme.fontStyle || 'normal',
+                                  textTransform: effectiveTheme.textTransform || 'none',
+                                  lineHeight: effectiveTheme.lineHeight || 1.3,
+                                  letterSpacing: `${effectiveTheme.letterSpacing || 0}px`,
+                                  WebkitTextStroke:
+                                    effectiveTheme.outlineWidthPx > 0
+                                      ? `${effectiveTheme.outlineWidthPx}px ${effectiveTheme.outlineColor}`
+                                      : 'none',
+                                  textShadow:
+                                    effectiveTheme.shadowBlurPx > 0
+                                      ? `${effectiveTheme.shadowOffsetX || 0}px ${effectiveTheme.shadowOffsetY || 4}px ${effectiveTheme.shadowBlurPx}px ${effectiveTheme.shadowColor}`
+                                      : 'none'
+                                }}
+                              >
+                                {content.body}
+                              </div>
+                            )}
+
+                            {content.subtitle &&
+                              (!content.scripturePayload ||
+                                effectiveTheme.bibleRefPosition !== 'top') && (
+                                <div
+                                  className="content-subtitle"
+                                  style={{
+                                    fontFamily: effectiveTheme.fontFamily,
+                                    fontSize: content.scripturePayload
+                                      ? `${effectiveTheme.bibleRefFontSizeVmin || 3.4}vmin`
+                                      : undefined
+                                  }}
+                                >
+                                  {content.subtitle}
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </>
+              )
+            })()}
 
             {/* Layer 3: Overlay (Logo) */}
             {visibility.showOverlay && (
@@ -835,6 +1107,49 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
             {/* Layer 4: Operator message overlay */}
             {visibility.showMessage && roleLayerState?.message?.visible && (
               <div className="layer-message">{roleLayerState.message.text}</div>
+            )}
+
+            {/* Phase 6: Audience Active Message Overlay Banner */}
+            {!isStage && displayState?.activeMessage && (displayState.activeMessage.target === 'audience' || displayState.activeMessage.target === 'both') && (
+              <div
+                className="layer-audience-message"
+                style={{
+                  position: 'absolute',
+                  bottom: '36px',
+                  left: '5%',
+                  right: '5%',
+                  backgroundColor: 'rgba(18, 18, 18, 0.95)',
+                  border: '2px solid #f97316',
+                  borderRadius: '12px',
+                  padding: '16px 28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  boxShadow: '0 20px 45px rgba(0, 0, 0, 0.9)',
+                  zIndex: 9999
+                }}
+              >
+                <div
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f97316',
+                    flexShrink: 0
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    lineHeight: 1.3,
+                    flex: 1
+                  }}
+                >
+                  {displayState.activeMessage.text}
+                </div>
+              </div>
             )}
 
             {/* Layer 5: Active Presentation Timers on Stage & Audience */}

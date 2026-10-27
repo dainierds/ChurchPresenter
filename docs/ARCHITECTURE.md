@@ -14,6 +14,9 @@ graph TD
         WindowMgr["OutputWindowManager\n(Gestor de Ventanas)"]
         DbMgr["DatabaseService\n(SQLite + Migraciones)"]
         LogMgr["LoggerService\n(electron-log Rotativo)"]
+        RemoteServer["RemoteServer\n(HTTP + WebSocket 8080)"]
+        StageSvc["StageLayoutService\n(CRUD y Asignación de Diseños)"]
+        MsgSvc["MessageService\n(Avisos Audiencia/Escenario)"]
     end
 
     subgraph PreloadLayer ["Capa de Preload (Aislamiento de Contexto)"]
@@ -27,12 +30,21 @@ graph TD
         OutLobby["Salida: Lobby (renderer/output)\nPantalla de Vestíbulo"]
     end
 
+    subgraph MobileClients ["Clientes Móviles y Remotos (LAN)"]
+        WebRemote["Control Remoto Web (GET /)\nSmartphones / Tablets"]
+        WebStage["Visor Web de Escenario (GET /stage)\nTablets / Monitores Inalámbricos"]
+    end
+
     StateMgr -->|IPC: state-updated| Bridge
     DisplayMgr -->|IPC: displays-changed| Bridge
     Bridge --> OpRenderer
     Bridge --> OutMain
     Bridge --> OutStage
     Bridge --> OutLobby
+
+    RemoteServer <-->|WebSocket: /ws| WebRemote
+    RemoteServer -->|WebSocket: /ws| WebStage
+    RemoteServer -->|Dispatch Action| StateMgr
 
     OpRenderer -->|IPC Invoke: set-global-control| StateMgr
     OpRenderer -->|IPC Invoke: send-slide| StateMgr
@@ -469,6 +481,91 @@ graph LR
    - Reemplazo de tonos azul marino por fondos oscuros neutros (`--bg-base: #0A0A0A`, `--bg-surface: #121212`, `--bg-surface-raised: #181818`, `--border-color: #2A2A2A`).
    - Colores de acento configurables en Configuración -> Apariencia: Primario (`#FF7A00`), En Vivo (`#22C55E`), Vista Previa (`#2D9CFF`), Peligro (`#EF4444`).
    - Controles nativos (`select`, `input`, `button`, barras de desplazamiento delgadas, `checkbox`, `range`) estilizados bajo el tema oscuro sin fondos blancos del sistema.
+
+---
+
+## 14. Arquitectura del Servidor de Control Remoto, Escenario Web y Mensajería (Fase 6)
+
+```mermaid
+graph TD
+    subgraph CoreServices ["Servicios del Proceso Principal"]
+        RS["RemoteServer (Node.js http + ws)"]
+        AUTH["RemoteAuthService (PIN, Token, Lockout)"]
+        MS["MessageService (Avisos Audiencia/Escenario)"]
+        SLS["StageLayoutService (Diseños de Escenario)"]
+        SM["PresenterStateManager"]
+    end
+
+    subgraph WebEndpoints ["Puntos de Entrada Web (LAN)"]
+        UI_REMOTE["GET / (Control Remoto Táctil)"]
+        UI_STAGE["GET /stage (Monitor de Confianza)"]
+        WS_CHAN["WS /ws (Canal Bidireccional)"]
+    end
+
+    subgraph OutputSurfaces ["Superficies de Salida"]
+        OUT_MAIN["Salida Audiencia (Capa Mensaje)"]
+        OUT_STAGE["Salida Escenario (Diseño + Banner)"]
+    end
+
+    RS --> AUTH
+    RS --> MS
+    RS --> SLS
+    RS <--> SM
+
+    RS --- UI_REMOTE
+    RS --- UI_STAGE
+    RS <--> WS_CHAN
+
+    MS -->|Banner Superpuesto| OUT_MAIN
+    MS -->|Alerta de Alto Contraste| OUT_STAGE
+    SLS -->|Sincronización de Layout| OUT_STAGE
+```
+
+### Componentes Clave:
+1. **`RemoteServer`**: Servidor unificado HTTP/WS en Node.js que sirve las aplicaciones web directamente en memoria y gestiona conexiones WebSocket concurrentes con latencia < 50ms.
+2. **`RemoteAuthService`**: Manejo de PIN numérico de 6 dígitos, bloqueo tras 5 intentos fallidos durante 300 segundos, emisión de tokens UUID v4 criptográficos y verificación en cada acción.
+3. **`StageLayoutService`**: Sistema de diseño modular para pantallas de escenario físicas y remotas (`/stage`), con elementos configurables: diapositiva actual, diapositiva siguiente, reloj, temporizadores, mensajes y notas del orador.
+4. **`MessageService`**: Emisión y auto-ocultado de mensajes instantáneos dirigidos a Audiencia (banner superior/inferior), Escenario (alerta prominente de alto contraste) o ambas simultáneamente.
+
+---
+
+## 11. Arquitectura de Estabilidad y Operación Segura (Fase 7)
+
+```mermaid
+graph TD
+    subgraph StabilitySubsystem ["Subsistema de Estabilidad y Operación Segura"]
+        SRS["SessionRecoveryService\n(Snapshots continuos y detección de crash)"]
+        OHS["OutputHealthService\n(Muestreo de FPS, RAM e incidentes por rol)"]
+        SMS["SystemMonitorService\n(CPU, Memoria y fs.statfs para disco libre)"]
+        PPS["PowerProtectionService\n(powerSaveBlocker y powerMonitor OS)"]
+        EMS["EmergencyService\n(Modo de Emergencia y Safe Mode)"]
+        CLS["ChecklistService\n(Verificación Pre-Culto de 9 puntos)"]
+        DGS["DiagnosticsService\n(Visor de logs y exportación .ZIP)"]
+        RHS["RehearsalService\n(Auditoría dedicada en Modo Ensayo)"]
+    end
+
+    subgraph OSIntegration ["Integración con Sistema Operativo Windows"]
+        ScreenAPI["Electron Screen API & powerMonitor"]
+        PSB["powerSaveBlocker (prevent-display-sleep)"]
+        SafeStorage["Electron safeStorage (DPAPI)"]
+    end
+
+    PPS --> ScreenAPI
+    PPS --> PSB
+    SMS --> OSIntegration
+    SRS --> SafeStorage
+```
+
+### Componentes de Estabilidad:
+1. **`SessionRecoveryService`**: Registra instantáneas periódicas de sesión en disco (`session-snapshot.json`) con marca de apagado limpio. Ante un fallo eléctrico o caída del proceso, en el siguiente arranque detecta el cierre anómalo y permite reanudar el área de trabajo (lista, elemento y diapositiva en previo) garantizando que no se proyecte nada automáticamente a las salidas hasta confirmación manual del operador.
+2. **`OutputHealthService`**: Registra latidos periódicos emitidos por cada ventana de salida (`main`, `stage`, `lobby`), reportando FPS reales calculados con RAF, consumo de memoria de proceso con `app.getAppMetrics()` y registro cronológico de incidentes (bajas de FPS, desconexiones, cierres inesperados y recreaciones automáticas).
+3. **`SystemMonitorService`**: Monitorea de forma no bloqueante el uso de procesador CPU %, memoria RAM libre/ocupada y espacio restante en disco mediante llamadas nativas `fs.promises.statfs()`, emitiendo alertas configurables si el espacio en disco baja de 5 GB o la memoria supera el 85%.
+4. **`PowerProtectionService`**: Inicia automáticamente `powerSaveBlocker.start('prevent-display-sleep')` mientras haya salidas de proyección abiertas para evitar que Windows apague los monitores o suspenda la PC. Escucha eventos del sistema operativo (`suspend`, `resume`, `unlock-screen`, `display-metrics-changed`) para pausar medios de forma segura y reconectar/reubicar automáticamente las ventanas de salida al restaurar la sesión.
+5. **`EmergencyService`**: Implementa el Modo de Emergencia (botón de pánico) que con un solo clic congela la reproducción de medios y proyecta el logotipo o fondo seguro en todas las pantallas sin alterar la sesión de trabajo del operador. También gestiona la bandera `--safe-mode` al arranque para aislar y diagnosticar problemas técnicos deshabilitando YouTube, servidor remoto y vigilantes de archivos.
+6. **`ChecklistService`**: Evalúa la lista de servicio abierta inspeccionando 9 áreas fundamentales (archivos de video/imagen legibles, fuentes, videos de YouTube válidos, PowerPoint actualizados frente a original, traducciones bíblicas cargadas, monitores asignados y conectados, salida de audio, espacio en disco y respaldos recientes de base de datos) asignando estados Verde/Ámbar/Rojo con acciones de corrección directa.
+7. **`DiagnosticsService`**: Proporciona el visor interno de registros filtrable por severidad y búsqueda, y la generación de un paquete de diagnóstico `.zip` mediante `adm-zip` que incluye registros, especificaciones de hardware y configuración sanitizada (sin contraseñas, PINs ni tokens).
+8. **`RehearsalService`**: Permite activar el Modo Ensayo con insignia visual, registrando cada cambio de diapositiva e incidente en un archivo de log dedicado (`rehearsal-<fecha>.log`) y generando un reporte final al concluir el ensayo.
+
 
 
 

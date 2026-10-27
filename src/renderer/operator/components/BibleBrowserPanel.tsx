@@ -56,6 +56,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   onToggleDual,
   onChangeDualLayout,
   onOpenBibleManager,
+  onOpenBibleImport,
   onGoLive,
   onAddToService,
   onToggleFavorite
@@ -189,6 +190,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
           >
             <button
               type="button"
+              className="bible-mode-ref-btn"
               onClick={() => setSearchMode('reference')}
               style={{
                 background: searchMode === 'reference' ? '#2A2A2A' : 'transparent',
@@ -205,6 +207,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             </button>
             <button
               type="button"
+              className="bible-mode-text-btn"
               onClick={() => setSearchMode('text')}
               style={{
                 background: searchMode === 'text' ? '#2A2A2A' : 'transparent',
@@ -318,6 +321,29 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
 
           <button
             type="button"
+            onClick={onOpenBibleImport}
+            className="pro-tool-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              backgroundColor: '#262626',
+              border: '1px solid #38bdf8',
+              color: '#38bdf8',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+            title="Importar traducción bíblica (.sqlite, .db, .json, .xml, .osis, .usfm)"
+          >
+            <Plus size={13} />
+            <span>Importar...</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onOpenBibleManager}
             className="pro-tool-btn"
             style={{
@@ -332,7 +358,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               fontSize: '12px',
               cursor: 'pointer'
             }}
-            title="Administrar o importar traducciones de la Biblia"
+            title="Administrar traducciones de la Biblia"
           >
             <Sliders size={13} />
             <span>Administrar Biblias...</span>
@@ -397,6 +423,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             <div style={{ position: 'relative', flex: 1, maxWidth: '420px' }}>
               <input
                 type="text"
+                className="bible-reference-input"
                 value={refInput}
                 onChange={(e) => setRefInput(e.target.value)}
                 placeholder="ej. Juan 3:16, Salmos 23, Génesis 1:1-5"
@@ -415,6 +442,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
 
             <button
               type="submit"
+              className="bible-go-btn"
               style={{
                 backgroundColor: '#2563EB',
                 border: 'none',
@@ -457,6 +485,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             <div style={{ position: 'relative', flex: 1, maxWidth: '420px' }}>
               <input
                 type="text"
+                className="bible-text-input"
                 value={textQuery}
                 onChange={(e) => setTextQuery(e.target.value)}
                 placeholder="Buscar palabras o frases (ej. amor, salvación, luz)..."
@@ -533,6 +562,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
 
             <button
               type="submit"
+              className="bible-text-search-btn"
               disabled={isSearchingText}
               style={{
                 backgroundColor: '#2563EB',
@@ -711,6 +741,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               {textResults.map((res, i) => (
                 <div
                   key={`res_${i}_${res.formattedReference}`}
+                  className="bible-search-result-item"
                   onClick={() => {
                     setRefInput(res.formattedReference)
                     onLoadPassage(res.formattedReference, false)
@@ -830,7 +861,11 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                 return (
                   <div
                     key={slide.id || `slide_${index}`}
-                    onClick={() => setSelectedSlideIndex(index)}
+                    className="pro-bible-slide-card"
+                    onClick={() => {
+                      setSelectedSlideIndex(index)
+                      onGoLive(slide, directSlides[index + 1])
+                    }}
                     onDoubleClick={() => {
                       setSelectedSlideIndex(index)
                       onGoLive(slide, directSlides[index + 1])

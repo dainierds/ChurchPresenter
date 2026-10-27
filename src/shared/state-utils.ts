@@ -10,7 +10,7 @@ export function createInitialOutputLayersState(): OutputLayersState {
   return {
     background: {
       type: 'gradient',
-      value: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)'
+      value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
     },
     content: null,
     overlay: {

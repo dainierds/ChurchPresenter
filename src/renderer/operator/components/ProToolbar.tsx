@@ -11,9 +11,14 @@ import {
   BookOpen,
   Edit3,
   Sliders,
-  Monitor
+  Monitor,
+  MessageSquare,
+  Smartphone,
+  CheckCircle2,
+  Activity,
+  AlertTriangle
 } from 'lucide-react'
-import { PresenterState, DisplayInfo, RoleAssignment } from '../../../shared/types'
+import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics } from '../../../shared/types'
 
 interface ProToolbarProps {
   searchQuery: string
@@ -22,6 +27,14 @@ interface ProToolbarProps {
   onModeChange: (mode: 'show' | 'edit' | 'bible' | 'youtube' | 'more') => void
   onAddTextSlide: () => void
   onOpenThemeModal: () => void
+  onOpenMessageModal?: () => void
+  onOpenChecklistModal?: () => void
+  onOpenOutputHealthModal?: () => void
+  isRehearsalActive?: boolean
+  onToggleRehearsal?: () => void
+  isEmergencyActive?: boolean
+  onToggleEmergency?: () => void
+  systemMetrics?: SystemMetrics | null
   state: PresenterState | null
   displays: DisplayInfo[]
   assignments: RoleAssignment
@@ -43,6 +56,8 @@ interface ProToolbarProps {
   onToggleMediaDrawer?: () => void
   onOpenOutputPreviewOrSettings?: (role: string) => void
   onOpenDisplaysModal?: () => void
+  remoteStatus?: RemoteServerStatus | null
+  onOpenRemoteSettings?: () => void
 }
 
 export const ProToolbar: React.FC<ProToolbarProps> = ({
@@ -52,6 +67,14 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   onModeChange,
   onAddTextSlide,
   onOpenThemeModal,
+  onOpenMessageModal,
+  onOpenChecklistModal,
+  onOpenOutputHealthModal,
+  isRehearsalActive,
+  onToggleRehearsal,
+  isEmergencyActive,
+  onToggleEmergency,
+  systemMetrics,
   state,
   displays,
   assignments,
@@ -60,7 +83,9 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   isMediaDrawerOpen,
   onToggleMediaDrawer,
   onOpenOutputPreviewOrSettings,
-  onOpenDisplaysModal
+  onOpenDisplaysModal,
+  remoteStatus,
+  onOpenRemoteSettings
 }) => {
   const isMainAssigned = Boolean(assignments.main)
   const isMainConnected =
@@ -112,6 +137,28 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         <button className="pro-tool-btn" onClick={onOpenThemeModal} title="Configuración de Tema y Estilos">
           <Palette size={14} />
           <span>Tema</span>
+        </button>
+        <button
+          className="pro-tool-btn"
+          onClick={onOpenMessageModal}
+          title="Enviar Mensaje a Escenario o Audiencia"
+          style={{ position: 'relative' }}
+        >
+          <MessageSquare size={14} />
+          <span>Mensaje</span>
+          {state?.activeMessage && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                backgroundColor: '#f97316'
+              }}
+            />
+          )}
         </button>
       </div>
 
@@ -230,6 +277,26 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           />
           <span>{panelLabels?.stage || 'Stage'}</span>
         </button>
+
+        {/* Remote Server Active Status Pill (Item 6) */}
+        {remoteStatus?.running && (
+          <button
+            type="button"
+            className="pro-status-pill-btn pro-remote-status-pill"
+            onClick={onOpenRemoteSettings}
+            title={`Control Remoto Activo en puerto ${remoteStatus.port} (${remoteStatus.connectedClients?.length || 0} dispositivos conectados). Clic para abrir configuración.`}
+            style={{
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34, 197, 94, 0.12)',
+              color: '#4ade80'
+            }}
+          >
+            <span className="pro-status-dot dot-green" />
+            <Smartphone size={12} style={{ marginRight: 2 }} />
+            <span>Remoto: {remoteStatus.connectedClients?.length || 0}</span>
+          </button>
+        )}
+
         <button
           type="button"
           className="pro-status-pill-btn pro-screen-config-btn"
@@ -240,10 +307,74 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           <Monitor size={12} />
           <span>Pantallas</span>
         </button>
+
+        {/* Phase 7: Pre-Service Checklist Button */}
+        <button
+          type="button"
+          className="pro-status-pill-btn pro-checklist-btn"
+          onClick={onOpenChecklistModal}
+          title="Verificar servicio: inspección de medios, pantallas, biblias y hardware"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, borderColor: '#22c55e', color: '#4ade80' }}
+        >
+          <CheckCircle2 size={12} color="#22c55e" />
+          <span>Verificar</span>
+        </button>
+
+        {/* Phase 7: Rehearsal Mode Badge */}
+        <button
+          type="button"
+          className="pro-status-pill-btn pro-rehearsal-pill"
+          onClick={onToggleRehearsal}
+          title={
+            isRehearsalActive
+              ? 'MODO ENSAYO ACTIVO: Clic para finalizar y ver resumen'
+              : 'Clic para iniciar Modo Ensayo (auditoría en archivo dedicado)'
+          }
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            borderColor: isRehearsalActive ? '#f97316' : '#3f3f46',
+            backgroundColor: isRehearsalActive ? 'rgba(249, 115, 22, 0.18)' : 'transparent',
+            color: isRehearsalActive ? '#f97316' : '#9ca3af',
+            fontWeight: isRehearsalActive ? 700 : 500
+          }}
+        >
+          <span className={`pro-status-dot ${isRehearsalActive ? 'dot-orange' : 'dot-gray'}`} />
+          <span>{isRehearsalActive ? 'ENSAYO' : 'Ensayo'}</span>
+        </button>
+
+        {/* Phase 7: Output Health Button */}
+        <button
+          type="button"
+          className="pro-status-pill-btn"
+          onClick={onOpenOutputHealthModal}
+          title="Ver salud y rendimiento de salidas (FPS, memoria, incidentes)"
+          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <Activity size={12} color="#38bdf8" />
+          <span>Salud</span>
+        </button>
       </div>
 
-      {/* Right: Global Emergency Actions (F1 - F4) */}
+      {/* Right: Global Emergency Actions (F1 - F4) + Panic Mode */}
       <div className="pro-global-actions">
+        {/* Phase 7: Emergency Mode Button */}
+        <button
+          type="button"
+          className={`pro-action-btn ${isEmergencyActive ? 'active-emergency' : ''}`}
+          onClick={onToggleEmergency}
+          title="Modo de Emergencia (Pánico): Congela medios y muestra fondo seguro en todas las salidas"
+          style={{
+            borderColor: isEmergencyActive ? '#ef4444' : 'rgba(239, 68, 68, 0.4)',
+            backgroundColor: isEmergencyActive ? '#ef4444' : 'rgba(239, 68, 68, 0.12)',
+            color: isEmergencyActive ? '#ffffff' : '#f87171',
+            fontWeight: isEmergencyActive ? 700 : 600
+          }}
+        >
+          <AlertTriangle size={14} />
+          <span>Emergencia</span>
+        </button>
         <button
           className={`pro-action-btn ${state?.controls.black ? 'active-black' : ''}`}
           onClick={() => window.churchPresenterApi?.toggleGlobalControl('black')}

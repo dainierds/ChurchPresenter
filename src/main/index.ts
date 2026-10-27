@@ -26,6 +26,13 @@ import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
 import { youtubeService } from './youtube/youtube-service'
+import { stageLayoutService } from './stage/stage-layout-service'
+import { remoteServer } from './remote/remote-server'
+import { sessionRecoveryService } from './recovery/session-recovery-service'
+import { outputHealthService } from './health/output-health-service'
+import { systemMonitorService } from './health/system-monitor-service'
+import { powerProtectionService } from './power/power-protection-service'
+import { emergencyService } from './emergency/emergency-service'
 
 // Single instance lock (bypassed in test environment)
 const gotTheLock = isTest ? true : app.requestSingleInstanceLock()
@@ -68,7 +75,24 @@ async function initializeApp() {
     const gpuStatus = app.getGPUFeatureStatus()
     logger.info(`Hardware acceleration GPU status: ${JSON.stringify(gpuStatus)}`)
 
-    // Allow YouTube embed preview frames in operator UI
+    // Configure YouTube headers (Referer & Origin) to prevent Error 153 "Video Player configuration error"
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      {
+        urls: [
+          '*://*.youtube.com/*',
+          '*://*.youtube-nocookie.com/*',
+          '*://*.googlevideo.com/*'
+        ]
+      },
+      (details, callback) => {
+        const requestHeaders = { ...details.requestHeaders }
+        requestHeaders['Referer'] = 'https://www.youtube.com/'
+        requestHeaders['Origin'] = 'https://www.youtube.com'
+        callback({ requestHeaders })
+      }
+    )
+
+    // Allow YouTube embed preview frames in operator UI & output windows
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const responseHeaders = { ...details.responseHeaders }
       if (details.url.includes('youtube.com') || details.url.includes('youtube-nocookie.com')) {
@@ -103,6 +127,28 @@ async function initializeApp() {
     shortcutsManager.initialize()
     logger.info('ShortcutsManager initialized.')
 
+    stageLayoutService.initialize()
+    logger.info('StageLayoutService initialized.')
+
+    sessionRecoveryService.initialize()
+    logger.info('SessionRecoveryService initialized.')
+
+    outputHealthService.initialize(() => windowManager.getOutputWindows())
+    logger.info('OutputHealthService initialized.')
+
+    systemMonitorService.initialize()
+    logger.info('SystemMonitorService initialized.')
+
+    powerProtectionService.initialize()
+    logger.info('PowerProtectionService initialized.')
+
+    if (!emergencyService.isSafeModeEnabled()) {
+      remoteServer.initialize()
+      logger.info('RemoteServer initialized.')
+    } else {
+      logger.warn('Safe Mode active: RemoteServer initialization skipped.')
+    }
+
     // Create Operator Window
     windowManager.createOperatorWindow()
 
@@ -124,12 +170,17 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  logger.info('App closing: flushing database and closing windows.')
+  logger.info('App closing: flushing database, saving session snapshot and closing windows.')
+  sessionRecoveryService.markCleanShutdown()
   databaseService.persist()
   databaseService.createBackup()
 })
 
 app.on('will-quit', () => {
+  powerProtectionService.release()
+  systemMonitorService.destroy()
+  outputHealthService.destroy()
+  remoteServer.stop()
   shortcutsManager.unregisterAll()
   windowManager.closeAllOutputWindows()
   databaseService.close()

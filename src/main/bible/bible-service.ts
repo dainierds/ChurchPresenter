@@ -3,6 +3,7 @@ import path from 'path'
 import { app } from 'electron'
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js'
 import {
+  BibleImportResult,
   BibleReferenceParsed,
   BibleSearchResult,
   BibleTranslationMeta,
@@ -15,6 +16,8 @@ import {
   parseOsisXml,
   parseUsfm,
   parseZefaniaXml,
+  parseSqliteBible,
+  validateBibleData,
   ParsedBibleImport
 } from './bible-importers'
 import { databaseService } from '../db/database-service'
@@ -112,6 +115,7 @@ export class BibleService {
     const translations: BibleTranslationMeta[] = []
     const SQL = await this.getSqlInstance()
 
+    const defaultAbbrev = (databaseService.getConfig('default_bible_abbrev', 'RVR1909') || 'RVR1909').toUpperCase()
     for (const file of files) {
       const filePath = path.join(this.biblesDir, file)
       try {
@@ -136,7 +140,7 @@ export class BibleService {
           isPublicDomain: metaMap.get('is_public_domain') === '1',
           verseCount: parseInt(metaMap.get('verse_count') || '31102', 10),
           filePath,
-          isDefault: abbrev.toUpperCase() === 'RVR1909'
+          isDefault: abbrev.toUpperCase() === defaultAbbrev
         })
         db.close()
       } catch (err) {
@@ -322,24 +326,30 @@ export class BibleService {
    * Imports a new Bible translation into its own standalone SQLite file.
    */
   public async importTranslation(
-    format: 'zefania' | 'osis' | 'usfm' | 'json',
-    rawContent: string,
+    format: 'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite',
+    rawContent: string | Buffer | Uint8Array,
     metaOverrides: Partial<BibleTranslationMeta> = {}
-  ): Promise<BibleTranslationMeta> {
+  ): Promise<BibleImportResult> {
+    const SQL = await this.getSqlInstance()
     let parsed: ParsedBibleImport
 
     switch (format) {
       case 'json':
-        parsed = parseJsonBible(rawContent)
+        parsed = parseJsonBible(typeof rawContent === 'string' ? rawContent : rawContent.toString('utf-8'))
         break
+      case 'sqlite': {
+        const buf = typeof rawContent === 'string' ? Buffer.from(rawContent, 'binary') : rawContent
+        parsed = parseSqliteBible(buf, SQL, metaOverrides as any)
+        break
+      }
       case 'zefania':
-        parsed = parseZefaniaXml(rawContent)
+        parsed = parseZefaniaXml(typeof rawContent === 'string' ? rawContent : rawContent.toString('utf-8'))
         break
       case 'osis':
-        parsed = parseOsisXml(rawContent)
+        parsed = parseOsisXml(typeof rawContent === 'string' ? rawContent : rawContent.toString('utf-8'))
         break
       case 'usfm':
-        parsed = parseUsfm(rawContent)
+        parsed = parseUsfm(typeof rawContent === 'string' ? rawContent : rawContent.toString('utf-8'))
         break
       default:
         throw new Error(`Formato bíblico no soportado: ${format}`)
@@ -355,7 +365,6 @@ export class BibleService {
     const targetFileName = `${abbrev}.bible`
     const targetPath = path.join(this.biblesDir, targetFileName)
 
-    const SQL = await this.getSqlInstance()
     const db = new SQL.Database()
 
     db.run(`
@@ -421,7 +430,17 @@ export class BibleService {
     db.close()
     logger.info(`Successfully imported translation ${name} (${abbrev}) with ${parsed.verses.length} verses.`)
 
-    return {
+    const validation = validateBibleData({
+      ...parsed,
+      name,
+      abbrev,
+      language,
+      copyright,
+      licenseNotice,
+      isPublicDomain
+    })
+
+    const translation: BibleTranslationMeta = {
       id: `bible_${abbrev.toLowerCase()}`,
       name,
       abbrev,
@@ -432,12 +451,86 @@ export class BibleService {
       verseCount: parsed.verses.length,
       filePath: targetPath
     }
+
+    return {
+      success: true,
+      translation,
+      bookCount: validation.bookCount,
+      verseCount: validation.verseCount,
+      missingBooks: validation.missingBooks,
+      sampleVerses: validation.sampleVerses
+    }
+  }
+
+  /**
+   * Imports a translation directly from a file on disk, automatically detecting format.
+   */
+  public async importTranslationFromFile(
+    filePath: string,
+    metaOverrides: Partial<BibleTranslationMeta> = {}
+  ): Promise<BibleImportResult> {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`El archivo bíblico no existe: ${filePath}`)
+    }
+
+    const ext = path.extname(filePath).toLowerCase()
+    let format: 'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite' = 'json'
+
+    if (ext === '.sqlite' || ext === '.db' || ext === '.bible') {
+      format = 'sqlite'
+      const buf = fs.readFileSync(filePath)
+      return this.importTranslation(format, buf, metaOverrides)
+    }
+
+    if (ext === '.osis') {
+      format = 'osis'
+    } else if (ext === '.usfm') {
+      format = 'usfm'
+    } else if (ext === '.xml') {
+      const sample = fs.readFileSync(filePath, { encoding: 'utf-8', flag: 'r' }).substring(0, 1000)
+      if (sample.includes('<osis') || sample.includes('osisID=')) {
+        format = 'osis'
+      } else {
+        format = 'zefania'
+      }
+    } else if (ext === '.txt') {
+      const sample = fs.readFileSync(filePath, { encoding: 'utf-8', flag: 'r' }).substring(0, 1000)
+      if (sample.includes('\\c') && sample.includes('\\v')) {
+        format = 'usfm'
+      } else {
+        format = 'json'
+      }
+    } else {
+      format = 'json'
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8')
+    return this.importTranslation(format, content, metaOverrides)
+  }
+
+  /**
+   * Sets the user's preferred default Bible translation.
+   */
+  public async setDefaultTranslation(abbrev: string): Promise<boolean> {
+    const cleanAbbrev = abbrev.toUpperCase().trim()
+    databaseService.setConfig('default_bible_abbrev', cleanAbbrev)
+    logger.info(`Set default Bible translation to: ${cleanAbbrev}`)
+    return true
   }
 
   public async deleteTranslation(id: string): Promise<boolean> {
     const translations = await this.getTranslations()
     const found = translations.find((t) => t.id === id || t.abbrev === id)
     if (!found) return false
+
+    const defaultAbbrev = (databaseService.getConfig('default_bible_abbrev', 'RVR1909') || 'RVR1909').toUpperCase()
+    if (
+      found.abbrev.toUpperCase() === 'RVR1909' ||
+      found.abbrev.toUpperCase() === 'KJV' ||
+      found.abbrev.toUpperCase() === defaultAbbrev
+    ) {
+      throw new Error(`No se puede eliminar la traducción de fábrica o predeterminada (${found.abbrev}).`)
+    }
 
     // Close in-memory database if open
     if (this.openDbs.has(found.abbrev.toUpperCase())) {

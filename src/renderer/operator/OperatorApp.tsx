@@ -19,6 +19,7 @@ import {
   SongGroup,
   DEFAULT_THEME,
   BibleTranslationMeta,
+  BibleImportResult,
   BibleSearchResult,
   MediaItem,
   MediaType,
@@ -33,7 +34,12 @@ import {
   ServiceItemType,
   PresentationTimer,
   FileChangedEvent,
-  YouTubeItem
+  YouTubeItem,
+  RemoteServerConfig,
+  RemoteServerStatus,
+  RemoteNetworkInterface,
+  StageLayoutConfig,
+  PresentationMessage
 } from '../../shared/types'
 import { TopMenuBar } from './components/TopMenuBar'
 import { ProToolbar } from './components/ProToolbar'
@@ -47,6 +53,15 @@ import { FileWatcherToast } from './components/FileWatcherToast'
 import { YouTubeBrowserPanel } from './components/YouTubeBrowserPanel'
 import { YouTubeVerifyModal } from './components/YouTubeVerifyModal'
 import { BibleBrowserPanel } from './components/BibleBrowserPanel'
+import { ThemeManagerModal } from './components/ThemeManagerModal'
+import { MessageModal } from './components/MessageModal'
+import { StageLayoutEditorModal } from './components/StageLayoutEditorModal'
+import { SessionRecoveryModal } from './components/SessionRecoveryModal'
+import { ChecklistModal } from './components/ChecklistModal'
+import { DiagnosticsModal } from './components/DiagnosticsModal'
+import { OutputHealthModal } from './components/OutputHealthModal'
+import { RehearsalSummaryModal } from './components/RehearsalSummaryModal'
+import { SessionSnapshot, RehearsalSummary, SystemMetrics } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -68,6 +83,7 @@ import {
   FolderOpen,
   X,
   AlertCircle,
+  AlertTriangle,
   Plus,
   Trash2,
   Edit3,
@@ -90,6 +106,10 @@ import {
   Upload,
   BookOpen,
   Star,
+  CheckCircle,
+  Database,
+  FileUp,
+  FileCheck,
   History,
   Book,
   Video,
@@ -144,7 +164,9 @@ export const OperatorApp: React.FC = () => {
   })
   const [libHeight, setLibHeight] = useState<number>(() => {
     const saved = localStorage.getItem('cp_layout_lib_height')
-    return saved ? parseInt(saved, 10) || 240 : 240
+    const parsed = saved ? parseInt(saved, 10) : 0
+    if (!parsed || parsed > 380 || parsed < 260) return 340
+    return parsed
   })
   const [mediaDrawerHeight, setMediaDrawerHeight] = useState<number>(() => {
     const saved = localStorage.getItem('cp_layout_media_drawer_height')
@@ -203,7 +225,7 @@ export const OperatorApp: React.FC = () => {
   const handleResetLayout = useCallback(() => {
     setLeftWidth(280)
     setRightWidth(340)
-    setLibHeight(240)
+    setLibHeight(340)
     setMediaDrawerHeight(220)
     setPreviewHeight(260)
     setIsLeftCollapsed(false)
@@ -253,7 +275,7 @@ export const OperatorApp: React.FC = () => {
     const startH = libHeight
     const onMouseMove = (ev: MouseEvent) => {
       const delta = ev.clientY - startY
-      const newH = Math.min(Math.max(120, startH + delta), 600)
+      const newH = Math.min(Math.max(120, startH + delta), 800)
       setLibHeight(newH)
     }
     const onMouseUp = () => {
@@ -387,6 +409,40 @@ export const OperatorApp: React.FC = () => {
     localStorage.setItem('cp_slide_zoom', String(slideZoom))
   }, [slideZoom])
 
+  // Dynamic Font Registration for Operator Workspace
+  useEffect(() => {
+    const updateFontStyles = (fonts: any[]) => {
+      let styleTag = document.getElementById('cp-injected-fonts') as HTMLStyleElement | null
+      if (!styleTag) {
+        styleTag = document.createElement('style')
+        styleTag.id = 'cp-injected-fonts'
+        document.head.appendChild(styleTag)
+      }
+      const cssRules = (fonts || [])
+        .map(
+          (f) => `
+        @font-face {
+          font-family: '${f.name}';
+          src: url('${f.url}') format('${f.format}');
+          font-weight: normal;
+          font-style: normal;
+        }
+      `
+        )
+        .join('\n')
+      styleTag.textContent = cssRules
+    }
+
+    if (window.churchPresenterApi?.getCustomFonts) {
+      window.churchPresenterApi.getCustomFonts().then(updateFontStyles).catch(() => {})
+    }
+    if (window.churchPresenterApi?.onFontsChanged) {
+      const unsubFonts = window.churchPresenterApi.onFontsChanged(updateFontStyles)
+      return () => unsubFonts()
+    }
+    return undefined
+  }, [])
+
   // Independent Background Audio State
   const [independentAudio, setIndependentAudio] = useState<IndependentAudioState>({
     isPlaying: false,
@@ -445,11 +501,30 @@ export const OperatorApp: React.FC = () => {
   const [isSongEditorOpen, setIsSongEditorOpen] = useState<boolean>(false)
   const [isPresentationEditorOpen, setIsPresentationEditorOpen] = useState<boolean>(false)
   const [isThemesModalOpen, setIsThemesModalOpen] = useState<boolean>(false)
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState<boolean>(false)
+  const [isStageLayoutModalOpen, setIsStageLayoutModalOpen] = useState<boolean>(false)
+  const [remoteConfig, setRemoteConfig] = useState<RemoteServerConfig | null>(null)
+  const [remoteStatus, setRemoteStatus] = useState<RemoteServerStatus | null>(null)
+  const [networkInterfaces, setNetworkInterfaces] = useState<RemoteNetworkInterface[]>([])
+  const [assignedStageLayout, setAssignedStageLayout] = useState<StageLayoutConfig | null>(null)
   const [isBackgroundsModalOpen, setIsBackgroundsModalOpen] = useState<boolean>(false)
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false)
   const [isBibleImportModalOpen, setIsBibleImportModalOpen] = useState<boolean>(false)
   const [isBibleManagerModalOpen, setIsBibleManagerModalOpen] = useState<boolean>(false)
   const [showFirstLaunchModal, setShowFirstLaunchModal] = useState<boolean>(false)
+
+  // Phase 7: Stability, Recovery, Checklist, Diagnostics & Rehearsal States
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState<boolean>(false)
+  const [recoverySnapshot, setRecoverySnapshot] = useState<SessionSnapshot | null>(null)
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState<boolean>(false)
+  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
+  const [isOutputHealthModalOpen, setIsOutputHealthModalOpen] = useState<boolean>(false)
+  const [isRehearsalSummaryModalOpen, setIsRehearsalSummaryModalOpen] = useState<boolean>(false)
+  const [rehearsalSummary, setRehearsalSummary] = useState<RehearsalSummary | null>(null)
+  const [isRehearsalActive, setIsRehearsalActive] = useState<boolean>(false)
+  const [isEmergencyActive, setIsEmergencyActive] = useState<boolean>(false)
+  const [isSafeMode, setIsSafeMode] = useState<boolean>(false)
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
 
   // Check if any modal is currently visible on screen
   const isAnyModalOpen = Boolean(
@@ -468,7 +543,12 @@ export const OperatorApp: React.FC = () => {
     isMediaImportModalOpen ||
     isFfmpegModalOpen ||
     isPptImportModalOpen ||
-    showFirstLaunchModal
+    showFirstLaunchModal ||
+    isRecoveryModalOpen ||
+    isChecklistModalOpen ||
+    isDiagnosticsModalOpen ||
+    isOutputHealthModalOpen ||
+    isRehearsalSummaryModalOpen
   )
 
   // Prevent native WebContentsView (YouTube) from covering modal overlays
@@ -479,13 +559,35 @@ export const OperatorApp: React.FC = () => {
   }, [isAnyModalOpen, activeToolbarMode])
 
   // Bible Import Form State
-  const [importFormat, setImportFormat] = useState<'zefania' | 'osis' | 'usfm' | 'json'>('json')
+  const [importFormat, setImportFormat] = useState<'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite'>('json')
+  const [importFilePath, setImportFilePath] = useState<string>('')
+  const [importFileName, setImportFileName] = useState<string>('')
   const [importName, setImportName] = useState<string>('')
   const [importAbbrev, setImportAbbrev] = useState<string>('')
   const [importLang, setImportLang] = useState<string>('es')
   const [importCopyright, setImportCopyright] = useState<string>('Dominio Público')
   const [importRawContent, setImportRawContent] = useState<string>('')
   const [importConsent, setImportConsent] = useState<boolean>(false)
+  const [isImportingBible, setIsImportingBible] = useState<boolean>(false)
+  const [importValidationSummary, setImportValidationSummary] = useState<BibleImportResult | null>(null)
+  const [importBibleError, setImportBibleError] = useState<string | null>(null)
+  const [isDraggingBibleFile, setIsDraggingBibleFile] = useState<boolean>(false)
+
+  const resetBibleImportForm = () => {
+    setImportFormat('json')
+    setImportFilePath('')
+    setImportFileName('')
+    setImportName('')
+    setImportAbbrev('')
+    setImportLang('es')
+    setImportCopyright('Dominio Público')
+    setImportRawContent('')
+    setImportConsent(false)
+    setIsImportingBible(false)
+    setImportValidationSummary(null)
+    setImportBibleError(null)
+    setIsDraggingBibleFile(false)
+  }
 
   // Editing Song / Presentation State
   const [editingSong, setEditingSong] = useState<Song | null>(null)
@@ -741,12 +843,48 @@ export const OperatorApp: React.FC = () => {
       })
     }
 
+    // Phase 7: Initial Checks (Session Recovery, Safe Mode, Emergency & Rehearsal)
+    if (window.churchPresenterApi?.checkSessionRecovery) {
+      window.churchPresenterApi.checkSessionRecovery().then((res) => {
+        if (res && res.hasPendingRecovery && res.snapshot) {
+          setRecoverySnapshot(res.snapshot)
+          setIsRecoveryModalOpen(true)
+        }
+      }).catch(() => {})
+    }
+
+    if (window.churchPresenterApi?.isSafeModeActive) {
+      window.churchPresenterApi.isSafeModeActive().then(setIsSafeMode).catch(() => {})
+    }
+
+    if (window.churchPresenterApi?.isEmergencyModeActive) {
+      window.churchPresenterApi.isEmergencyModeActive().then(setIsEmergencyActive).catch(() => {})
+    }
+
+    if (window.churchPresenterApi?.getRehearsalStatus) {
+      window.churchPresenterApi.getRehearsalStatus().then((st) => {
+        if (st) setIsRehearsalActive(st.active)
+      }).catch(() => {})
+    }
+
+    let unsubRehearsal: () => void = () => {}
+    if (window.churchPresenterApi?.onRehearsalModeChanged) {
+      unsubRehearsal = window.churchPresenterApi.onRehearsalModeChanged(setIsRehearsalActive)
+    }
+
+    let unsubMetrics: () => void = () => {}
+    if (window.churchPresenterApi?.onSystemMetricsTick) {
+      unsubMetrics = window.churchPresenterApi.onSystemMetricsTick(setSystemMetrics)
+    }
+
     return () => {
       unsubDisplays()
       unsubState()
       unsubNotif()
       unsubTimers()
       unsubFileWatcher()
+      unsubRehearsal()
+      unsubMetrics()
       navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
     }
   }, [loadAllData, audioDeviceVideo, audioDeviceAmbient])
@@ -833,7 +971,7 @@ export const OperatorApp: React.FC = () => {
   // Generated slides for the currently selected item in Zone 3
   const activeSlides: SlideItem[] = useMemo(() => {
     // If operator is on Bible tab and has searched/loaded a passage directly, prioritize Bible slides
-    if (libraryTab === 'bible' && bibleDirectSlides.length > 0) {
+    if ((libraryTab === 'bible' || activeToolbarMode === 'bible') && bibleDirectSlides.length > 0) {
       return bibleDirectSlides
     }
 
@@ -1143,6 +1281,10 @@ export const OperatorApp: React.FC = () => {
             audioOutputRole: audioOutputRole || 'main'
           })
         }
+      } else {
+        // Automatically stop any playing video or YouTube when presenting Bible, songs, or text slides!
+        window.churchPresenterApi?.controlVideo?.('stop')
+        window.churchPresenterApi?.controlYouTube?.('stop')
       }
 
       window.churchPresenterApi.sendSlide(slide, ['main', 'lobby', 'stage'], nextSlide)
@@ -1167,22 +1309,26 @@ export const OperatorApp: React.FC = () => {
     if (previewSlideIndex < activeSlides.length - 1) {
       const nextIdx = previewSlideIndex + 1
       setPreviewSlideIndex(nextIdx)
-      if (liveSlideId) {
-        handleGoLive(activeSlides[nextIdx], activeSlides[nextIdx + 1])
-      }
+      handleGoLive(activeSlides[nextIdx], activeSlides[nextIdx + 1])
+    } else if (activeSlides.length > 0) {
+      // Loop back to start if at last slide
+      setPreviewSlideIndex(0)
+      handleGoLive(activeSlides[0], activeSlides[1])
     }
-  }, [previewSlideIndex, activeSlides, liveSlideId, handleGoLive])
+  }, [previewSlideIndex, activeSlides, handleGoLive])
 
   // Return to previous slide in live mode
   const handlePrevSlide = useCallback(() => {
     if (previewSlideIndex > 0) {
       const prevIdx = previewSlideIndex - 1
       setPreviewSlideIndex(prevIdx)
-      if (liveSlideId) {
-        handleGoLive(activeSlides[prevIdx], activeSlides[prevIdx + 1])
-      }
+      handleGoLive(activeSlides[prevIdx], activeSlides[prevIdx + 1])
+    } else if (activeSlides.length > 0) {
+      const lastIdx = activeSlides.length - 1
+      setPreviewSlideIndex(lastIdx)
+      handleGoLive(activeSlides[lastIdx], undefined)
     }
-  }, [previewSlideIndex, activeSlides, liveSlideId, handleGoLive])
+  }, [previewSlideIndex, activeSlides, handleGoLive])
 
   // Next chapter for Bible passage (Key C)
   const handleNextChapter = useCallback(() => {
@@ -1275,6 +1421,11 @@ export const OperatorApp: React.FC = () => {
           e.preventDefault()
           const searchInput = document.querySelector('.pro-search-input') as HTMLInputElement | null
           searchInput?.focus()
+          return
+        }
+        if (e.key === ',' || e.key === '<') {
+          e.preventDefault()
+          setIsSettingsOpen(true)
           return
         }
       }
@@ -1397,6 +1548,93 @@ export const OperatorApp: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
+
+  // Phase 6: Remote Control Action Listener
+  useEffect(() => {
+    if (window.churchPresenterApi?.onRemoteActionDispatch) {
+      const unsub = window.churchPresenterApi.onRemoteActionDispatch((action) => {
+        if (action.type === 'next-slide') {
+          handleNextSlide()
+        } else if (action.type === 'prev-slide') {
+          handlePrevSlide()
+        } else if (action.type === 'next-item') {
+          handleNextPlaylistItem()
+        } else if (action.type === 'prev-item') {
+          handlePrevPlaylistItem()
+        } else if (action.type === 'clear-layer') {
+          handleClearLayer((action as any).layer)
+        }
+      })
+      return () => unsub()
+    }
+    return undefined
+  }, [handleNextSlide, handlePrevSlide, handleNextPlaylistItem, handlePrevPlaylistItem, handleClearLayer])
+
+  const loadRemoteSettings = useCallback(async () => {
+    try {
+      if (window.churchPresenterApi?.getRemoteConfig) {
+        const [cfg, status, ifaces, stage] = await Promise.all([
+          window.churchPresenterApi.getRemoteConfig(),
+          window.churchPresenterApi.getRemoteStatus(),
+          window.churchPresenterApi.getNetworkInterfaces(),
+          window.churchPresenterApi.getAssignedStageLayout()
+        ])
+        setRemoteConfig(cfg)
+        setRemoteStatus(status)
+        setNetworkInterfaces(ifaces || [])
+        setAssignedStageLayout(stage)
+      }
+    } catch (err) {
+      console.error('Error loading remote settings:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const poll = async () => {
+      if (window.churchPresenterApi?.getRemoteStatus) {
+        try {
+          const st = await window.churchPresenterApi.getRemoteStatus()
+          if (mounted) setRemoteStatus(st)
+        } catch {
+          // ignore
+        }
+      }
+    }
+    poll()
+    const timer = setInterval(poll, 4000)
+    return () => {
+      mounted = false
+      clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      loadRemoteSettings()
+    }
+  }, [isSettingsOpen, loadRemoteSettings])
+
+  const handleToggleRemoteEnabled = async (enabled: boolean) => {
+    if (!remoteConfig) return
+    const updated = await window.churchPresenterApi.saveRemoteConfig({ enabled })
+    setRemoteConfig(updated)
+    const status = await window.churchPresenterApi.getRemoteStatus()
+    setRemoteStatus(status)
+  }
+
+  const handleRegeneratePin = async () => {
+    const newPin = await window.churchPresenterApi.regenerateRemotePin()
+    if (remoteConfig) setRemoteConfig({ ...remoteConfig, pin: newPin })
+    const status = await window.churchPresenterApi.getRemoteStatus()
+    setRemoteStatus(status)
+  }
+
+  const handleKickClient = async (clientId: string) => {
+    await window.churchPresenterApi.kickRemoteClient(clientId)
+    const status = await window.churchPresenterApi.getRemoteStatus()
+    setRemoteStatus(status)
+  }
 
   // Filtered Library Items (Accent-insensitive & typo-tolerant)
   const filteredSongs = useMemo(() => {
@@ -1896,36 +2134,133 @@ export const OperatorApp: React.FC = () => {
     reader.readAsText(file)
   }
 
-  // Bible Import Handler
+  // Bible Import Handlers
+  const handleSelectBibleFile = (filePath: string) => {
+    setImportFilePath(filePath)
+    const base = filePath.split(/[/\\]/).pop() || ''
+    setImportFileName(base)
+    const ext = base.split('.').pop()?.toLowerCase() || ''
+    if (ext === 'sqlite' || ext === 'db' || ext === 'bible') {
+      setImportFormat('sqlite')
+    } else if (ext === 'osis') {
+      setImportFormat('osis')
+    } else if (ext === 'usfm') {
+      setImportFormat('usfm')
+    } else if (ext === 'xml') {
+      setImportFormat('zefania')
+    } else if (ext === 'json') {
+      setImportFormat('json')
+    }
+    const cleanBase = base.replace(/\.[^/.]+$/, '').trim()
+    if (!importName) {
+      setImportName(cleanBase)
+    }
+    if (!importAbbrev) {
+      setImportAbbrev(cleanBase.replace(/[^A-Za-z0-9]/g, '').substring(0, 8).toUpperCase() || 'BIB')
+    }
+    setImportBibleError(null)
+  }
+
+  const handlePickBibleFileNative = async () => {
+    try {
+      const res = await window.churchPresenterApi.openFileDialog({
+        title: 'Seleccionar Archivo de Traducción Bíblica',
+        filters: [
+          {
+            name: 'Traducciones Bíblicas (*.sqlite, *.db, *.bible, *.json, *.xml, *.osis, *.usfm, *.txt)',
+            extensions: ['sqlite', 'db', 'bible', 'json', 'xml', 'osis', 'usfm', 'txt']
+          }
+        ]
+      })
+      if (res && res.length > 0) {
+        handleSelectBibleFile(res[0])
+      }
+    } catch (err: any) {
+      setImportBibleError(`Error al abrir selector de archivos: ${err.message}`)
+    }
+  }
+
+  const handleBibleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingBibleFile(false)
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0]
+      const filePath = window.churchPresenterApi?.getPathForFile?.(file) || (file as any).path
+      if (filePath) {
+        handleSelectBibleFile(filePath)
+      } else {
+        const reader = new FileReader()
+        reader.onload = (evt) => {
+          const content = String(evt.target?.result || '')
+          setImportRawContent(content)
+          setImportFileName(file.name)
+          const cleanBase = file.name.replace(/\.[^/.]+$/, '').trim()
+          if (!importName) setImportName(cleanBase)
+          if (!importAbbrev) setImportAbbrev(cleanBase.substring(0, 8).toUpperCase())
+        }
+        reader.readAsText(file)
+      }
+    }
+  }
+
   const handleExecuteBibleImport = async () => {
     if (!importConsent) {
-      alert('Debe aceptar la declaración de licencia y derechos de autor para continuar.')
+      setImportBibleError('Debe marcar la casilla obligatoria de confirmación de derechos o licencia.')
       return
     }
-    if (!importRawContent.trim()) {
-      alert('Por favor pegue o cargue el contenido del archivo de la traducción bíblica.')
+    if (!importFilePath && !importRawContent.trim()) {
+      setImportBibleError('Debe seleccionar un archivo (.sqlite, .db, .bible, .json, .xml, .osis, .usfm) o pegar el contenido.')
       return
     }
 
+    setIsImportingBible(true)
+    setImportBibleError(null)
+
     try {
-      const res = await window.churchPresenterApi.importBibleTranslation(
-        importFormat,
-        importRawContent,
-        {
+      let res: BibleImportResult
+      if (importFilePath) {
+        res = await window.churchPresenterApi.importBibleFile(importFilePath, {
           name: importName.trim() || undefined,
           abbrev: importAbbrev.trim() || undefined,
           language: importLang.trim() || 'es',
           copyright: importCopyright.trim() || 'Dominio Público',
           isPublicDomain: true
-        }
-      )
+        })
+      } else {
+        res = await window.churchPresenterApi.importBibleTranslation(
+          importFormat,
+          importRawContent,
+          {
+            name: importName.trim() || undefined,
+            abbrev: importAbbrev.trim() || undefined,
+            language: importLang.trim() || 'es',
+            copyright: importCopyright.trim() || 'Dominio Público',
+            isPublicDomain: true
+          }
+        )
+      }
 
-      alert(`¡Traducción bíblica "${res.name}" (${res.abbrev}) importada exitosamente con ${res.verseCount} versículos!`)
-      setIsBibleImportModalOpen(false)
+      setImportValidationSummary(res)
       const updated = await window.churchPresenterApi.getBibleTranslations()
       setBibleTranslations(updated)
+      if (res.translation && res.translation.abbrev) {
+        setPrimaryBibleAbbrev(res.translation.abbrev)
+      }
     } catch (err: any) {
-      alert(`Error al importar traducción bíblica: ${err.message}`)
+      setImportBibleError(`Error al procesar e importar traducción bíblica: ${err.message}`)
+    } finally {
+      setIsImportingBible(false)
+    }
+  }
+
+  const handleSetDefaultBible = async (abbrev: string) => {
+    try {
+      await window.churchPresenterApi.setBibleDefault(abbrev)
+      const updated = await window.churchPresenterApi.getBibleTranslations()
+      setBibleTranslations(updated)
+      setPrimaryBibleAbbrev(abbrev)
+    } catch (err: any) {
+      alert(`Error al establecer traducción predeterminada: ${err.message}`)
     }
   }
 
@@ -2207,7 +2542,151 @@ export const OperatorApp: React.FC = () => {
     }
   }
 
-  const activeTheme = state?.currentTheme || DEFAULT_THEME
+  const effectiveDisplayTheme = useMemo(() => {
+    const itemThemeId = currentServiceItem?.themeId || currentSong?.themeId || currentPresentation?.themeId
+    if (itemThemeId) {
+      const found = themes.find((t) => t.id === itemThemeId)
+      if (found) return found
+    }
+    return state?.currentTheme || DEFAULT_THEME
+  }, [currentServiceItem?.themeId, currentSong?.themeId, currentPresentation?.themeId, themes, state?.currentTheme])
+
+  const handleAssignThemeToCurrentElement = async (themeId: string) => {
+    const chosenThemeId = themeId || undefined
+    if (currentService && selectedServiceItemIndex >= 0 && currentService.items[selectedServiceItemIndex]) {
+      const newItems = [...currentService.items]
+      newItems[selectedServiceItemIndex] = {
+        ...newItems[selectedServiceItemIndex],
+        themeId: chosenThemeId
+      }
+      const updated = { ...currentService, items: newItems }
+      setCurrentService(updated)
+      await window.churchPresenterApi.saveService(updated)
+
+      const isLiveItem = liveSourceId && (
+        newItems[selectedServiceItemIndex].id === liveSourceId ||
+        newItems[selectedServiceItemIndex].songId === liveSourceId ||
+        newItems[selectedServiceItemIndex].presentationId === liveSourceId
+      )
+      if (isLiveItem) {
+        setIsLiveDirty(true)
+      }
+      return
+    }
+
+    if (currentSong) {
+      const updated = { ...currentSong, themeId: chosenThemeId }
+      await window.churchPresenterApi.saveSong(updated)
+      const allSongs = await window.churchPresenterApi.getSongs()
+      setSongs(allSongs)
+      if (liveSourceId === currentSong.id) {
+        setIsLiveDirty(true)
+      }
+      return
+    }
+
+    if (currentPresentation) {
+      const updated = { ...currentPresentation, themeId: chosenThemeId }
+      await window.churchPresenterApi.savePresentation(updated)
+      const allPres = await window.churchPresenterApi.getPresentations()
+      setPresentations(allPres)
+      if (liveSourceId === currentPresentation.id) {
+        setIsLiveDirty(true)
+      }
+    }
+  }
+
+  const activeTheme = effectiveDisplayTheme
+
+  // Phase 7: Stability Handlers (Session Recovery, Emergency, Rehearsal)
+  const handleResumeSession = async () => {
+    if (!recoverySnapshot) return
+    try {
+      await window.churchPresenterApi.dismissSessionRecovery()
+      setIsRecoveryModalOpen(false)
+
+      if (recoverySnapshot.activePlanId) {
+        const foundPlan = services.find((s) => s.id === recoverySnapshot.activePlanId)
+        if (foundPlan) {
+          setCurrentService(foundPlan)
+        }
+      }
+
+      if (typeof recoverySnapshot.activeItemIndex === 'number') {
+        setSelectedServiceItemIndex(recoverySnapshot.activeItemIndex)
+      }
+      if (typeof recoverySnapshot.activeSlideIndex === 'number') {
+        setPreviewSlideIndex(recoverySnapshot.activeSlideIndex)
+      }
+
+      setToasts((prev) => [
+        ...prev,
+        {
+          id: `rec_success_${Date.now()}`,
+          title: 'Sesión Anterior Recuperada',
+          message: 'Tu área de trabajo y selección de diapositivas han sido restauradas. La proyección en vivo permanece segura.',
+          type: 'success',
+          timestamp: Date.now()
+        }
+      ])
+    } catch (err) {
+      console.error('Error resuming session:', err)
+    }
+  }
+
+  const handleDismissSession = async () => {
+    try {
+      await window.churchPresenterApi.dismissSessionRecovery()
+    } catch (err) {
+      console.error('Error dismissing session recovery:', err)
+    } finally {
+      setIsRecoveryModalOpen(false)
+      setRecoverySnapshot(null)
+    }
+  }
+
+  const handleToggleEmergency = async () => {
+    try {
+      if (isEmergencyActive) {
+        await window.churchPresenterApi.deactivateEmergencyMode()
+        setIsEmergencyActive(false)
+      } else {
+        await window.churchPresenterApi.activateEmergencyMode()
+        setIsEmergencyActive(true)
+      }
+    } catch (err) {
+      console.error('Error toggling emergency mode:', err)
+    }
+  }
+
+  const handleToggleRehearsal = async () => {
+    try {
+      if (isRehearsalActive) {
+        await window.churchPresenterApi.setRehearsalMode(false)
+        setIsRehearsalActive(false)
+        const summary = await window.churchPresenterApi.getRehearsalSummary()
+        if (summary) {
+          setRehearsalSummary(summary)
+          setIsRehearsalSummaryModalOpen(true)
+        }
+      } else {
+        await window.churchPresenterApi.setRehearsalMode(true)
+        setIsRehearsalActive(true)
+        setToasts((prev) => [
+          ...prev,
+          {
+            id: `rehearsal_${Date.now()}`,
+            title: 'Modo Ensayo Iniciado',
+            message: 'Las operaciones se registrarán en un archivo de auditoría dedicado.',
+            type: 'info',
+            timestamp: Date.now()
+          }
+        ])
+      }
+    } catch (err) {
+      console.error('Error toggling rehearsal mode:', err)
+    }
+  }
 
   return (
     <div
@@ -2245,6 +2724,12 @@ export const OperatorApp: React.FC = () => {
         onToggleRightPanel={() => setIsRightCollapsed((c) => !c)}
         onOpenFloatingPreview={() => window.churchPresenterApi.openFloatingPreview('main')}
         onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
+        onOpenThemeModal={() => setIsThemesModalOpen(true)}
+        onOpenChecklistModal={() => setIsChecklistModalOpen(true)}
+        onOpenOutputHealthModal={() => setIsOutputHealthModalOpen(true)}
+        onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+        onUndo={handleUndoSong}
+        onRedo={handleRedoSong}
       />
 
       {/* 2. ProPresenter Toolbar */}
@@ -2254,20 +2739,17 @@ export const OperatorApp: React.FC = () => {
         activeMode={activeToolbarMode}
         onModeChange={(m) => {
           setActiveToolbarMode(m)
-          if (m === 'edit') {
-            if (currentSong) {
-              handleOpenSongEditor(currentSong)
-            } else if (currentPresentation) {
-              handleOpenPresentationEditor(currentPresentation)
-            } else {
-              handleOpenSongEditor()
-            }
-          } else if (m === 'more') {
-            setIsSettingsOpen(true)
-          }
         }}
         onAddTextSlide={handleAddBlankItem}
         onOpenThemeModal={() => setIsThemesModalOpen(true)}
+        onOpenMessageModal={() => setIsMessageModalOpen(true)}
+        onOpenChecklistModal={() => setIsChecklistModalOpen(true)}
+        onOpenOutputHealthModal={() => setIsOutputHealthModalOpen(true)}
+        isRehearsalActive={isRehearsalActive}
+        onToggleRehearsal={handleToggleRehearsal}
+        isEmergencyActive={isEmergencyActive}
+        onToggleEmergency={handleToggleEmergency}
+        systemMetrics={systemMetrics}
         state={state}
         displays={displays}
         assignments={assignments}
@@ -2279,7 +2761,68 @@ export const OperatorApp: React.FC = () => {
         onOpenOutputPreviewOrSettings={(role) => {
           window.churchPresenterApi.openPreviewOutputWindow(role)
         }}
+        remoteStatus={remoteStatus}
+        onOpenRemoteSettings={() => setIsSettingsOpen(true)}
       />
+
+      {/* Phase 7: Safe Mode Diagnostic Warning Banner */}
+      {isSafeMode && (
+        <div
+          style={{
+            backgroundColor: 'rgba(234, 179, 8, 0.15)',
+            borderBottom: '1px solid rgba(234, 179, 8, 0.35)',
+            padding: '6px 16px',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#fde047',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8
+          }}
+        >
+          <AlertTriangle size={15} color="#eab308" />
+          <span>MODO SEGURO ACTIVO: YouTube, servidor remoto y vigilante de archivos desactivados para diagnóstico.</span>
+        </div>
+      )}
+
+      {/* Phase 7: Emergency Mode Active Banner */}
+      {isEmergencyActive && (
+        <div
+          style={{
+            backgroundColor: '#ef4444',
+            color: '#ffffff',
+            padding: '8px 20px',
+            fontSize: 13,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={18} />
+            <span>MODO DE EMERGENCIA ACTIVO: Todas las pantallas de salida muestran fondo seguro y los medios están en pausa.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleEmergency}
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#ef4444',
+              border: 'none',
+              padding: '4px 14px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Reanudar Salidas
+          </button>
+        </div>
+      )}
 
       {/* 3. Main Workspace: 3 Columns Layout */}
       <div className="pro-main-columns-layout">
@@ -2368,7 +2911,7 @@ export const OperatorApp: React.FC = () => {
               <div
                 className="pro-resizer-horizontal"
                 onMouseDown={handleMouseDownH1}
-                onDoubleClick={() => setLibHeight(240)}
+                onDoubleClick={() => setLibHeight(340)}
                 title="Arrastrar para redimensionar biblioteca (Doble clic para restablecer)"
               />
 
@@ -2429,6 +2972,35 @@ export const OperatorApp: React.FC = () => {
                 }}
                 onAddBlankItem={handleAddBlankItem}
                 onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
+                allThemes={themes}
+                onAssignItemTheme={(idx, themeId) => {
+                  if (currentService && currentService.items[idx]) {
+                    const newItems = [...currentService.items]
+                    newItems[idx] = {
+                      ...newItems[idx],
+                      themeId: themeId || undefined
+                    }
+                    const updated = { ...currentService, items: newItems }
+                    setCurrentService(updated)
+                    window.churchPresenterApi.saveService(updated)
+                    if (selectedServiceItemIndex === idx && liveSourceId) {
+                      setIsLiveDirty(true)
+                    }
+                  }
+                }}
+                onApplyThemeToScope={async (themeId, scope) => {
+                  await window.churchPresenterApi.applyThemeToScope(themeId, scope, currentService?.id)
+                  const [updatedServices, updatedSongs] = await Promise.all([
+                    window.churchPresenterApi.getServices(),
+                    window.churchPresenterApi.getSongs()
+                  ])
+                  setServices(updatedServices)
+                  setSongs(updatedSongs)
+                  if (currentService) {
+                    const found = updatedServices.find((s) => s.id === currentService.id)
+                    if (found) setCurrentService(found)
+                  }
+                }}
                 panelLabels={panelLabels}
               />
             </ErrorBoundary>
@@ -2687,7 +3259,26 @@ export const OperatorApp: React.FC = () => {
                     }}
                   >
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Biblias y Traducciones</div>
-                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Importar Zefania XML, OSIS, USFM o JSON</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Gestionar versiones, establecer predeterminada</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetBibleImportForm()
+                      setIsBibleImportModalOpen(true)
+                    }}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #3B82F6',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#60A5FA' }}>Importar Traducción Bíblica</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>SQLite (.db/.sqlite/.bible), JSON genérico, XML o USFM</div>
                   </button>
                   <button
                     type="button"
@@ -2813,6 +3404,42 @@ export const OperatorApp: React.FC = () => {
                   </div>
                 )}
 
+                {isLiveDirty && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 14px',
+                      backgroundColor: '#261609',
+                      borderBottom: '1px solid #f97316',
+                      color: '#ffedd5',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <span>⚠️ El tema de este elemento se modificó pero aún no se ha proyectado en vivo.</span>
+                    <button
+                      onClick={() => {
+                        if (activeSlides[previewSlideIndex]) {
+                          handleGoLive(activeSlides[previewSlideIndex], activeSlides[previewSlideIndex + 1])
+                          setIsLiveDirty(false)
+                        }
+                      }}
+                      style={{
+                        backgroundColor: '#f97316',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '4px 12px',
+                        borderRadius: '4px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Actualizar en vivo
+                    </button>
+                  </div>
+                )}
+
                 <SlideGridPanel
                   title={currentServiceItem?.name || currentSong?.title || 'Diapositivas'}
                   subtitle={currentSong?.author}
@@ -2836,6 +3463,9 @@ export const OperatorApp: React.FC = () => {
                     }
                   }}
                   theme={activeTheme}
+                  allThemes={themes}
+                  elementThemeId={currentServiceItem?.themeId || currentSong?.themeId || currentPresentation?.themeId}
+                  onSelectTheme={handleAssignThemeToCurrentElement}
                   arrangements={currentSong?.arrangements}
                   selectedArrangementId={selectedArrangementId}
                   onSelectArrangement={setSelectedArrangementId}
@@ -3010,115 +3640,321 @@ export const OperatorApp: React.FC = () => {
           ========================================================= */}
       {isBibleImportModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content bible-import-modal">
+          <div className="modal-content bible-import-modal" style={{ maxWidth: 680 }}>
             <div className="modal-header">
-              <div className="modal-title">Importar Traducción de la Biblia</div>
-              <button className="modal-close-btn" onClick={() => setIsBibleImportModalOpen(false)}>
+              <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BookOpen size={18} color="#3B82F6" />
+                <span>Importar Traducción de la Biblia</span>
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => {
+                  resetBibleImportForm()
+                  setIsBibleImportModalOpen(false)
+                }}
+              >
                 <X size={18} />
               </button>
             </div>
 
             <div className="modal-body">
-              <div className="license-warning-notice">
-                <AlertCircle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
-                <div>
-                  <strong>Aviso de Propiedad Intelectual y Licencia:</strong>
-                  <p>
-                    ChurchPresenter respeta los derechos de autor. Solo importe traducciones que pertenezcan al <strong>Dominio Público</strong> o respecto de las cuales su congregación posea la licencia por escrito otorgada por los titulares o sociedades bíblicas. No incluya traducciones protegidas sin autorización.
-                  </p>
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group flex-1">
-                  <label>Formato de Archivo:</label>
-                  <select
-                    value={importFormat}
-                    onChange={(e) => setImportFormat(e.target.value as any)}
+              {importValidationSummary ? (
+                /* Verification & Summary Card upon completion */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '12px 16px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      borderRadius: 8
+                    }}
                   >
-                    <option value="json">JSON Estructurado ChurchPresenter</option>
-                    <option value="zefania">Zefania XML (.xml)</option>
-                    <option value="osis">OSIS XML (.osis / .xml)</option>
-                    <option value="usfm">USFM (.usfm / .txt)</option>
-                  </select>
-                </div>
+                    <CheckCircle size={24} color="#22c55e" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong style={{ color: '#4ade80', fontSize: 14 }}>
+                        ¡Traducción importada y validada con éxito!
+                      </strong>
+                      <div style={{ color: '#cbd5e1', fontSize: 12 }}>
+                        La base de datos SQLite fue creada y optimizada con índice FTS4 para búsquedas instantáneas.
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="form-group flex-2">
-                  <label>Nombre de la Traducción *</label>
-                  <input
-                    type="text"
-                    placeholder="ej. Reina-Valera 1909"
-                    value={importName}
-                    onChange={(e) => setImportName(e.target.value)}
-                  />
-                </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 10,
+                      backgroundColor: '#1E1E1E',
+                      padding: 12,
+                      borderRadius: 6,
+                      fontSize: 13
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: '#9CA3AF' }}>Nombre:</span> <strong>{importValidationSummary.translation.name}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#9CA3AF' }}>Abreviatura:</span>{' '}
+                      <span className="trans-pill">{importValidationSummary.translation.abbrev}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: '#9CA3AF' }}>Libros contenidos:</span>{' '}
+                      <strong>{importValidationSummary.bookCount} de 66</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#9CA3AF' }}>Versículos totales:</span>{' '}
+                      <strong>{importValidationSummary.verseCount.toLocaleString()}</strong>
+                    </div>
+                  </div>
 
-                <div className="form-group flex-1">
-                  <label>Abreviatura *</label>
-                  <input
-                    type="text"
-                    placeholder="ej. RVR1909"
-                    value={importAbbrev}
-                    onChange={(e) => setImportAbbrev(e.target.value.toUpperCase())}
-                  />
-                </div>
-              </div>
+                  {importValidationSummary.missingBooks.length > 0 && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        color: '#fbbf24'
+                      }}
+                    >
+                      <strong>Nota de completitud:</strong> Faltan {importValidationSummary.missingBooks.length} libros
+                      para el canon completo de 66 (por ej. si es una edición solo del Nuevo Testamento).
+                    </div>
+                  )}
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Idioma (ISO):</label>
-                  <input
-                    type="text"
-                    value={importLang}
-                    onChange={(e) => setImportLang(e.target.value)}
-                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#F3F4F6', marginBottom: 8 }}>
+                      Muestras de Verificación (Génesis 1:1, Salmos 23:1, Juan 3:16):
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {importValidationSummary.sampleVerses.map((sv, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '8px 12px',
+                            backgroundColor: '#18181B',
+                            border: '1px solid #27272A',
+                            borderRadius: 6,
+                            fontSize: 12
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, color: '#60A5FA', marginBottom: 2 }}>{sv.reference}</div>
+                          <div style={{ color: '#E4E4E7', fontStyle: 'italic' }}>"{sv.text}"</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group flex-2">
-                  <label>Texto de Derechos de Autor:</label>
-                  <input
-                    type="text"
-                    placeholder="ej. Dominio Público"
-                    value={importCopyright}
-                    onChange={(e) => setImportCopyright(e.target.value)}
-                  />
+              ) : (
+                /* Import Configuration Form */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="license-warning-notice">
+                    <AlertCircle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong>Aviso de Propiedad Intelectual y Licencia:</strong>
+                      <p>
+                        ChurchPresenter respeta los derechos de autor. Solo importe traducciones que pertenezcan al{' '}
+                        <strong>Dominio Público</strong> o respecto de las cuales su congregación posea la licencia por
+                        escrito otorgada por los titulares o sociedades bíblicas.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Drag & Drop File Zone */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDraggingBibleFile(true)
+                    }}
+                    onDragLeave={() => setIsDraggingBibleFile(false)}
+                    onDrop={handleBibleFileDrop}
+                    style={{
+                      border: isDraggingBibleFile ? '2px dashed #3B82F6' : '1px dashed #3F3F46',
+                      backgroundColor: isDraggingBibleFile ? 'rgba(59, 130, 246, 0.08)' : '#18181B',
+                      borderRadius: 8,
+                      padding: '16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={handlePickBibleFileNative}
+                  >
+                    <Upload size={24} color={isDraggingBibleFile ? '#3B82F6' : '#9CA3AF'} style={{ margin: '0 auto 8px' }} />
+                    {importFilePath ? (
+                      <div>
+                        <div style={{ color: '#38BDF8', fontWeight: 600, fontSize: 13 }}>
+                          Archivo seleccionado: {importFileName}
+                        </div>
+                        <div style={{ color: '#71717A', fontSize: 11, marginTop: 4 }}>
+                          {importFilePath} (Haga clic para cambiar)
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ color: '#F4F4F5', fontSize: 13, fontWeight: 500 }}>
+                          Arrastre aquí su archivo o haga clic para examinar
+                        </div>
+                        <div style={{ color: '#A1A1AA', fontSize: 11, marginTop: 4 }}>
+                          Formatos compatibles: SQLite (.sqlite, .db, .bible), JSON (ChurchPresenter o Genérico), Zefania XML (.xml), OSIS XML (.osis), USFM (.usfm, .txt)
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {importBibleError && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: 6,
+                        color: '#f87171',
+                        fontSize: 12
+                      }}
+                    >
+                      {importBibleError}
+                    </div>
+                  )}
+
+                  <div className="form-row">
+                    <div className="form-group flex-1">
+                      <label>Formato:</label>
+                      <select
+                        value={importFormat}
+                        onChange={(e) => setImportFormat(e.target.value as any)}
+                      >
+                        <option value="sqlite">Base de Datos SQLite (.sqlite, .db, .bible)</option>
+                        <option value="json">JSON (ChurchPresenter o Genérico)</option>
+                        <option value="zefania">Zefania XML (.xml)</option>
+                        <option value="osis">OSIS XML (.osis / .xml)</option>
+                        <option value="usfm">USFM (.usfm / .txt)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group flex-2">
+                      <label>Nombre de la Traducción *</label>
+                      <input
+                        type="text"
+                        placeholder="ej. Reina-Valera 1960"
+                        value={importName}
+                        onChange={(e) => setImportName(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group flex-1">
+                      <label>Abreviatura *</label>
+                      <input
+                        type="text"
+                        placeholder="ej. RVR60"
+                        value={importAbbrev}
+                        onChange={(e) => setImportAbbrev(e.target.value.toUpperCase())}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Idioma (ISO):</label>
+                      <input
+                        type="text"
+                        value={importLang}
+                        onChange={(e) => setImportLang(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group flex-2">
+                      <label>Texto de Derechos de Autor:</label>
+                      <input
+                        type="text"
+                        placeholder="ej. Dominio Público / Sociedades Bíblicas Unidas"
+                        value={importCopyright}
+                        onChange={(e) => setImportCopyright(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {!importFilePath && (
+                    <div className="form-group">
+                      <label>O pegue el contenido del archivo de texto directamente:</label>
+                      <textarea
+                        className="raw-lyrics-textarea"
+                        rows={5}
+                        placeholder="Pegue aquí el texto JSON, Zefania XML, OSIS XML o USFM..."
+                        value={importRawContent}
+                        onChange={(e) => setImportRawContent(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="checkbox-label" style={{ fontSize: 12, color: '#f8fafc', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={importConsent}
+                        onChange={(e) => setImportConsent(e.target.checked)}
+                        style={{ marginTop: 2 }}
+                      />
+                      <span>
+                        <strong>Confirmo que tengo derecho a usar esta traducción en mi iglesia</strong> (pertenece al dominio público o mi congregación cuenta con la licencia correspondiente).
+                      </span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: 12 }}>
-                <label>Pegar o cargar contenido del archivo:</label>
-                <textarea
-                  className="raw-lyrics-textarea"
-                  rows={8}
-                  placeholder="Pegue aquí el texto JSON, Zefania XML, OSIS XML o USFM..."
-                  value={importRawContent}
-                  onChange={(e) => setImportRawContent(e.target.value)}
-                />
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <label className="checkbox-label" style={{ fontSize: 12, color: '#f8fafc' }}>
-                  <input
-                    type="checkbox"
-                    checked={importConsent}
-                    onChange={(e) => setImportConsent(e.target.checked)}
-                  />
-                  <span>
-                    Confirmo que esta traducción bíblica es de dominio público o cuenta con la licencia correspondiente.
-                  </span>
-                </label>
-              </div>
+              )}
             </div>
 
             <div className="modal-footer">
-              <button
-                className="secondary-action-btn"
-                onClick={() => setIsBibleImportModalOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button className="primary-action-btn" onClick={handleExecuteBibleImport}>
-                Procesar e Importar
-              </button>
+              {importValidationSummary ? (
+                <>
+                  <button
+                    className="secondary-action-btn"
+                    onClick={() => {
+                      if (importValidationSummary.translation.abbrev) {
+                        handleSetDefaultBible(importValidationSummary.translation.abbrev)
+                      }
+                      resetBibleImportForm()
+                      setIsBibleImportModalOpen(false)
+                    }}
+                  >
+                    Establecer como Predeterminada y Salir
+                  </button>
+                  <button
+                    className="primary-action-btn"
+                    onClick={() => {
+                      resetBibleImportForm()
+                      setIsBibleImportModalOpen(false)
+                    }}
+                  >
+                    Aceptar y Finalizar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="secondary-action-btn"
+                    onClick={() => {
+                      resetBibleImportForm()
+                      setIsBibleImportModalOpen(false)
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="primary-action-btn"
+                    disabled={!importConsent || (!importFilePath && !importRawContent.trim()) || isImportingBible}
+                    onClick={handleExecuteBibleImport}
+                    style={{
+                      opacity: !importConsent || (!importFilePath && !importRawContent.trim()) || isImportingBible ? 0.5 : 1
+                    }}
+                  >
+                    {isImportingBible ? 'Procesando e Importando...' : 'Procesar e Importar'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -3129,48 +3965,129 @@ export const OperatorApp: React.FC = () => {
           ========================================================= */}
       {isBibleManagerModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content bible-manager-modal" style={{ width: 620 }}>
+          <div className="modal-content bible-manager-modal" style={{ width: 680 }}>
             <div className="modal-header">
-              <div className="modal-title">Traducciones Bíblicas Instaladas</div>
+              <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BookOpen size={18} color="#3B82F6" />
+                <span>Traducciones Bíblicas Instaladas</span>
+              </div>
               <button className="modal-close-btn" onClick={() => setIsBibleManagerModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
 
             <div className="modal-body">
-              <p className="section-note">
-                Cada traducción se almacena en su propio archivo SQLite independiente dentro de la carpeta de datos de la aplicación y se consulta bajo demanda.
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <p className="section-note" style={{ margin: 0 }}>
+                  Cada traducción se almacena en su propio archivo SQLite independiente dentro de la carpeta de datos de la aplicación.
+                </p>
+                <button
+                  type="button"
+                  className="primary-action-btn"
+                  onClick={() => {
+                    setIsBibleManagerModalOpen(false)
+                    resetBibleImportForm()
+                    setIsBibleImportModalOpen(true)
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12, flexShrink: 0 }}
+                >
+                  <Upload size={14} />
+                  <span>Importar traducción...</span>
+                </button>
+              </div>
+
+              {/* Drag & drop dropzone on the manager dialog */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setIsDraggingBibleFile(true)
+                }}
+                onDragLeave={() => setIsDraggingBibleFile(false)}
+                onDrop={(e) => {
+                  setIsBibleManagerModalOpen(false)
+                  resetBibleImportForm()
+                  setIsBibleImportModalOpen(true)
+                  handleBibleFileDrop(e)
+                }}
+                style={{
+                  border: isDraggingBibleFile ? '2px dashed #3B82F6' : '1px dashed #374151',
+                  backgroundColor: isDraggingBibleFile ? 'rgba(59, 130, 246, 0.08)' : '#18181B',
+                  borderRadius: 6,
+                  padding: '10px',
+                  textAlign: 'center',
+                  marginBottom: 12,
+                  fontSize: 12,
+                  color: '#9CA3AF'
+                }}
+              >
+                Arrastre y suelte un archivo (.sqlite, .db, .bible, .json, .xml, .osis, .usfm) aquí para importarlo de inmediato
+              </div>
 
               <div className="translations-list">
                 {bibleTranslations.map((bt) => (
-                  <div key={bt.id} className="translation-item-card">
+                  <div key={bt.id} className="translation-item-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div className="translation-name-row">
+                      <div className="translation-name-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <strong>{bt.name}</strong>
                         <span className="trans-pill">{bt.abbrev}</span>
-                        {bt.isDefault && <span className="default-pill">POR DEFECTO</span>}
+                        {bt.isDefault && (
+                          <span className="default-pill" style={{ backgroundColor: '#262626', color: '#38bdf8', border: '1px solid #38bdf8', padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                            PREDETERMINADA
+                          </span>
+                        )}
                       </div>
-                      <div className="trans-meta">
+                      <div className="trans-meta" style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
                         {bt.verseCount.toLocaleString()} versículos • {bt.language.toUpperCase()} • {bt.copyright}
                       </div>
                     </div>
 
-                    {!bt.isDefault && (
-                      <button
-                        className="control-btn delete-btn"
-                        onClick={async () => {
-                          if (confirm(`¿Eliminar la traducción ${bt.name}?`)) {
-                            await window.churchPresenterApi.deleteBibleTranslation(bt.id)
-                            const updated = await window.churchPresenterApi.getBibleTranslations()
-                            setBibleTranslations(updated)
-                          }
-                        }}
-                        title="Eliminar traducción"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {!bt.isDefault && (
+                        <button
+                          className="control-btn"
+                          onClick={() => handleSetDefaultBible(bt.abbrev)}
+                          title="Establecer como traducción predeterminada"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '4px 8px',
+                            fontSize: 11,
+                            backgroundColor: '#262626',
+                            border: '1px solid #3F3F46',
+                            borderRadius: 4,
+                            color: '#E4E4E7',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Star size={12} color="#FBBF24" />
+                          <span>Hacer default</span>
+                        </button>
+                      )}
+
+                      {!bt.isDefault && bt.abbrev !== 'RVR1909' && bt.abbrev !== 'KJV' ? (
+                        <button
+                          className="control-btn delete-btn"
+                          onClick={async () => {
+                            if (confirm(`¿Eliminar la traducción ${bt.name} (${bt.abbrev})?`)) {
+                              await window.churchPresenterApi.deleteBibleTranslation(bt.id)
+                              const updated = await window.churchPresenterApi.getBibleTranslations()
+                              setBibleTranslations(updated)
+                            }
+                          }}
+                          title="Eliminar traducción"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : (
+                        <span
+                          title="Traducción de fábrica o predeterminada protegida contra eliminación"
+                          style={{ fontSize: 11, color: '#6B7280', padding: '4px 6px' }}
+                        >
+                          Protegida
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -4085,6 +5002,41 @@ export const OperatorApp: React.FC = () => {
                 </div>
               </div>
 
+              {/* Requirement 0: Gestión e Importación de Traducciones Bíblicas */}
+              <div className="settings-section">
+                <h3>Traducciones Bíblicas y Versiones</h3>
+                <p className="section-note">
+                  El sistema cuenta con {bibleTranslations.length} traducciones instaladas ({bibleTranslations.map((b) => b.abbrev).join(', ')}). Cada versión se indexa de forma independiente en SQLite con búsqueda de texto instantánea.
+                </p>
+                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="primary-action-btn"
+                    onClick={() => {
+                      setIsSettingsOpen(false)
+                      resetBibleImportForm()
+                      setIsBibleImportModalOpen(true)
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Upload size={14} />
+                    <span>Importar traducción...</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-action-btn"
+                    onClick={() => {
+                      setIsSettingsOpen(false)
+                      setIsBibleManagerModalOpen(true)
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <BookOpen size={14} />
+                    <span>Administrar traducciones instaladas</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Requirement B.4 & A.2: Salidas y Dispositivos de Audio Físicos */}
               <div className="settings-section">
                 <h3>Salida y Dispositivos de Audio</h3>
@@ -4223,6 +5175,242 @@ export const OperatorApp: React.FC = () => {
                   >
                     <span>Cerrar sesión / borrar datos de YouTube</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Phase 6: Control Remoto desde Celular y Tablet */}
+              <div className="settings-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3>Control Remoto desde Celular y Tablet</h3>
+                    <p className="section-note" style={{ margin: 0 }}>
+                      Opere la presentación y pantallas desde cualquier teléfono o tableta conectado a la red Wi-Fi local mediante navegador web.
+                    </p>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(remoteConfig?.enabled)}
+                      onChange={(e) => handleToggleRemoteEnabled(e.target.checked)}
+                    />
+                    <span style={{ color: remoteConfig?.enabled ? '#22c55e' : '#9ca3af' }}>
+                      {remoteConfig?.enabled ? 'ACTIVADO' : 'DESACTIVADO'}
+                    </span>
+                  </label>
+                </div>
+
+                {remoteConfig?.enabled && (
+                  <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {remoteStatus?.portConflictWarning && (
+                      <div style={{ backgroundColor: '#7c2d12', border: '1px solid #ea580c', color: '#ffedd5', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                        ⚠️ <strong>Conflicto de puerto:</strong> {remoteStatus.portConflictWarning}
+                      </div>
+                    )}
+                    {remoteStatus?.isWindowsPublicNetwork && (
+                      <div style={{ backgroundColor: '#451a03', border: '1px solid #d97706', color: '#fef3c7', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                        ⚠️ <strong>Perfil de red de Windows detectado como "Público":</strong> El Firewall de Windows suele bloquear conexiones entrantes en redes públicas. Si los dispositivos no pueden conectarse, configure la conexión como "Red privada" en Windows &gt; Configuración &gt; Red e Internet.
+                      </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px', gap: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Interfaz de Red (IP Local):</label>
+                        <select
+                          value={remoteConfig.selectedIp || '0.0.0.0'}
+                          onChange={async (e) => {
+                            const updated = await window.churchPresenterApi.saveRemoteConfig({ selectedIp: e.target.value })
+                            setRemoteConfig(updated)
+                            const status = await window.churchPresenterApi.getRemoteStatus()
+                            setRemoteStatus(status)
+                          }}
+                          style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                        >
+                          {networkInterfaces.map((ni) => (
+                            <option key={ni.ip} value={ni.ip}>{ni.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Puerto HTTP:</label>
+                        <input
+                          type="number"
+                          value={remoteConfig.port || 8080}
+                          onChange={async (e) => {
+                            const port = parseInt(e.target.value, 10) || 8080
+                            const updated = await window.churchPresenterApi.saveRemoteConfig({ port })
+                            setRemoteConfig(updated)
+                          }}
+                          style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>PIN de Acceso:</label>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                          <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: '#f97316', backgroundColor: '#1a1a1a', border: '1px solid #333', padding: '6px 10px', borderRadius: 6, flex: 1, textAlign: 'center' }}>
+                            {remoteConfig.pin || '------'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleRegeneratePin}
+                            className="secondary-action-btn"
+                            title="Regenerar PIN numérico de 6 dígitos"
+                            style={{ padding: '6px 8px', fontSize: 11 }}
+                          >
+                            ↻
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* QR Code and URLs: Operator & Stage */}
+                    {remoteStatus?.addresses && remoteStatus.addresses.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        {/* Operator Remote Card */}
+                        <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
+                          {remoteStatus.addresses[0].qrDataUrl && (
+                            <img
+                              src={remoteStatus.addresses[0].qrDataUrl}
+                              alt="Código QR de Conexión Remota Operador"
+                              style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
+                            />
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', marginBottom: 4 }}>
+                              📱 Control Remoto (Operador)
+                            </div>
+                            {remoteStatus.addresses.map((addr) => (
+                              <div key={addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
+                                  {addr.url}
+                                </span>
+                              </div>
+                            ))}
+                            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                              Permite operar diapositivas, playlist y temporizadores (requiere PIN).
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stage Viewer Card */}
+                        <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
+                          {remoteStatus.addresses[0].stageQrDataUrl && (
+                            <img
+                              src={remoteStatus.addresses[0].stageQrDataUrl}
+                              alt="Código QR para Pantalla de Escenario"
+                              style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
+                            />
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', marginBottom: 4 }}>
+                              🎭 Pantalla de Escenario (Tablets)
+                            </div>
+                            {remoteStatus.addresses.map((addr) => (
+                              <div key={addr.stageUrl || addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
+                                  {addr.stageUrl || `${addr.url}/stage`}
+                                </span>
+                              </div>
+                            ))}
+                            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                              Visor de escenario para músicos y orador (QR incluye token de solo lectura).
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stage Without PIN option */}
+                    <div style={{ padding: '10px 12px', backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 6 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(remoteConfig?.allowReadOnlyWithoutPin)}
+                          onChange={async (e) => {
+                            const updated = await window.churchPresenterApi.saveRemoteConfig({ allowReadOnlyWithoutPin: e.target.checked })
+                            setRemoteConfig(updated)
+                            const status = await window.churchPresenterApi.getRemoteStatus()
+                            setRemoteStatus(status)
+                          }}
+                        />
+                        <span style={{ color: '#fff', fontWeight: 600 }}>Permitir visor de Escenario (/stage) sin código PIN</span>
+                      </label>
+                      <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                        ⚠️ <strong>Advertencia:</strong> Si se activa, cualquier dispositivo en la red local podrá ver la pantalla de retorno sin ingresar el PIN. Manténgalo desactivado si desea exigir autorización por PIN o código QR.
+                      </div>
+                    </div>
+
+                    {/* Connected Devices Table */}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 6 }}>
+                        Dispositivos Conectados ({remoteStatus?.connectedClients?.length || 0}):
+                      </div>
+                      {(remoteStatus?.connectedClients?.length || 0) === 0 ? (
+                        <div style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', padding: '6px 0' }}>
+                          No hay dispositivos remotos conectados actualmente.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {remoteStatus?.connectedClients.map((client) => (
+                            <div
+                              key={client.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                backgroundColor: '#1a1a1a',
+                                border: '1px solid #2e2e2e',
+                                borderRadius: 6,
+                                padding: '8px 12px'
+                              }}
+                            >
+                              <div>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{client.name}</span>
+                                <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>({client.ip})</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: client.role === 'operator' ? '#f97316' : '#38bdf8', color: '#000', padding: '2px 6px', borderRadius: 4, marginLeft: 8 }}>
+                                  {client.role === 'operator' ? 'CONTROL TOTAL' : 'SOLO LECTURA'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleKickClient(client.id)}
+                                style={{ backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
+                              >
+                                Expulsar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Phase 6: Diseño de Pantalla de Escenario */}
+              <div className="settings-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3>Diseño de Pantalla de Escenario (Stage Monitor)</h3>
+                    <p className="section-note" style={{ margin: 0 }}>
+                      Personalice los elementos visibles para los predicadores y músicos (diapositiva actual, siguiente, reloj, notas, temporizadores).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsStageLayoutModalOpen(true)}
+                    className="secondary-action-btn"
+                    style={{ borderColor: '#38bdf8', color: '#38bdf8', fontSize: 12 }}
+                  >
+                    Editar Diseños de Escenario...
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>Diseño activo asignado:</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', backgroundColor: '#1a1a1a', padding: '4px 10px', borderRadius: 6, border: '1px solid #333' }}>
+                    {assignedStageLayout?.name || 'Escenario - Clásico Pro'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -4696,58 +5884,34 @@ export const OperatorApp: React.FC = () => {
       )}
 
       {/* =========================================================
-          THEMES MODAL
+          THEMES MANAGER PRO MODAL
           ========================================================= */}
-      {isThemesModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content themes-modal">
-            <div className="modal-header">
-              <div className="modal-title">Gestión de Temas y Tipografía</div>
-              <button className="modal-close-btn" onClick={() => setIsThemesModalOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
+      <ThemeManagerModal
+        isOpen={isThemesModalOpen}
+        onClose={() => setIsThemesModalOpen(false)}
+        onThemeSaved={async () => {
+          const updatedThemes = await window.churchPresenterApi.getThemes()
+          setThemes(updatedThemes)
+        }}
+      />
 
-            <div className="modal-body">
-              <div className="themes-list-grid">
-                {themes.map((th) => (
-                  <div
-                    key={th.id}
-                    className={`theme-card ${th.isDefault ? 'is-active-theme' : ''}`}
-                    style={{ background: th.background.value }}
-                  >
-                    <div className="theme-card-content">
-                      <div className="theme-title">{th.name}</div>
-                      <div className="theme-meta">Fuente: {th.fontFamily}</div>
-                    </div>
+      {/* =========================================================
+          MESSAGE MODAL (Phase 6)
+          ========================================================= */}
+      <MessageModal
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+        activeMessage={state?.activeMessage}
+      />
 
-                    <div className="theme-actions">
-                      {!th.isDefault && (
-                        <button
-                          className="primary-action-btn"
-                          onClick={async () => {
-                            await window.churchPresenterApi.setDefaultTheme(th.id)
-                            const updatedThemes = await window.churchPresenterApi.getThemes()
-                            setThemes(updatedThemes)
-                          }}
-                        >
-                          Usar por Defecto
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="primary-action-btn" onClick={() => setIsThemesModalOpen(false)}>
-                Listo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* =========================================================
+          STAGE LAYOUT EDITOR MODAL (Phase 6)
+          ========================================================= */}
+      <StageLayoutEditorModal
+        isOpen={isStageLayoutModalOpen}
+        onClose={() => setIsStageLayoutModalOpen(false)}
+        onAssignedChange={loadAllData}
+      />
 
       {/* =========================================================
           BACKGROUNDS MODAL
@@ -4800,6 +5964,46 @@ export const OperatorApp: React.FC = () => {
         isOpen={isYouTubeVerifyOpen}
         items={currentService?.items || []}
         onClose={() => setIsYouTubeVerifyOpen(false)}
+      />
+
+      {/* =========================================================
+          PHASE 7: STABILITY & SAFE OPERATION MODALS
+          ========================================================= */}
+      {/* 1. Session Crash Recovery Modal */}
+      <SessionRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        snapshot={recoverySnapshot}
+        onResume={handleResumeSession}
+        onDismiss={handleDismissSession}
+      />
+
+      {/* 2. Pre-Service Checklist Modal */}
+      <ChecklistModal
+        isOpen={isChecklistModalOpen}
+        onClose={() => setIsChecklistModalOpen(false)}
+        activePlan={currentService}
+        onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
+        onOpenBibleManager={() => setIsBibleManagerModalOpen(true)}
+      />
+
+      {/* 3. Diagnostics & Log Viewer Modal */}
+      <DiagnosticsModal
+        isOpen={isDiagnosticsModalOpen}
+        onClose={() => setIsDiagnosticsModalOpen(false)}
+      />
+
+      {/* 4. Output Health & Incidents Modal */}
+      <OutputHealthModal
+        isOpen={isOutputHealthModalOpen}
+        onClose={() => setIsOutputHealthModalOpen(false)}
+        onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
+      />
+
+      {/* 5. Rehearsal Summary Modal */}
+      <RehearsalSummaryModal
+        isOpen={isRehearsalSummaryModalOpen}
+        summary={rehearsalSummary}
+        onClose={() => setIsRehearsalSummaryModalOpen(false)}
       />
 
       {/* Toast Notifications */}

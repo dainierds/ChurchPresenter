@@ -13,9 +13,14 @@ import {
   Song,
   GenericPresentation,
   ThemeConfig,
+  ThemeContentType,
+  TypeDefaultThemesMap,
+  CustomFontItem,
+  ThemeImportResult,
   BackgroundImageItem,
   ServicePlan,
   BibleTranslationMeta,
+  BibleImportResult,
   BibleReferenceParsed,
   BibleVerse,
   BibleSearchResult,
@@ -32,7 +37,12 @@ import {
   YouTubeItem,
   YouTubeAvailabilityStatus,
   YouTubeSyncTick,
-  ServiceItem
+  ServiceItem,
+  RemoteServerConfig,
+  RemoteServerStatus,
+  RemoteNetworkInterface,
+  StageLayoutConfig,
+  PresentationMessage
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -151,7 +161,7 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.PRESENTATIONS_DELETE, id)
   },
 
-  // Phase 3: Themes
+  // Phase 3 & Extended Theme System
   getThemes: (): Promise<ThemeConfig[]> => {
     return ipcRenderer.invoke(IPC_CHANNELS.THEMES_GET)
   },
@@ -160,8 +170,62 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.THEMES_SAVE, theme)
   },
 
+  deleteTheme: (id: string, reassignToThemeId?: string): Promise<{ success: boolean; reassignedCount: number }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_DELETE, id, reassignToThemeId)
+  },
+
+  duplicateTheme: (id: string, newName?: string): Promise<ThemeConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_DUPLICATE, id, newName)
+  },
+
   setDefaultTheme: (id: string): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.THEMES_SET_DEFAULT, id)
+  },
+
+  getTypeDefaultThemes: (): Promise<TypeDefaultThemesMap> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_GET_TYPE_DEFAULTS)
+  },
+
+  setTypeDefaultTheme: (contentType: ThemeContentType, themeId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_SET_TYPE_DEFAULT, contentType, themeId)
+  },
+
+  applyThemeToScope: (themeId: string, scope: 'playlist' | 'library' | 'all_songs', playlistId?: string): Promise<{ affectedItems: number }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_APPLY_SCOPE, themeId, scope, playlistId)
+  },
+
+  exportTheme: (themeId: string, targetPath?: string, includeFonts?: boolean): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_EXPORT, { themeId, targetPath, includeFonts })
+  },
+
+  importThemePackage: (filePath?: string): Promise<ThemeImportResult> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_IMPORT, filePath)
+  },
+
+  uploadThemeBackground: (filePath?: string): Promise<BackgroundImageItem | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.THEMES_UPLOAD_BG, filePath)
+  },
+
+  getCustomFonts: (): Promise<CustomFontItem[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FONTS_GET)
+  },
+
+  importCustomFont: (filePath?: string): Promise<CustomFontItem | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FONTS_IMPORT, filePath)
+  },
+
+  deleteCustomFont: (id: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.FONTS_DELETE, id)
+  },
+
+  onFontsChanged: (callback: (fonts: CustomFontItem[]) => void): (() => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, fonts: CustomFontItem[]) => {
+      callback(fonts)
+    }
+    ipcRenderer.on(IPC_CHANNELS.FONTS_CHANGED, subscription)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.FONTS_CHANGED, subscription)
+    }
   },
 
   // Phase 3: Background Images
@@ -226,15 +290,26 @@ const api: ChurchPresenterApi = {
   },
 
   importBibleTranslation: (
-    format: 'zefania' | 'osis' | 'usfm' | 'json',
+    format: 'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite',
     rawContent: string,
     meta: Partial<BibleTranslationMeta>
-  ): Promise<BibleTranslationMeta> => {
+  ): Promise<BibleImportResult> => {
     return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_IMPORT_TRANSLATION, format, rawContent, meta)
+  },
+
+  importBibleFile: (
+    filePath: string,
+    metaOverrides?: Partial<BibleTranslationMeta>
+  ): Promise<BibleImportResult> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_IMPORT_FILE, filePath, metaOverrides)
   },
 
   deleteBibleTranslation: (id: string): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_DELETE_TRANSLATION, id)
+  },
+
+  setBibleDefault: (abbrev: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.BIBLE_SET_DEFAULT, abbrev)
   },
 
   parseBibleReference: (input: string): Promise<BibleReferenceParsed | null> => {
@@ -332,6 +407,10 @@ const api: ChurchPresenterApi = {
 
   // Phase 5B: PowerPoint & Video Conversion
   detectPptConverters: (): Promise<any[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_DETECT_CONVERTERS)
+  },
+
+  detectPowerPointConverters: (): Promise<any[]> => {
     return ipcRenderer.invoke(IPC_CHANNELS.POWERPOINT_DETECT_CONVERTERS)
   },
 
@@ -524,7 +603,7 @@ const api: ChurchPresenterApi = {
   },
 
   controlYouTube: (
-    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+    action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute' | 'status',
     payload?: any
   ): Promise<any> => {
     return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CONTROL, action, payload)
@@ -596,6 +675,178 @@ const api: ChurchPresenterApi = {
 
   closeFloatingPreview: (): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.FLOATING_PREVIEW_CLOSE)
+  },
+
+  // Phase 6: Remote Control
+  getRemoteConfig: (): Promise<RemoteServerConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_GET_CONFIG)
+  },
+  remoteGetConfig: (): Promise<RemoteServerConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_GET_CONFIG)
+  },
+
+  saveRemoteConfig: (config: Partial<RemoteServerConfig>): Promise<RemoteServerConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_SAVE_CONFIG, config)
+  },
+  remoteSaveConfig: (config: Partial<RemoteServerConfig>): Promise<RemoteServerConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_SAVE_CONFIG, config)
+  },
+
+  getRemoteStatus: (): Promise<RemoteServerStatus> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_GET_STATUS)
+  },
+  remoteGetStatus: (): Promise<RemoteServerStatus> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_GET_STATUS)
+  },
+
+  regenerateRemotePin: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_REGENERATE_PIN)
+  },
+  remoteRegeneratePin: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_REGENERATE_PIN)
+  },
+
+  kickRemoteClient: (clientId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_KICK_CLIENT, clientId)
+  },
+  remoteKickClient: (clientId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_KICK_CLIENT, clientId)
+  },
+
+  getNetworkInterfaces: (): Promise<RemoteNetworkInterface[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_GET_NETWORK_INTERFACES)
+  },
+
+  onRemoteActionDispatch: (callback: (action: { type: string; payload?: any; [key: string]: any }) => void): (() => void) => {
+    const handler = (_event: any, action: { type: string; payload?: any; [key: string]: any }) => callback(action)
+    ipcRenderer.on(IPC_CHANNELS.REMOTE_ACTION_DISPATCH, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.REMOTE_ACTION_DISPATCH, handler)
+  },
+
+  // Phase 6: Stage Layouts
+  getStageLayouts: (): Promise<StageLayoutConfig[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STAGE_GET_LAYOUTS)
+  },
+
+  saveStageLayout: (layout: StageLayoutConfig): Promise<StageLayoutConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STAGE_SAVE_LAYOUT, layout)
+  },
+
+  deleteStageLayout: (layoutId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STAGE_DELETE_LAYOUT, layoutId)
+  },
+
+  getAssignedStageLayout: (role?: string): Promise<StageLayoutConfig> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STAGE_GET_ASSIGNMENT, role)
+  },
+
+  setAssignedStageLayout: (layoutId: string, role?: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.STAGE_SET_ASSIGNMENT, layoutId, role)
+  },
+
+  // Phase 6: Messages
+  getActiveMessage: (): Promise<PresentationMessage | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_GET_ACTIVE)
+  },
+
+  sendMessage: (message: { text: string; target: 'stage' | 'audience' | 'both'; durationSeconds?: number }): Promise<PresentationMessage> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_SEND, message)
+  },
+
+  clearMessage: (): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_CLEAR)
+  },
+
+  getMessagePresets: (): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_GET_PRESETS)
+  },
+
+  saveMessagePreset: (text: string): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_SAVE_PRESET, text)
+  },
+
+  deleteMessagePreset: (text: string): Promise<string[]> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.MESSAGES_DELETE_PRESET, text)
+  },
+
+  // Phase 7: Crash Recovery
+  checkSessionRecovery: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.RECOVERY_CHECK)
+  },
+  dismissSessionRecovery: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.RECOVERY_DISMISS)
+  },
+  getSessionRecoverySnapshot: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.RECOVERY_GET_SNAPSHOT)
+  },
+
+  // Phase 7: Output Health
+  getOutputHealthStatuses: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.OUTPUT_HEALTH_GET)
+  },
+  onOutputHealthChanged: (callback) => {
+    const handler = (_event: any, statuses: any) => callback(statuses)
+    ipcRenderer.on(IPC_CHANNELS.OUTPUT_HEALTH_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.OUTPUT_HEALTH_CHANGED, handler)
+  },
+  sendOutputHeartbeat: (heartbeat) => {
+    ipcRenderer.send(IPC_CHANNELS.OUTPUT_HEALTH_HEARTBEAT, heartbeat)
+  },
+
+  // Phase 7: System Monitor
+  getSystemMetrics: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_METRICS_GET)
+  },
+  onSystemMetricsTick: (callback) => {
+    const handler = (_event: any, metrics: any) => callback(metrics)
+    ipcRenderer.on(IPC_CHANNELS.SYSTEM_METRICS_TICK, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SYSTEM_METRICS_TICK, handler)
+  },
+
+  // Phase 7: Pre-Service Checklist
+  runPreServiceChecklist: (plan?: any) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.CHECKLIST_RUN, plan)
+  },
+  fixChecklistItem: (itemId: string, actionType: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.CHECKLIST_FIX_ITEM, itemId, actionType)
+  },
+
+  // Phase 7: Diagnostics
+  getDiagnosticsLogs: (options?: any) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS_GET_LOGS, options)
+  },
+  exportDiagnosticsZip: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.DIAGNOSTICS_EXPORT_ZIP)
+  },
+
+  // Phase 7: Rehearsal Mode
+  setRehearsalMode: (enabled: boolean) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REHEARSAL_SET_MODE, enabled)
+  },
+  getRehearsalStatus: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REHEARSAL_GET_STATUS)
+  },
+  getRehearsalSummary: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REHEARSAL_GET_SUMMARY)
+  },
+  onRehearsalModeChanged: (callback) => {
+    const handler = (_event: any, active: boolean) => callback(active)
+    ipcRenderer.on(IPC_CHANNELS.REHEARSAL_MODE_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.REHEARSAL_MODE_CHANGED, handler)
+  },
+
+  // Phase 7: Emergency & Safe Mode
+  activateEmergencyMode: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.EMERGENCY_ACTIVATE)
+  },
+  deactivateEmergencyMode: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.EMERGENCY_DEACTIVATE)
+  },
+  isEmergencyModeActive: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.EMERGENCY_GET_STATUS)
+  },
+  isSafeModeActive: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SAFE_MODE_GET_STATUS)
   }
 }
 

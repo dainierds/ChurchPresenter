@@ -32,10 +32,22 @@ export const IPC_CHANNELS = {
   PRESENTATIONS_SAVE: 'presentations:save',
   PRESENTATIONS_DELETE: 'presentations:delete',
 
-  // Phase 3: Themes
+  // Phase 3 & Extended Theme System
   THEMES_GET: 'themes:get',
   THEMES_SAVE: 'themes:save',
+  THEMES_DELETE: 'themes:delete',
+  THEMES_DUPLICATE: 'themes:duplicate',
   THEMES_SET_DEFAULT: 'themes:set-default',
+  THEMES_GET_TYPE_DEFAULTS: 'themes:get-type-defaults',
+  THEMES_SET_TYPE_DEFAULT: 'themes:set-type-default',
+  THEMES_APPLY_SCOPE: 'themes:apply-scope',
+  THEMES_EXPORT: 'themes:export',
+  THEMES_IMPORT: 'themes:import',
+  THEMES_UPLOAD_BG: 'themes:upload-bg',
+  FONTS_GET: 'fonts:get',
+  FONTS_IMPORT: 'fonts:import',
+  FONTS_DELETE: 'fonts:delete',
+  FONTS_CHANGED: 'fonts:changed',
 
   // Phase 3: Background Images
   BACKGROUNDS_GET: 'backgrounds:get',
@@ -61,7 +73,9 @@ export const IPC_CHANNELS = {
   // Phase 4: Bible
   BIBLE_GET_TRANSLATIONS: 'bible:get-translations',
   BIBLE_IMPORT_TRANSLATION: 'bible:import-translation',
+  BIBLE_IMPORT_FILE: 'bible:import-file',
   BIBLE_DELETE_TRANSLATION: 'bible:delete-translation',
+  BIBLE_SET_DEFAULT: 'bible:set-default',
   BIBLE_PARSE_REFERENCE: 'bible:parse-reference',
   BIBLE_GET_VERSES: 'bible:get-verses',
   BIBLE_SEARCH_TEXT: 'bible:search-text',
@@ -152,5 +166,51 @@ export const IPC_CHANNELS = {
   // Floating Output Preview Window (Requirement 3)
   FLOATING_PREVIEW_OPEN: 'floating-preview:open',
   FLOATING_PREVIEW_SET_ALWAYS_ON_TOP: 'floating-preview:set-always-on-top',
-  FLOATING_PREVIEW_CLOSE: 'floating-preview:close'
+  FLOATING_PREVIEW_CLOSE: 'floating-preview:close',
+
+  // Phase 6: Remote Control
+  REMOTE_GET_CONFIG: 'remote:get-config',
+  REMOTE_SAVE_CONFIG: 'remote:save-config',
+  REMOTE_GET_STATUS: 'remote:get-status',
+  REMOTE_REGENERATE_PIN: 'remote:regenerate-pin',
+  REMOTE_KICK_CLIENT: 'remote:kick-client',
+  REMOTE_GET_NETWORK_INTERFACES: 'remote:get-network-interfaces',
+  REMOTE_ACTION_DISPATCH: 'remote:action-dispatch',
+
+  // Phase 6: Stage Layouts
+  STAGE_GET_LAYOUTS: 'stage:get-layouts',
+  STAGE_SAVE_LAYOUT: 'stage:save-layout',
+  STAGE_DELETE_LAYOUT: 'stage:delete-layout',
+  STAGE_GET_ASSIGNMENT: 'stage:get-assignment',
+  STAGE_SET_ASSIGNMENT: 'stage:set-assignment',
+
+  // Phase 6: Messages
+  MESSAGES_GET_ACTIVE: 'messages:get-active',
+  MESSAGES_SEND: 'messages:send',
+  MESSAGES_CLEAR: 'messages:clear',
+  MESSAGES_GET_PRESETS: 'messages:get-presets',
+  MESSAGES_SAVE_PRESET: 'messages:save-preset',
+  MESSAGES_DELETE_PRESET: 'messages:delete-preset',
+
+  // Phase 7: Crash Recovery, Output Health, System Monitor, Checklist, Diagnostics, Rehearsal & Emergency
+  RECOVERY_CHECK: 'recovery:check',
+  RECOVERY_DISMISS: 'recovery:dismiss',
+  RECOVERY_GET_SNAPSHOT: 'recovery:get-snapshot',
+  OUTPUT_HEALTH_GET: 'output-health:get',
+  OUTPUT_HEALTH_HEARTBEAT: 'output-health:heartbeat',
+  OUTPUT_HEALTH_CHANGED: 'output-health:changed',
+  SYSTEM_METRICS_GET: 'system-metrics:get',
+  SYSTEM_METRICS_TICK: 'system-metrics:tick',
+  CHECKLIST_RUN: 'checklist:run',
+  CHECKLIST_FIX_ITEM: 'checklist:fix-item',
+  DIAGNOSTICS_GET_LOGS: 'diagnostics:get-logs',
+  DIAGNOSTICS_EXPORT_ZIP: 'diagnostics:export-zip',
+  REHEARSAL_SET_MODE: 'rehearsal:set-mode',
+  REHEARSAL_GET_STATUS: 'rehearsal:get-status',
+  REHEARSAL_GET_SUMMARY: 'rehearsal:get-summary',
+  REHEARSAL_MODE_CHANGED: 'rehearsal:mode-changed',
+  EMERGENCY_ACTIVATE: 'emergency:activate',
+  EMERGENCY_DEACTIVATE: 'emergency:deactivate',
+  EMERGENCY_GET_STATUS: 'emergency:get-status',
+  SAFE_MODE_GET_STATUS: 'safe-mode:get-status'
 } as const

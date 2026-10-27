@@ -12,6 +12,7 @@ import {
   Layers,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   BookOpen,
   Film
 } from 'lucide-react'
@@ -74,6 +75,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [filterQuery, setFilterQuery] = useState('')
   const [searchScope, setSearchScope] = useState<'current' | 'all'>('current')
   const [libraryItemRefs, setLibraryItemRefs] = useState<LibraryItemReference[]>([])
+  const [isFoldersCollapsed, setIsFoldersCollapsed] = useState(false)
 
   // Load item references for active library
   useEffect(() => {
@@ -249,7 +251,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
     }
   }
 
-  const getLibraryFolderIcon = (id: string) => {
+  const getLibraryFolderIcon = (id: string, name?: string) => {
     switch (id) {
       case 'lib_songs':
         return <Music size={13} className="pro-lib-icon song" />
@@ -259,7 +261,26 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         return <Video size={13} className="pro-lib-icon vid" />
       case 'lib_recent':
         return <History size={13} className="pro-lib-icon hist" />
+      case 'lib_unclassified':
+        return <Folder size={13} className="pro-lib-icon unclassified" />
       default:
+        if (id === 'lib_youtube' || name?.toLowerCase().includes('youtube')) {
+          return (
+            <span
+              style={{
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: 9,
+                fontWeight: 800,
+                padding: '1px 3px',
+                borderRadius: 3,
+                marginRight: 2
+              }}
+            >
+              YT
+            </span>
+          )
+        }
         return <Folder size={13} className="pro-lib-icon custom" />
     }
   }
@@ -267,15 +288,26 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   return (
     <div
       className="pro-library-panel zone-library"
-      style={height ? { height: `${height}px`, flex: 'none' } : undefined}
+      style={height ? { height: `${height}px`, width: '100%', flex: 'none' } : { width: '100%' }}
     >
       {/* Library Collections Header */}
       <div className="pro-panel-header">
-        <div className="pro-header-title-box">
+        <div
+          className="pro-header-title-box"
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setIsFoldersCollapsed((prev) => !prev)}
+          title={isFoldersCollapsed ? 'Mostrar colecciones' : 'Colapsar colecciones'}
+        >
+          {isFoldersCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
           <Layers size={13} />
           <span className="pro-header-title">
             {panelLabels?.library ? panelLabels.library.toUpperCase() : 'LIBRARY'}
           </span>
+          {isFoldersCollapsed && (
+            <span style={{ fontSize: 10, color: 'var(--accent-preview)', marginLeft: 4, fontWeight: 500 }}>
+              ({libraries.find((l) => l.id === activeLibraryId)?.name || 'Colección'})
+            </span>
+          )}
         </div>
         <button
           className="pro-header-add-btn"
@@ -311,101 +343,103 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         </form>
       )}
 
-      {/* Library Collections Tabs List */}
-      <div className="pro-lib-folders-list">
-        {libraries.map((lib, idx) => {
-          const isActive = activeLibraryId === lib.id
-          const isEditing = editingLibId === lib.id
+      {/* Library Collections Tabs List (Collapsible) */}
+      {!isFoldersCollapsed && (
+        <div className="pro-lib-folders-list">
+          {libraries.map((lib, idx) => {
+            const isActive = activeLibraryId === lib.id
+            const isEditing = editingLibId === lib.id
 
-          return (
-            <div
-              key={lib.id}
-              className={`pro-lib-folder-row ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectLibrary(lib.id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault()
-                try {
-                  const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                  if (data?.refId && onMoveItem) {
-                    onMoveItem(data.refId, lib.id)
+            return (
+              <div
+                key={lib.id}
+                className={`pro-lib-folder-row ${isActive ? 'active' : ''}`}
+                onClick={() => onSelectLibrary(lib.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  try {
+                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                    if (data?.refId && onMoveItem) {
+                      onMoveItem(data.refId, lib.id)
+                    }
+                  } catch {
+                    // Ignore invalid drag payload
                   }
-                } catch {
-                  // Ignore invalid drag payload
-                }
-              }}
-            >
-              <div className="pro-lib-folder-label">
-                {getLibraryFolderIcon(lib.id)}
-                {isEditing ? (
-                  <input
-                    type="text"
-                    className="pro-lib-inline-rename-input"
-                    value={editingLibName}
-                    autoFocus
-                    onChange={(e) => setEditingLibName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleRenameSubmit(lib.id)
-                      if (e.key === 'Escape') setEditingLibId(null)
-                    }}
-                    onBlur={() => handleRenameSubmit(lib.id)}
-                  />
-                ) : (
-                  <span>{lib.name}</span>
+                }}
+              >
+                <div className="pro-lib-folder-label">
+                  {getLibraryFolderIcon(lib.id, lib.name)}
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="pro-lib-inline-rename-input"
+                      value={editingLibName}
+                      autoFocus
+                      onChange={(e) => setEditingLibName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRenameSubmit(lib.id)
+                        if (e.key === 'Escape') setEditingLibId(null)
+                      }}
+                      onBlur={() => handleRenameSubmit(lib.id)}
+                    />
+                  ) : (
+                    <span>{lib.name}</span>
+                  )}
+                </div>
+
+                {!lib.isSpecial && (
+                  <div className="pro-lib-folder-actions" onClick={(e) => e.stopPropagation()}>
+                    {idx > 0 && onReorderLibraries && (
+                      <button
+                        className="pro-lib-mini-btn"
+                        onClick={() => handleMoveLibOrder(idx, 'up')}
+                        title="Mover arriba"
+                      >
+                        <ChevronUp size={11} />
+                      </button>
+                    )}
+                    {idx < libraries.length - 1 && onReorderLibraries && (
+                      <button
+                        className="pro-lib-mini-btn"
+                        onClick={() => handleMoveLibOrder(idx, 'down')}
+                        title="Mover abajo"
+                      >
+                        <ChevronDown size={11} />
+                      </button>
+                    )}
+                    <button
+                      className="pro-lib-mini-btn"
+                      onClick={() => {
+                        setEditingLibId(lib.id)
+                        setEditingLibName(lib.name)
+                      }}
+                      title="Renombrar biblioteca"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                    <button
+                      className="pro-lib-delete-btn"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `¿Está seguro de eliminar la biblioteca "${lib.name}"?\n\nLos elementos contenidos no se perderán y se moverán a "Sin clasificar".`
+                          )
+                        ) {
+                          onDeleteLibrary(lib.id)
+                        }
+                      }}
+                      title="Eliminar biblioteca (elementos pasan a Sin clasificar)"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
                 )}
               </div>
-
-              {!lib.isSpecial && (
-                <div className="pro-lib-folder-actions" onClick={(e) => e.stopPropagation()}>
-                  {idx > 0 && onReorderLibraries && (
-                    <button
-                      className="pro-lib-mini-btn"
-                      onClick={() => handleMoveLibOrder(idx, 'up')}
-                      title="Mover arriba"
-                    >
-                      <ChevronUp size={11} />
-                    </button>
-                  )}
-                  {idx < libraries.length - 1 && onReorderLibraries && (
-                    <button
-                      className="pro-lib-mini-btn"
-                      onClick={() => handleMoveLibOrder(idx, 'down')}
-                      title="Mover abajo"
-                    >
-                      <ChevronDown size={11} />
-                    </button>
-                  )}
-                  <button
-                    className="pro-lib-mini-btn"
-                    onClick={() => {
-                      setEditingLibId(lib.id)
-                      setEditingLibName(lib.name)
-                    }}
-                    title="Renombrar biblioteca"
-                  >
-                    <Edit2 size={10} />
-                  </button>
-                  <button
-                    className="pro-lib-delete-btn"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `¿Está seguro de eliminar la biblioteca "${lib.name}"?\n\nLos elementos contenidos no se perderán y se moverán a "Sin clasificar".`
-                        )
-                      ) {
-                        onDeleteLibrary(lib.id)
-                      }
-                    }}
-                    title="Eliminar biblioteca (elementos pasan a Sin clasificar)"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Items list inside active library */}
       <div className="pro-lib-items-section">

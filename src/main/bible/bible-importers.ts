@@ -1,3 +1,4 @@
+import { Database, SqlJsStatic } from 'sql.js'
 import { BibleBook, BibleVerse } from '../../shared/types'
 import { BIBLE_BOOKS, resolveBibleBook } from '../../shared/bible-reference-parser'
 
@@ -11,7 +12,23 @@ export interface ParsedBibleImport {
   verses: BibleVerse[]
 }
 
-function cleanXmlEntities(str: string): string {
+export interface BibleImportValidationSummary {
+  success: boolean
+  name: string
+  abbrev: string
+  language: string
+  copyright: string
+  licenseNotice: string
+  bookCount: number
+  verseCount: number
+  missingBooks: string[]
+  sampleVerses: {
+    reference: string
+    text: string
+  }[]
+}
+
+export function cleanXmlEntities(str: string): string {
   return str
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -23,7 +40,67 @@ function cleanXmlEntities(str: string): string {
 }
 
 /**
- * Standard Simple JSON Format Importer
+ * Validates parsed Bible data and extracts sample verses for user verification.
+ */
+export function validateBibleData(parsed: ParsedBibleImport): BibleImportValidationSummary {
+  const distinctBooks = new Set<number>()
+  for (const v of parsed.verses) {
+    distinctBooks.add(v.bookNumber)
+  }
+
+  const missingBooks: string[] = []
+  for (const b of BIBLE_BOOKS) {
+    if (!distinctBooks.has(b.number)) {
+      missingBooks.push(b.name)
+    }
+  }
+
+  // Key sample verses for visual verification: Génesis 1:1, Salmos 23:1, Juan 3:16
+  const targetSamples = [
+    { label: 'Génesis 1:1', bookNumber: 1, chapter: 1, verse: 1 },
+    { label: 'Salmos 23:1', bookNumber: 19, chapter: 23, verse: 1 },
+    { label: 'Juan 3:16', bookNumber: 43, chapter: 3, verse: 16 }
+  ]
+
+  const sampleVerses: { reference: string; text: string }[] = []
+  for (const target of targetSamples) {
+    const found = parsed.verses.find(
+      (v) => v.bookNumber === target.bookNumber && v.chapter === target.chapter && v.verse === target.verse
+    )
+    if (found) {
+      sampleVerses.push({
+        reference: target.label,
+        text: found.text
+      })
+    } else {
+      sampleVerses.push({
+        reference: target.label,
+        text: '(No disponible en esta traducción)'
+      })
+    }
+  }
+
+  return {
+    success: parsed.verses.length > 0,
+    name: parsed.name,
+    abbrev: parsed.abbrev,
+    language: parsed.language,
+    copyright: parsed.copyright,
+    licenseNotice: parsed.licenseNotice,
+    bookCount: distinctBooks.size,
+    verseCount: parsed.verses.length,
+    missingBooks,
+    sampleVerses
+  }
+}
+
+/**
+ * Universal JSON Format Importer:
+ * Supports:
+ * 1. ChurchPresenter standard format: { books: [{ number, name, chapters: [{ chapter, verses: [{ verse, text }] }] }] }
+ * 2. Generic Format A: { books: [{ name: "Genesis", chapters: [["v1", "v2"]] }] } or array of books [{ name, chapters: [...] }]
+ * 3. Generic Format B: Flat verses array [{ book, chapter, verse, text }] or { verses: [...] }
+ * 4. Generic Format C: Dictionary format { "Genesis": { "1": { "1": "text" } } } or { "Genesis": [["v1", "v2"]] }
  */
 export function parseJsonBible(rawJson: string): ParsedBibleImport {
   let parsed: any
@@ -33,53 +110,409 @@ export function parseJsonBible(rawJson: string): ParsedBibleImport {
     throw new Error(`Error de sintaxis JSON en archivo bíblico: ${err.message}`)
   }
 
-  if (!parsed.books || !Array.isArray(parsed.books)) {
-    throw new Error('El archivo JSON no contiene el arreglo "books" requerido.')
+  const verses: BibleVerse[] = []
+  const name = parsed.name || parsed.title || 'Biblia Importada'
+  const abbrev = (parsed.abbrev || parsed.short_name || 'BIB').toUpperCase().substring(0, 10)
+  const language = parsed.language || parsed.lang || 'es'
+  const copyright = parsed.copyright || 'No especificado'
+  const licenseNotice = parsed.licenseNotice || 'Texto importado por el usuario'
+  const isPublicDomain = Boolean(parsed.isPublicDomain)
+
+  // Helper to resolve book obj or fallback
+  const resolveBook = (rawBook: any): { bookNumber: number; bookName: string } => {
+    if (typeof rawBook === 'number' && rawBook >= 1 && rawBook <= 66) {
+      const bObj = BIBLE_BOOKS.find((bk) => bk.number === rawBook)
+      return { bookNumber: rawBook, bookName: bObj ? bObj.name : `Libro ${rawBook}` }
+    }
+    const str = String(rawBook || '').trim()
+    const bObj = resolveBibleBook(str)
+    if (bObj) return { bookNumber: bObj.number, bookName: bObj.name }
+    const num = parseInt(str, 10)
+    if (!isNaN(num) && num >= 1 && num <= 66) {
+      const bByNum = BIBLE_BOOKS.find((bk) => bk.number === num)
+      return { bookNumber: num, bookName: bByNum ? bByNum.name : `Libro ${num}` }
+    }
+    return { bookNumber: 1, bookName: str || 'Libro' }
   }
 
-  const verses: BibleVerse[] = []
-  const abbrev = parsed.abbrev || parsed.name || 'BIBLIA'
+  // CASE 1: Flat verses array: [{ book, chapter, verse, text }] or { verses: [...] }
+  const flatVerses = Array.isArray(parsed) && parsed.length > 0 && (parsed[0].verse !== undefined || parsed[0].v !== undefined)
+    ? parsed
+    : Array.isArray(parsed.verses)
+      ? parsed.verses
+      : null
 
-  for (const b of parsed.books) {
-    const bookObj = BIBLE_BOOKS.find((bk) => bk.number === b.number) || resolveBibleBook(b.name || '')
-    const bookNumber = bookObj ? bookObj.number : b.number || 1
-    const bookName = bookObj ? bookObj.name : b.name || `Libro ${bookNumber}`
+  if (flatVerses) {
+    for (const item of flatVerses) {
+      const { bookNumber, bookName } = resolveBook(item.book ?? item.bookNumber ?? item.b ?? item.book_number ?? 1)
+      const chapter = Number(item.chapter ?? item.c ?? item.chapter_number ?? 1)
+      const verse = Number(item.verse ?? item.v ?? item.verse_number ?? 1)
+      const text = String(item.text ?? item.content ?? item.words ?? '').trim()
+      if (text) {
+        verses.push({
+          bookNumber,
+          bookName,
+          chapter,
+          verse,
+          text,
+          translationAbbrev: abbrev
+        })
+      }
+    }
+  }
 
-    if (!b.chapters || !Array.isArray(b.chapters)) continue
+  // CASE 2: Books array: parsed.books or directly parsed as array of books
+  const booksArray = !flatVerses && Array.isArray(parsed.books)
+    ? parsed.books
+    : !flatVerses && Array.isArray(parsed) && parsed.length > 0 && (parsed[0].chapters || parsed[0].name)
+      ? parsed
+      : null
 
-    for (const c of b.chapters) {
-      const chapter = Number(c.chapter) || 1
-      if (!c.verses || !Array.isArray(c.verses)) continue
+  if (booksArray) {
+    for (let bIndex = 0; bIndex < booksArray.length; bIndex++) {
+      const b = booksArray[bIndex]
+      const { bookNumber, bookName } = resolveBook(b.number ?? b.bookNumber ?? b.name ?? bIndex + 1)
 
-      for (const v of c.verses) {
-        const verseNum = Number(v.verse) || 1
-        const text = String(v.text || '').trim()
-        if (text) {
-          verses.push({
-            bookNumber,
-            bookName,
-            chapter,
-            verse: verseNum,
-            text,
-            translationAbbrev: abbrev
-          })
+      if (!b.chapters) continue
+
+      if (Array.isArray(b.chapters)) {
+        for (let cIndex = 0; cIndex < b.chapters.length; cIndex++) {
+          const c = b.chapters[cIndex]
+
+          // Subcase 2A: chapter is array of string verses: [["v1", "v2"], ...]
+          if (Array.isArray(c)) {
+            const chapterNum = cIndex + 1
+            for (let vIndex = 0; vIndex < c.length; vIndex++) {
+              const text = String(c[vIndex] || '').trim()
+              if (text) {
+                verses.push({
+                  bookNumber,
+                  bookName,
+                  chapter: chapterNum,
+                  verse: vIndex + 1,
+                  text,
+                  translationAbbrev: abbrev
+                })
+              }
+            }
+          }
+          // Subcase 2B: chapter is object { chapter: 1, verses: [...] }
+          else if (c && typeof c === 'object') {
+            const chapterNum = Number(c.chapter ?? c.c ?? cIndex + 1)
+            const rawVerses = c.verses ?? c.v ?? []
+
+            if (Array.isArray(rawVerses)) {
+              for (let vIndex = 0; vIndex < rawVerses.length; vIndex++) {
+                const v = rawVerses[vIndex]
+                if (typeof v === 'string') {
+                  const text = v.trim()
+                  if (text) {
+                    verses.push({
+                      bookNumber,
+                      bookName,
+                      chapter: chapterNum,
+                      verse: vIndex + 1,
+                      text,
+                      translationAbbrev: abbrev
+                    })
+                  }
+                } else if (v && typeof v === 'object') {
+                  const verseNum = Number(v.verse ?? v.v ?? vIndex + 1)
+                  const text = String(v.text ?? v.content ?? v.words ?? '').trim()
+                  if (text) {
+                    verses.push({
+                      bookNumber,
+                      bookName,
+                      chapter: chapterNum,
+                      verse: verseNum,
+                      text,
+                      translationAbbrev: abbrev
+                    })
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // CASE 3: Dictionary keyed by book names: { "Génesis": { "1": { "1": "..." } } } or { "Genesis": [["v1", "v2"]] }
+  if (verses.length === 0 && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [bookKey, bookVal] of Object.entries(parsed)) {
+      if (['name', 'abbrev', 'title', 'language', 'lang', 'copyright', 'licenseNotice', 'isPublicDomain', 'version'].includes(bookKey)) {
+        continue
+      }
+      const { bookNumber, bookName } = resolveBook(bookKey)
+
+      if (Array.isArray(bookVal)) {
+        // Chapters as array of verse strings
+        for (let cIndex = 0; cIndex < bookVal.length; cIndex++) {
+          const chapArray = bookVal[cIndex]
+          if (Array.isArray(chapArray)) {
+            for (let vIndex = 0; vIndex < chapArray.length; vIndex++) {
+              const text = String(chapArray[vIndex] || '').trim()
+              if (text) {
+                verses.push({
+                  bookNumber,
+                  bookName,
+                  chapter: cIndex + 1,
+                  verse: vIndex + 1,
+                  text,
+                  translationAbbrev: abbrev
+                })
+              }
+            }
+          }
+        }
+      } else if (bookVal && typeof bookVal === 'object') {
+        // Chapters as object keys { "1": { "1": "..." } }
+        for (const [chapKey, chapVal] of Object.entries(bookVal as Record<string, any>)) {
+          const chapterNum = parseInt(chapKey, 10) || 1
+          if (Array.isArray(chapVal)) {
+            for (let vIndex = 0; vIndex < chapVal.length; vIndex++) {
+              const text = String(chapVal[vIndex] || '').trim()
+              if (text) {
+                verses.push({
+                  bookNumber,
+                  bookName,
+                  chapter: chapterNum,
+                  verse: vIndex + 1,
+                  text,
+                  translationAbbrev: abbrev
+                })
+              }
+            }
+          } else if (chapVal && typeof chapVal === 'object') {
+            for (const [verseKey, verseText] of Object.entries(chapVal as Record<string, any>)) {
+              const verseNum = parseInt(verseKey, 10) || 1
+              const text = String(verseText || '').trim()
+              if (text) {
+                verses.push({
+                  bookNumber,
+                  bookName,
+                  chapter: chapterNum,
+                  verse: verseNum,
+                  text,
+                  translationAbbrev: abbrev
+                })
+              }
+            }
+          }
         }
       }
     }
   }
 
   if (verses.length === 0) {
-    throw new Error('El archivo JSON no contiene ningún versículo válido.')
+    throw new Error('El archivo JSON no contiene una estructura bíblica reconocible (se admiten books[], versículos planos o diccionario de libros).')
   }
 
   return {
-    name: parsed.name || 'Biblia Importada',
-    abbrev: parsed.abbrev || 'BIB',
-    language: parsed.language || 'es',
-    copyright: parsed.copyright || 'No especificado',
-    licenseNotice: parsed.licenseNotice || 'Texto importado por el usuario',
-    isPublicDomain: Boolean(parsed.isPublicDomain),
+    name,
+    abbrev,
+    language,
+    copyright,
+    licenseNotice,
+    isPublicDomain,
     verses
+  }
+}
+
+/**
+ * SQLite Database Importer (.sqlite, .db, .bible)
+ * Intelligently inspects database schema, discovers verse and metadata tables,
+ * maps columns automatically and extracts verses without crashing.
+ */
+export function parseSqliteBible(
+  buffer: Buffer | Uint8Array,
+  SQL: SqlJsStatic,
+  metaOverrides?: Partial<ParsedBibleImport>
+): ParsedBibleImport {
+  let db: Database | null = null
+  try {
+    const uint8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+    db = new SQL.Database(uint8)
+
+    // 1. Discover tables in SQLite database
+    const tablesRes = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+    if (tablesRes.length === 0 || tablesRes[0].values.length === 0) {
+      throw new Error('La base de datos SQLite no contiene tablas de datos.')
+    }
+
+    const tableNames = tablesRes[0].values.map((v) => String(v[0]))
+
+    // 2. Extract metadata if available (metadata, info, details, config)
+    let metaName = metaOverrides?.name || ''
+    let metaAbbrev = metaOverrides?.abbrev || ''
+    let metaLang = metaOverrides?.language || 'es'
+    let metaCopyright = metaOverrides?.copyright || 'Dominio Público'
+
+    const metaTable = tableNames.find((t) => /^(metadata|info|details|config|bible_version)$/i.test(t))
+    if (metaTable) {
+      try {
+        const metaRows = db.exec(`SELECT * FROM "${metaTable}";`)
+        if (metaRows.length > 0 && metaRows[0].values.length > 0) {
+          const cols = metaRows[0].columns.map((c) => c.toLowerCase())
+          // Key-Value structure
+          if (cols.includes('key') && cols.includes('value')) {
+            const keyIdx = cols.indexOf('key')
+            const valIdx = cols.indexOf('value')
+            for (const row of metaRows[0].values) {
+              const k = String(row[keyIdx]).toLowerCase()
+              const val = String(row[valIdx])
+              if (!metaName && (k === 'name' || k === 'title')) metaName = val
+              if (!metaAbbrev && (k === 'abbrev' || k === 'short_name' || k === 'id')) metaAbbrev = val
+              if (k === 'language' || k === 'lang') metaLang = val
+              if (k === 'copyright') metaCopyright = val
+            }
+          } else {
+            // Row-based metadata
+            const firstRow = metaRows[0].values[0]
+            cols.forEach((col, idx) => {
+              const val = String(firstRow[idx] || '')
+              if (!metaName && (col.includes('name') || col.includes('title'))) metaName = val
+              if (!metaAbbrev && (col.includes('abbrev') || col.includes('short'))) metaAbbrev = val
+              if (col.includes('lang')) metaLang = val
+              if (col.includes('copyright')) metaCopyright = val
+            })
+          }
+        }
+      } catch {
+        // Continue with defaults if metadata query fails
+      }
+    }
+
+    // 3. Locate verses table
+    // Priority check for known standard table names
+    let verseTable = tableNames.find((t) => /^(verses|verse|bible|scripture|content|words|verse_list|tbl_verse)$/i.test(t))
+
+    let bookCol = ''
+    let chapCol = ''
+    let verseCol = ''
+    let textCol = ''
+
+    // Helper to test if a table has book, chapter, verse, and text columns
+    const inspectTableColumns = (tName: string): boolean => {
+      try {
+        const colRes = db!.exec(`PRAGMA table_info("${tName}");`)
+        if (colRes.length === 0) return false
+        const cols = colRes[0].values.map((v) => String(v[1]).toLowerCase())
+
+        const bCol = cols.find((c) => /^(book.*|id_book|b_?num.*|b_?id|bk|b|libro.*)$/i.test(c))
+        const cCol = cols.find((c) => /^(chap.*|c_?num.*|c_?id|c|cap.*)$/i.test(c))
+        const vCol = cols.find((c) => /^(verse.*|v_?num.*|v_?id|vers.*|v)$/i.test(c))
+        const tCol = cols.find((c) => /^(verse_text|scripture_text|body_text|text.*|content.*|body.*|words.*|scripture.*|t|texto.*)$/i.test(c))
+
+        if (bCol && cCol && vCol && tCol) {
+          bookCol = bCol
+          chapCol = cCol
+          verseCol = vCol
+          textCol = tCol
+          return true
+        }
+      } catch {
+        return false
+      }
+      return false
+    }
+
+    if (verseTable && inspectTableColumns(verseTable)) {
+      // Confirmed standard table
+    } else {
+      // Search all tables in DB
+      for (const t of tableNames) {
+        if (inspectTableColumns(t)) {
+          verseTable = t
+          break
+        }
+      }
+    }
+
+    if (!verseTable || !bookCol || !chapCol || !verseCol || !textCol) {
+      throw new Error(
+        `No se pudo detectar la tabla de versículos en la base de datos SQLite. Tablas encontradas: ${tableNames.join(', ')}.`
+      )
+    }
+
+    // 4. Query all verses
+    const versesQuery = `SELECT "${bookCol}", "${chapCol}", "${verseCol}", "${textCol}" FROM "${verseTable}" ORDER BY rowid ASC;`
+    const versesRes = db.exec(versesQuery)
+
+    if (versesRes.length === 0 || versesRes[0].values.length === 0) {
+      throw new Error(`La tabla "${verseTable}" no contiene filas de versículos.`)
+    }
+
+    const name = metaName || metaOverrides?.name || 'Biblia SQLite Importada'
+    const abbrev = (metaAbbrev || metaOverrides?.abbrev || name.substring(0, 8)).toUpperCase()
+    const verses: BibleVerse[] = []
+
+    for (const row of versesRes[0].values) {
+      const rawBook = row[0]
+      const rawChap = row[1]
+      const rawVerse = row[2]
+      const rawText = row[3]
+
+      let bookNumber = 1
+      let bookName = 'Génesis'
+
+      if (typeof rawBook === 'number' && rawBook >= 1 && rawBook <= 66) {
+        bookNumber = rawBook
+        const bObj = BIBLE_BOOKS.find((b) => b.number === bookNumber)
+        bookName = bObj ? bObj.name : `Libro ${bookNumber}`
+      } else {
+        const bookObj = resolveBibleBook(String(rawBook || ''))
+        if (bookObj) {
+          bookNumber = bookObj.number
+          bookName = bookObj.name
+        } else {
+          const num = parseInt(String(rawBook), 10)
+          if (!isNaN(num) && num >= 1 && num <= 66) {
+            bookNumber = num
+            const bByNum = BIBLE_BOOKS.find((b) => b.number === num)
+            bookName = bByNum ? bByNum.name : `Libro ${num}`
+          }
+        }
+      }
+
+      const chapter = parseInt(String(rawChap), 10) || 1
+      const verseNum = parseInt(String(rawVerse), 10) || 1
+      const text = cleanXmlEntities(String(rawText || '')).trim()
+
+      if (text) {
+        verses.push({
+          bookNumber,
+          bookName,
+          chapter,
+          verse: verseNum,
+          text,
+          translationAbbrev: abbrev
+        })
+      }
+    }
+
+    if (verses.length === 0) {
+      throw new Error('No se extrajo ningún versículo válido de la base de datos SQLite.')
+    }
+
+    return {
+      name,
+      abbrev,
+      language: metaLang,
+      copyright: metaCopyright,
+      licenseNotice: metaOverrides?.licenseNotice || 'Importado desde base de datos SQLite',
+      isPublicDomain: true,
+      verses
+    }
+  } finally {
+    if (db) {
+      try {
+        db.close()
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 

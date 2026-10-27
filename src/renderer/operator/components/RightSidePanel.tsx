@@ -84,6 +84,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   // YouTube Mirror Sync State & Control
   const [mirrorSync, setMirrorSync] = useState<YouTubeSyncTick | null>(null)
   const ytIframeRef = React.useRef<HTMLIFrameElement | null>(null)
+  const previewVideoRef = React.useRef<HTMLVideoElement | null>(null)
   const lastSyncTimeRef = React.useRef<number>(0)
   const lastPlayStateRef = React.useRef<boolean | null>(null)
 
@@ -93,6 +94,10 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
 
       const iframe = ytIframeRef.current
       if (!iframe || !iframe.contentWindow) return
+
+      // Strict Mute Guarantee: preview NEVER emits audio
+      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*')
+      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [0] }), '*')
 
       // Mirror Play / Pause
       if (lastPlayStateRef.current !== tick.isPlaying) {
@@ -116,7 +121,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
         }
       } else if (!tick.isPlaying) {
         // Paused state scrubbing
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.5) {
+        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.4) {
           lastSyncTimeRef.current = tick.currentTime
           iframe.contentWindow.postMessage(
             JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
@@ -124,8 +129,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
           )
         }
       } else {
-        // Playing state: ONLY seek on major jump / manual scrub (> 2.5s) to avoid buffer stutter
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 2.5) {
+        // Playing state: smooth drift correction if deviation exceeds 1.2s (< 1.5s requirement)
+        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 1.2) {
           lastSyncTimeRef.current = tick.currentTime
           iframe.contentWindow.postMessage(
             JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
@@ -197,7 +202,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   // Active layers state for the selected role
   const roleLayers = state?.activeLayers?.[activeOutputTab] || state?.activeLayers?.main
   const roleBackground = roleLayers?.background || state?.currentTheme?.background
-  const roleContent = roleLayers?.content || currentSlide
+  const liveSlide = state?.currentSlide
+  const roleContent = roleLayers?.content || liveSlide
   const roleMessage = roleLayers?.message
   const currentTheme = state?.currentTheme
 
@@ -206,25 +212,77 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const isFreeze = Boolean(state?.controls?.freeze)
   const showLogo = Boolean(state?.controls?.logo || roleLayers?.overlay?.showLogo)
 
-  const activeMediaUrl = roleContent?.mediaUrl || currentSlide?.mediaUrl
-  const activeMediaType = roleContent?.mediaType || currentSlide?.mediaType
-  const isYouTube =
-    !isCleared &&
-    (Boolean(mirrorSync?.videoId) ||
-      activeMediaType === 'youtube' ||
-      Boolean((roleContent as any)?.youtubeId) ||
-      Boolean((currentSlide as any)?.youtubeId))
+  const activeMediaUrl = roleContent?.mediaUrl || liveSlide?.mediaUrl
+  const activeMediaType = roleContent?.mediaType || liveSlide?.mediaType
 
-  const activeYoutubeId =
-    mirrorSync?.videoId ||
-    (roleContent as any)?.youtubeId ||
-    (currentSlide as any)?.youtubeId ||
-    (isYouTube && activeMediaUrl ? parseYouTubeUrl(activeMediaUrl).videoId : null)
+  const isYouTube =
+    Boolean(mirrorSync?.videoId) ||
+    activeMediaType === 'youtube' ||
+    Boolean((roleContent as any)?.youtubeId) ||
+    Boolean((liveSlide as any)?.youtubeId)
+
+  const activeYoutubeId = isYouTube
+    ? mirrorSync?.videoId ||
+      (roleContent as any)?.youtubeId ||
+      (liveSlide as any)?.youtubeId ||
+      (activeMediaUrl ? parseYouTubeUrl(activeMediaUrl).videoId : null)
+    : null
 
   const isVideo =
-    !isCleared &&
     !isYouTube &&
-    (activeMediaType === 'video' || (Boolean(activeMediaUrl) && /\.(mp4|webm|mkv|mov)$/i.test(activeMediaUrl || '')))
+    (activeMediaType === 'video' ||
+      (Boolean(activeMediaUrl) && /\.(mp4|webm|mkv|mov)$/i.test(activeMediaUrl || '')))
+
+  const isContentHidden = isCleared || showLogo || isBlack
+
+  // Master Clock Video Sync for Preview Monitor (strictly muted)
+  useEffect(() => {
+    const video = previewVideoRef.current
+    const tick = state?.mediaSyncTick
+    if (!video || !tick) return
+    video.muted = true
+
+    if (tick.isPlaying && video.paused) {
+      video.play().catch(() => {})
+    } else if (!tick.isPlaying && !video.paused) {
+      video.pause()
+    }
+
+    const drift = Math.abs(video.currentTime - tick.currentTime)
+    if (drift > 0.2) {
+      video.currentTime = tick.currentTime
+    }
+  }, [state?.mediaSyncTick])
+
+  // When un-hiding preview (toggling off clear/logo or tab change), resync local video immediately
+  useEffect(() => {
+    if (!isContentHidden && isVideo && previewVideoRef.current && state?.mediaSyncTick) {
+      const video = previewVideoRef.current
+      video.currentTime = state.mediaSyncTick.currentTime
+      if (state.mediaSyncTick.isPlaying && video.paused) {
+        video.play().catch(() => {})
+      }
+    }
+  }, [isContentHidden, isVideo, activeOutputTab])
+
+  // Whenever activeOutputTab changes or un-hiding from clear/logo, immediately synchronize YouTube preview with master clock
+  useEffect(() => {
+    if (!isContentHidden && activeOutputTab !== 'stage' && isYouTube && ytIframeRef.current?.contentWindow && mirrorSync) {
+      const iframe = ytIframeRef.current.contentWindow
+      iframe.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*')
+      iframe.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [0] }), '*')
+      iframe.postMessage(
+        JSON.stringify({ event: 'command', func: 'seekTo', args: [mirrorSync.currentTime, true] }),
+        '*'
+      )
+      lastSyncTimeRef.current = mirrorSync.currentTime
+      if (mirrorSync.isPlaying) {
+        iframe.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
+      } else {
+        iframe.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
+      }
+    }
+  }, [activeOutputTab, isYouTube, isContentHidden, mirrorSync?.isPlaying])
 
   const hasBackground = Boolean(roleBackground?.value)
   const hasSlide = Boolean(roleContent?.body || roleContent?.title)
@@ -319,6 +377,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
           <div className="pro-output-tabs-left">
             <button
               type="button"
+              data-tab-role="main"
               className={`pro-out-tab ${activeOutputTab === 'main' ? 'active' : ''}`}
               onClick={() => setActiveOutputTab('main')}
             >
@@ -326,6 +385,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             </button>
             <button
               type="button"
+              data-tab-role="stage"
               className={`pro-out-tab ${activeOutputTab === 'stage' ? 'active' : ''}`}
               onClick={() => setActiveOutputTab('stage')}
             >
@@ -333,6 +393,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             </button>
             <button
               type="button"
+              data-tab-role="lobby"
               className={`pro-out-tab ${activeOutputTab === 'lobby' ? 'active' : ''}`}
               onClick={() => setActiveOutputTab('lobby')}
             >
@@ -356,8 +417,15 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
 
         {/* Live Output Mini Screen with Layer Buttons Strip */}
         <div className="pro-preview-display-wrapper">
-          <div className="pro-preview-screen">
-            {isBlack ? (
+          <div
+            className="pro-preview-screen"
+            data-active-tab={activeOutputTab}
+            data-preview-time={mirrorSync ? mirrorSync.currentTime.toFixed(2) : '0.00'}
+            data-preview-playing={mirrorSync ? String(mirrorSync.isPlaying) : 'false'}
+            data-preview-muted="true"
+          >
+            {/* Salida a negro overlay */}
+            {isBlack && (
               <div
                 style={{
                   position: 'absolute',
@@ -369,235 +437,211 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                   color: '#ef4444',
                   fontSize: 10,
                   fontWeight: 800,
-                  letterSpacing: 1
+                  letterSpacing: 1,
+                  zIndex: 50
                 }}
               >
                 [SALIDA A NEGRO]
               </div>
-            ) : activeOutputTab === 'stage' ? (
-              /* Genuine Stage Monitor View */
+            )}
+
+            {/* Genuine Stage Monitor View (Always mounted, hidden when not in stage mode or when black) */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: '#000000',
+                display: activeOutputTab === 'stage' && !isBlack ? 'flex' : 'none',
+                flexDirection: 'column',
+                padding: '6px 8px',
+                color: '#ffffff',
+                boxSizing: 'border-box',
+                zIndex: 20
+              }}
+            >
+              {/* Stage Header: Clock & Timer */}
               <div
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  backgroundColor: '#000000',
                   display: 'flex',
-                  flexDirection: 'column',
-                  padding: '6px 8px',
-                  color: '#ffffff',
-                  boxSizing: 'border-box'
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px solid #334155',
+                  paddingBottom: 4,
+                  marginBottom: 4,
+                  fontSize: 9,
+                  fontWeight: 700
                 }}
               >
-                {/* Stage Header: Clock & Timer */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: '1px solid #334155',
-                    paddingBottom: 4,
-                    marginBottom: 4,
-                    fontSize: 9,
-                    fontWeight: 700
-                  }}
-                >
-                  <span style={{ color: '#94a3b8' }}>{clockTime}</span>
-                  {activeRunningTimer && (
-                    <span
-                      style={{
-                        color: activeRunningTimer.isOverrun ? '#ef4444' : '#10b981',
-                        backgroundColor: 'rgba(0,0,0,0.6)',
-                        padding: '1px 4px',
-                        borderRadius: 3
-                      }}
-                    >
-                      ⏱ {formatTimerDigits(activeRunningTimer.currentSeconds, activeRunningTimer.isOverrun)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Stage Body: Split Current / Next Slide */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
-                  <div
+                <span style={{ color: '#94a3b8' }}>{clockTime}</span>
+                {activeRunningTimer && (
+                  <span
                     style={{
-                      flex: 1,
-                      backgroundColor: 'var(--bg-base, #111215)',
-                      borderRadius: 3,
-                      padding: '4px 6px',
-                      overflow: 'hidden'
+                      color: activeRunningTimer.isOverrun ? '#ef4444' : '#10b981',
+                      backgroundColor: 'rgba(0,0,0,0.6)',
+                      padding: '1px 4px',
+                      borderRadius: 3
                     }}
                   >
-                    <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, marginBottom: 2 }}>ACTUAL</div>
-                    <div style={{ fontSize: 10, color: '#fef08a', lineHeight: 1.2 }}>
-                      {isCleared ? '' : roleContent?.body || '(Sin diapositiva)'}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      flex: 1,
-                      backgroundColor: 'var(--bg-card, #18191E)',
-                      borderRadius: 3,
-                      padding: '4px 6px',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, marginBottom: 2 }}>SIGUIENTE</div>
-                    <div style={{ fontSize: 9, color: '#cbd5e1', lineHeight: 1.2 }}>
-                      {roleContent?.nextSlideBody || '(Fin de presentación)'}
-                    </div>
-                  </div>
-                </div>
-
-                {roleMessage?.visible && (
-                  <div
-                    style={{
-                      backgroundColor: '#f59e0b',
-                      color: '#000000',
-                      fontSize: 8,
-                      fontWeight: 800,
-                      padding: '2px 4px',
-                      borderRadius: 2,
-                      marginTop: 3,
-                      textAlign: 'center'
-                    }}
-                  >
-                    ⚠️ {roleMessage.text}
-                  </div>
+                    ⏱ {formatTimerDigits(activeRunningTimer.currentSeconds, activeRunningTimer.isOverrun)}
+                  </span>
                 )}
               </div>
-            ) : (
-              /* Genuine Audience Screen Replica */
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  backgroundColor: roleBackground?.type === 'color' ? roleBackground.value : '#000000',
-                  backgroundImage: roleBackground?.type === 'gradient' ? roleBackground.value : undefined,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '8px 12px',
-                  boxSizing: 'border-box',
-                  overflow: 'hidden'
-                }}
-              >
-                {/* Background Image / Video thumbnail */}
-                {roleBackground?.type === 'image' && roleBackground.value && (
-                  <img
-                    src={roleBackground.value}
-                    alt=""
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
 
-                {/* 1. YouTube Live Video Player Layer */}
-                {isYouTube && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      backgroundColor: '#000000',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {activeYoutubeId ? (
-                      <iframe
-                        ref={ytIframeRef}
-                        key={activeYoutubeId}
-                        src={`https://www.youtube-nocookie.com/embed/${activeYoutubeId}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`}
-                        title="YouTube Live Preview"
-                        allow="autoplay; encrypted-media"
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          width: '100%',
-                          height: '100%',
-                          border: 'none',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ef4444',
-                          fontSize: 10,
-                          fontWeight: 700
-                        }}
-                      >
-                        ▶ YouTube En Vivo
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 6,
-                        left: 6,
-                        backgroundColor: mirrorSync && !mirrorSync.isPlaying ? 'rgba(100, 116, 139, 0.95)' : 'rgba(220, 38, 38, 0.95)',
-                        color: '#ffffff',
-                        fontSize: 9,
-                        fontWeight: 800,
-                        padding: '2px 6px',
-                        borderRadius: 3,
-                        letterSpacing: 0.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        zIndex: 10,
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.5)'
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          backgroundColor: mirrorSync && !mirrorSync.isPlaying ? '#cbd5e1' : '#ffffff',
-                          display: 'inline-block'
-                        }}
-                      />
-                      {mirrorSync && !mirrorSync.isPlaying ? 'YOUTUBE EN PAUSA' : 'YOUTUBE EN VIVO'}
-                    </div>
+              {/* Stage Body: Split Current / Next Slide */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    flex: 1,
+                    backgroundColor: 'var(--bg-base, #111215)',
+                    borderRadius: 3,
+                    padding: '4px 6px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, marginBottom: 2 }}>ACTUAL</div>
+                  <div style={{ fontSize: 10, color: '#fef08a', lineHeight: 1.2 }}>
+                    {isCleared ? '' : roleContent?.body || '(Sin diapositiva)'}
                   </div>
-                )}
+                </div>
 
-                {/* 2. Regular Video Player Layer */}
-                {isVideo && activeMediaUrl && (
-                  <div
+                <div
+                  style={{
+                    flex: 1,
+                    backgroundColor: 'var(--bg-card, #18191E)',
+                    borderRadius: 3,
+                    padding: '4px 6px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, marginBottom: 2 }}>SIGUIENTE</div>
+                  <div style={{ fontSize: 9, color: '#cbd5e1', lineHeight: 1.2 }}>
+                    {roleContent?.nextSlideBody || '(Fin de presentación)'}
+                  </div>
+                </div>
+              </div>
+
+              {roleMessage?.visible && (
+                <div
+                  style={{
+                    backgroundColor: '#f59e0b',
+                    color: '#000000',
+                    fontSize: 8,
+                    fontWeight: 800,
+                    padding: '2px 4px',
+                    borderRadius: 2,
+                    marginTop: 3,
+                    textAlign: 'center'
+                  }}
+                >
+                  ⚠️ {roleMessage.text}
+                </div>
+              )}
+            </div>
+
+            {/* Genuine Audience Screen Replica (Always mounted, hidden when stage is selected or when black) */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: roleBackground?.type === 'color' ? roleBackground.value : '#000000',
+                backgroundImage: roleBackground?.type === 'gradient' ? roleBackground.value : undefined,
+                display: activeOutputTab !== 'stage' && !isBlack ? 'flex' : 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '8px 12px',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                zIndex: 10
+              }}
+            >
+              {/* Background Image / Video thumbnail */}
+              {roleBackground?.type === 'image' && roleBackground.value && (
+                <img
+                  src={roleBackground.value}
+                  alt=""
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              )}
+
+              {/* 1. YouTube Live Video Player Layer: Persistently mounted, toggled via display */}
+              {isYouTube && activeYoutubeId && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundColor: '#000000',
+                    overflow: 'hidden',
+                    display: !isContentHidden && activeOutputTab !== 'stage' ? 'block' : 'none'
+                  }}
+                >
+                  <iframe
+                    ref={ytIframeRef}
+                    key={activeYoutubeId}
+                    data-testid="youtube-preview-iframe"
+                    src={`https://www.youtube.com/embed/${activeYoutubeId}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
+                    title="YouTube Live Preview"
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
                     style={{
                       position: 'absolute',
                       inset: 0,
-                      backgroundColor: '#000000',
-                      overflow: 'hidden'
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      pointerEvents: 'none'
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 6,
+                      left: 6,
+                      backgroundColor: mirrorSync && !mirrorSync.isPlaying ? 'rgba(100, 116, 139, 0.95)' : 'rgba(220, 38, 38, 0.95)',
+                      color: '#ffffff',
+                      fontSize: 9,
+                      fontWeight: 800,
+                      padding: '2px 6px',
+                      borderRadius: 3,
+                      letterSpacing: 0.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      zIndex: 10,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.5)'
                     }}
                   >
-                    <video
-                      src={toMediaUrl(activeMediaUrl)}
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
+                    <span
                       style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: '100%',
-                        height: '100%',
-                        objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor: mirrorSync && !mirrorSync.isPlaying ? '#cbd5e1' : '#ffffff',
+                        display: 'inline-block'
                       }}
                     />
+                    {mirrorSync && !mirrorSync.isPlaying ? 'YOUTUBE EN PAUSA' : 'YOUTUBE EN VIVO'}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* 3. Static Media / Slide Thumbnail Layer */}
-                {!isCleared && !isYouTube && !isVideo && activeMediaUrl && (
-                  <img
+              {/* 2. Regular Video Player Layer: Persistently mounted with previewVideoRef */}
+              {isVideo && activeMediaUrl && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundColor: '#000000',
+                    overflow: 'hidden',
+                    display: !isContentHidden && activeOutputTab !== 'stage' ? 'block' : 'none'
+                  }}
+                >
+                  <video
+                    ref={previewVideoRef}
                     src={toMediaUrl(activeMediaUrl)}
-                    alt=""
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
                     style={{
                       position: 'absolute',
                       inset: 0,
@@ -605,101 +649,142 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                       height: '100%',
                       objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
                     }}
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none'
-                    }}
                   />
-                )}
+                </div>
+              )}
 
-                {/* 4. Slide Text Content Layer (Omitted for YouTube so metadata text does not obscure the video) */}
-                {!isCleared && !isYouTube && (roleContent?.body || currentSlide?.body) && (
+              {/* 3. Static Media / Slide Thumbnail Layer */}
+              {!isContentHidden && !isYouTube && !isVideo && activeMediaUrl && (
+                <img
+                  src={toMediaUrl(activeMediaUrl)}
+                  alt=""
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
+                  }}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none'
+                  }}
+                />
+              )}
+
+              {/* 4. Slide Text Content Layer */}
+              {!isContentHidden && !isYouTube && (roleContent?.body || liveSlide?.body) && (
+                <div
+                  style={{
+                    position: 'relative',
+                    zIndex: 2,
+                    fontFamily: currentTheme?.fontFamily || 'sans-serif',
+                    color: currentTheme?.color || '#ffffff',
+                    textAlign: (currentTheme?.alignment || 'center') as any,
+                    textShadow: currentTheme ? '0 1px 3px rgba(0,0,0,0.85)' : undefined,
+                    fontSize: 10,
+                    lineHeight: 1.3,
+                    maxHeight: '100%',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {(roleContent?.title || liveSlide?.title) && (
+                    <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 2, opacity: 0.85 }}>
+                      {roleContent?.title || liveSlide?.title}
+                    </div>
+                  )}
+                  <div>{roleContent?.body || liveSlide?.body}</div>
+                </div>
+              )}
+
+              {/* Full Logo Screen Overlay (matching output display) */}
+              {showLogo && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundColor: '#0a0a0c',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    zIndex: 30
+                  }}
+                >
                   <div
                     style={{
-                      position: 'relative',
-                      zIndex: 2,
-                      fontFamily: currentTheme?.fontFamily || 'sans-serif',
-                      color: currentTheme?.color || '#ffffff',
-                      textAlign: (currentTheme?.alignment || 'center') as any,
-                      textShadow: currentTheme ? '0 1px 3px rgba(0,0,0,0.85)' : undefined,
-                      fontSize: 10,
-                      lineHeight: 1.3,
-                      maxHeight: '100%',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {(roleContent?.title || currentSlide?.title) && (
-                      <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 2, opacity: 0.85 }}>
-                        {roleContent?.title || currentSlide?.title}
-                      </div>
-                    )}
-                    <div>{roleContent?.body || currentSlide?.body}</div>
-                  </div>
-                )}
-
-                {/* Logo Watermark Overlay */}
-                {showLogo && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 4,
-                      right: 6,
-                      fontSize: 8,
-                      fontWeight: 800,
-                      color: 'rgba(255,255,255,0.45)',
-                      letterSpacing: 0.5,
-                      zIndex: 3
-                    }}
-                  >
-                    CHURCHPRESENTER
-                  </div>
-                )}
-
-                {/* Message Overlay Banner */}
-                {roleMessage?.visible && roleMessage.text && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      backgroundColor: 'rgba(245, 158, 11, 0.95)',
-                      color: '#000000',
-                      fontSize: 8,
-                      fontWeight: 800,
-                      padding: '2px 6px',
-                      textAlign: 'center',
-                      zIndex: 4
-                    }}
-                  >
-                    ⚠️ {roleMessage.text}
-                  </div>
-                )}
-
-                {/* Freeze Badge */}
-                {isFreeze && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      left: 4,
-                      backgroundColor: 'rgba(56, 189, 248, 0.9)',
-                      color: '#000000',
-                      fontSize: 8,
-                      fontWeight: 800,
-                      padding: '1px 4px',
-                      borderRadius: 2,
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      border: '2px solid rgba(255,255,255,0.7)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2,
-                      zIndex: 4
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      fontWeight: 900,
+                      fontSize: 14
                     }}
                   >
-                    <Snowflake size={9} />
-                    <span>CONGELADO</span>
+                    ✝
                   </div>
-                )}
-              </div>
-            )}
+                  <div
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 800,
+                      color: 'rgba(255,255,255,0.75)',
+                      letterSpacing: 1.2
+                    }}
+                  >
+                    CHURCH PRESENTER
+                  </div>
+                </div>
+              )}
+
+              {/* Message Overlay Banner */}
+              {roleMessage?.visible && roleMessage.text && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'rgba(245, 158, 11, 0.95)',
+                    color: '#000000',
+                    fontSize: 8,
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    textAlign: 'center',
+                    zIndex: 4
+                  }}
+                >
+                  ⚠️ {roleMessage.text}
+                </div>
+              )}
+
+              {/* Freeze Badge */}
+              {isFreeze && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    left: 4,
+                    backgroundColor: 'rgba(56, 189, 248, 0.9)',
+                    color: '#000000',
+                    fontSize: 8,
+                    fontWeight: 800,
+                    padding: '1px 4px',
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    zIndex: 4
+                  }}
+                >
+                  <Snowflake size={9} />
+                  <span>CONGELADO</span>
+                </div>
+              )}
+            </div>
 
             {/* Real Stereo Audio VU Meter (No CSS Pulse Animations) */}
             <div

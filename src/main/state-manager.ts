@@ -10,13 +10,18 @@ import {
   DEFAULT_ROLE_BIBLE_CONFIGS,
   IndependentAudioState,
   MediaSyncTick,
-  RoleBibleConfigsMap
+  RoleBibleConfigsMap,
+  ThemeContentType,
+  OutputRole,
+  PresentationMessage,
+  StageLayoutConfig
 } from '../shared/types'
 import {
   createInitialPresenterState,
   toggleControlInState
 } from '../shared/state-utils'
 import { parseYouTubeUrl } from '../shared/youtube-utils'
+import { themeService, resolveEffectiveTheme } from './theme/theme-service'
 import { logger } from './logger'
 
 export class StateManager extends EventEmitter {
@@ -73,20 +78,49 @@ export class StateManager extends EventEmitter {
     nextSlide?: SlideItem
   ): PresenterState {
     const newActiveLayers: Record<string, OutputLayersState> = { ...this.state.activeLayers }
-    const background = slide.background || this.state.currentTheme.background
+
+    let contentType: ThemeContentType | undefined
+    const sItem = slide as SlideItem
+    if (sItem.contentType) {
+      contentType = sItem.contentType
+    } else if (sItem.sourceType === 'song') {
+      contentType = 'songs'
+    } else if (sItem.sourceType === 'scripture') {
+      contentType = 'bible'
+    } else if (sItem.sourceType === 'presentation') {
+      contentType = 'announcements'
+    }
+
+    const allThemes = themeService.getThemes()
+    const typeDefaults = themeService.getTypeDefaultThemes()
+    const resolvedBaseTheme = resolveEffectiveTheme({
+      elementThemeId: sItem.themeId || sItem.theme?.id,
+      contentType,
+      typeDefaults,
+      themes: allThemes
+    })
+
+    const background = slide.background || resolvedBaseTheme.background || this.state.currentTheme.background
 
     for (const role of targetRoles) {
+      const roleTheme = resolveEffectiveTheme({
+        elementThemeId: sItem.themeId || sItem.theme?.id,
+        contentType,
+        typeDefaults,
+        themes: allThemes,
+        role: role as OutputRole
+      })
+
       const prev = newActiveLayers[role] || {
         background,
         content: null,
         overlay: { showLogo: false },
         message: null,
-        theme: this.state.currentTheme
+        theme: roleTheme
       }
 
       // Bible content tailored by each role's configured Bible settings
       let roleBody = slide.body
-      const sItem = slide as SlideItem
       if (sItem.scripturePayload && this.state.roleBibleConfigs?.[role]) {
         const rConfig = this.state.roleBibleConfigs[role]
         if (rConfig.mode === 'single') {
@@ -144,9 +178,10 @@ export class StateManager extends EventEmitter {
             pdfPageCount,
             fitMode,
             speakerNotes,
-            warnings
+            warnings,
+            scripturePayload: (slide as SlideItem).scripturePayload
           },
-          theme: this.state.currentTheme
+          theme: roleTheme
         }
       } else {
         newActiveLayers[role] = {
@@ -165,9 +200,10 @@ export class StateManager extends EventEmitter {
             pdfPageCount,
             fitMode,
             speakerNotes,
-            warnings
+            warnings,
+            scripturePayload: (slide as SlideItem).scripturePayload
           },
-          theme: this.state.currentTheme
+          theme: roleTheme
         }
       }
     }
@@ -191,8 +227,11 @@ export class StateManager extends EventEmitter {
         ? parseYouTubeUrl(currentSlideMediaUrl).videoId || undefined
         : undefined)
 
+    const isVid = currentSlideMediaType === 'video'
     this.state = {
       ...this.state,
+      currentTheme: resolvedBaseTheme,
+      mediaSyncTick: isVid ? this.state.mediaSyncTick : null,
       currentSlide: {
         id: slide.id,
         title: slide.title,
@@ -295,6 +334,26 @@ export class StateManager extends EventEmitter {
       updatedAt: Date.now()
     }
     logger.info(`Stress test mode set to: ${enabled}`)
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setActiveMessage(message: PresentationMessage | null): PresenterState {
+    this.state = {
+      ...this.state,
+      activeMessage: message,
+      updatedAt: Date.now()
+    }
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setActiveStageLayout(layout: StageLayoutConfig | null): PresenterState {
+    this.state = {
+      ...this.state,
+      activeStageLayout: layout,
+      updatedAt: Date.now()
+    }
     this.emit('state-updated', this.state)
     return this.state
   }

@@ -23,6 +23,7 @@ import { stateManager } from './state-manager'
 import { windowManager } from './window-manager'
 import { shortcutsManager } from './shortcuts-manager'
 import { libraryService } from './library-service'
+import { themeService } from './theme/theme-service'
 import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
 import { masterMediaSyncService } from './media/master-media-sync-service'
@@ -33,6 +34,17 @@ import { fileWatcherService } from './media/file-watcher-service'
 import { youtubeService } from './youtube/youtube-service'
 import { youTubeBrowserManager } from './youtube/youtube-browser-manager'
 import { youtubeOutputManager } from './youtube/youtube-output-manager'
+import { remoteServer } from './remote/remote-server'
+import { remoteAuthService } from './remote/remote-auth-service'
+import { stageLayoutService } from './stage/stage-layout-service'
+import { messageService } from './messages/message-service'
+import { sessionRecoveryService } from './recovery/session-recovery-service'
+import { outputHealthService } from './health/output-health-service'
+import { systemMonitorService } from './health/system-monitor-service'
+import { checklistService } from './checklist/checklist-service'
+import { diagnosticsService } from './diagnostics/diagnostics-service'
+import { rehearsalService } from './rehearsal/rehearsal-service'
+import { emergencyService } from './emergency/emergency-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -92,9 +104,39 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.STATE_SEND_SLIDE,
     (_event, slide: TestSlide | SlideItem, targetRoles?: string[], nextSlide?: SlideItem) => {
-      if ((slide as any).mediaType !== 'youtube') {
+      const isYt = (slide as any).mediaType === 'youtube' || Boolean((slide as any).youtubeId)
+      const isVid = (slide as any).mediaType === 'video' || (slide as any).sourceType === 'video'
+
+      if (!isYt) {
+        youtubeOutputManager.stop()
         youtubeOutputManager.cleanupViews()
+        windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, {
+          videoId: '',
+          isPlaying: false,
+          currentTime: 0,
+          duration: 0,
+          isAd: false,
+          timestamp: Date.now()
+        })
       }
+
+      if (!isVid) {
+        masterMediaSyncService.stopVideo()
+        stateManager.updateMediaSyncTick(null)
+        windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, {
+          mediaId: '',
+          mediaType: 'video',
+          filePath: '',
+          isPlaying: false,
+          currentTime: 0,
+          duration: 0,
+          loop: false,
+          volume: 1.0,
+          audioOutputRole: 'main',
+          timestamp: Date.now()
+        })
+      }
+
       return stateManager.sendSlide(slide, targetRoles, nextSlide)
     }
   )
@@ -153,13 +195,13 @@ export function registerIpcHandlers(): void {
     return libraryService.deletePresentation(id)
   })
 
-  // Phase 3: Themes
+  // Phase 3 & Extended Theme System
   ipcMain.handle(IPC_CHANNELS.THEMES_GET, () => {
-    return libraryService.getThemes()
+    return themeService.getThemes()
   })
 
   ipcMain.handle(IPC_CHANNELS.THEMES_SAVE, (_event, theme: ThemeConfig) => {
-    const saved = libraryService.saveTheme(theme)
+    const saved = themeService.saveTheme(theme)
     if (saved.isDefault) {
       stateManager.setTheme(saved)
     }
@@ -167,11 +209,74 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.THEMES_SET_DEFAULT, (_event, id: string) => {
-    const success = libraryService.setDefaultTheme(id)
-    const themes = libraryService.getThemes()
+    const success = themeService.setDefaultTheme(id)
+    const themes = themeService.getThemes()
     const found = themes.find((t) => t.id === id)
     if (found) {
       stateManager.setTheme(found)
+    }
+    return success
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_DUPLICATE, (_event, id: string, newName?: string) => {
+    return themeService.duplicateTheme(id, newName)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_DELETE, (_event, id: string, reassignToThemeId?: string) => {
+    return themeService.deleteTheme(id, reassignToThemeId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_GET_TYPE_DEFAULTS, () => {
+    return themeService.getTypeDefaultThemes()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_SET_TYPE_DEFAULT, (_event, contentType: any, themeId: string) => {
+    return themeService.setTypeDefaultTheme(contentType, themeId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_APPLY_SCOPE, (_event, themeId: string, scope: any, playlistId?: string) => {
+    return themeService.applyThemeToScope(themeId, scope, playlistId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_EXPORT, (_event, options: any) => {
+    return themeService.exportThemePackage(options)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_IMPORT, (_event, filePath?: string) => {
+    return themeService.importThemePackage(filePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.THEMES_UPLOAD_BG, (_event, filePath?: string) => {
+    return themeService.uploadBackground(filePath)
+  })
+
+  // Custom Fonts
+  ipcMain.handle(IPC_CHANNELS.FONTS_GET, () => {
+    return themeService.getCustomFonts()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FONTS_IMPORT, (_event, filePath?: string) => {
+    const font = themeService.importCustomFont(filePath)
+    if (font) {
+      const allFonts = themeService.getCustomFonts()
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.FONTS_CHANGED, allFonts)
+        }
+      })
+    }
+    return font
+  })
+
+  ipcMain.handle(IPC_CHANNELS.FONTS_DELETE, (_event, id: string) => {
+    const success = themeService.deleteCustomFont(id)
+    if (success) {
+      const allFonts = themeService.getCustomFonts()
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.FONTS_CHANGED, allFonts)
+        }
+      })
     }
     return success
   })
@@ -242,13 +347,24 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.BIBLE_IMPORT_TRANSLATION,
-    (_event, format: 'zefania' | 'osis' | 'usfm' | 'json', rawContent: string, meta: any) => {
+    (_event, format: 'zefania' | 'osis' | 'usfm' | 'json' | 'sqlite', rawContent: string, meta: any) => {
       return bibleService.importTranslation(format, rawContent, meta)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.BIBLE_IMPORT_FILE,
+    (_event, filePath: string, meta: any) => {
+      return bibleService.importTranslationFromFile(filePath, meta)
     }
   )
 
   ipcMain.handle(IPC_CHANNELS.BIBLE_DELETE_TRANSLATION, (_event, id: string) => {
     return bibleService.deleteTranslation(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BIBLE_SET_DEFAULT, (_event, abbrev: string) => {
+    return bibleService.setDefaultTranslation(abbrev)
   })
 
   ipcMain.handle(IPC_CHANNELS.BIBLE_PARSE_REFERENCE, (_event, input: string) => {
@@ -491,8 +607,20 @@ export function registerIpcHandlers(): void {
     return !!win
   })
 
-  ipcMain.handle(IPC_CHANNELS.OUTPUT_CLOSE, async (_event, role: string) => {
-    windowManager.closeOutputWindow(role)
+  ipcMain.handle(IPC_CHANNELS.OUTPUT_CLOSE, async (event, role: string) => {
+    const senderWin = BrowserWindow.fromWebContents(event.sender)
+    if (senderWin && !senderWin.isDestroyed()) {
+      for (const [r, w] of windowManager.getOutputWindows().entries()) {
+        if (w === senderWin) {
+          windowManager.closeOutputWindow(r)
+          return true
+        }
+      }
+      senderWin.close()
+    }
+    if (role) {
+      windowManager.closeOutputWindow(role)
+    }
     return true
   })
 
@@ -659,6 +787,10 @@ export function registerIpcHandlers(): void {
     windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_AD_STATUS, isAd)
   })
 
+  youtubeOutputManager.setSyncCallback((tick) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
+  })
+
   youTubeBrowserManager.setSyncCallback((tick) => {
     youtubeOutputManager.syncToTick(tick)
     windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
@@ -741,10 +873,13 @@ export function registerIpcHandlers(): void {
     IPC_CHANNELS.YOUTUBE_CONTROL,
     (
       _event,
-      action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute',
+      action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute' | 'status',
       payload?: any
     ) => {
       switch (action) {
+        case 'status':
+          // Status query only; does not modify playback
+          break
         case 'prepare':
           youtubeOutputManager.prepareVideo(
             payload as YouTubeItemConfig,
@@ -805,6 +940,161 @@ export function registerIpcHandlers(): void {
     return true
   })
 
+  // --- PHASE 6: REMOTE CONTROL HANDLERS ---
+  ipcMain.handle(IPC_CHANNELS.REMOTE_GET_CONFIG, async () => {
+    return remoteServer.loadConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REMOTE_SAVE_CONFIG, async (_event, config) => {
+    return remoteServer.saveConfig(config)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REMOTE_GET_STATUS, async () => {
+    return remoteServer.getStatus()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REMOTE_REGENERATE_PIN, async () => {
+    const newPin = remoteAuthService.regeneratePin()
+    await remoteServer.saveConfig({ pin: newPin })
+    return newPin
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REMOTE_KICK_CLIENT, async (_event, clientId: string) => {
+    return remoteServer.kickClient(clientId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REMOTE_GET_NETWORK_INTERFACES, async () => {
+    return remoteServer.getNetworkInterfaces()
+  })
+
+  // --- PHASE 6: STAGE LAYOUTS HANDLERS ---
+  ipcMain.handle(IPC_CHANNELS.STAGE_GET_LAYOUTS, async () => {
+    return stageLayoutService.getStageLayouts()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STAGE_SAVE_LAYOUT, async (_event, layout) => {
+    const saved = stageLayoutService.saveStageLayout(layout)
+    stateManager.setActiveStageLayout(stageLayoutService.getAssignedStageLayout())
+    return saved
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STAGE_DELETE_LAYOUT, async (_event, layoutId: string) => {
+    return stageLayoutService.deleteStageLayout(layoutId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STAGE_GET_ASSIGNMENT, async (_event, targetKey?: string) => {
+    return stageLayoutService.getAssignedStageLayout(targetKey)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.STAGE_SET_ASSIGNMENT, async (_event, layoutId: string, targetKey?: string) => {
+    const ok = stageLayoutService.setAssignedStageLayout(layoutId, targetKey)
+    if (ok) {
+      stateManager.setActiveStageLayout(stageLayoutService.getAssignedStageLayout())
+    }
+    return ok
+  })
+
+  // --- PHASE 6: MESSAGES HANDLERS ---
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_GET_ACTIVE, async () => {
+    return messageService.getActiveMessage()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_SEND, async (_event, msg) => {
+    return messageService.sendMessage(msg)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_CLEAR, async () => {
+    return messageService.clearMessage()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_GET_PRESETS, async () => {
+    return messageService.getMessagePresets()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_SAVE_PRESET, async (_event, text: string) => {
+    return messageService.saveMessagePreset(text)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.MESSAGES_DELETE_PRESET, async (_event, text: string) => {
+    return messageService.deleteMessagePreset(text)
+  })
+
+  // --- PHASE 7: STABILITY, RECOVERY, HEALTH, CHECKLIST, DIAGNOSTICS & REHEARSAL ---
+  ipcMain.handle(IPC_CHANNELS.RECOVERY_CHECK, async () => {
+    return sessionRecoveryService.checkRecovery()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.RECOVERY_DISMISS, async () => {
+    return sessionRecoveryService.dismissRecovery()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.RECOVERY_GET_SNAPSHOT, async () => {
+    return sessionRecoveryService.getPendingSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OUTPUT_HEALTH_GET, async () => {
+    return outputHealthService.getStatuses()
+  })
+
+  ipcMain.on(IPC_CHANNELS.OUTPUT_HEALTH_HEARTBEAT, (_event, heartbeat) => {
+    if (heartbeat && heartbeat.role) {
+      outputHealthService.recordHeartbeat(
+        heartbeat.role,
+        heartbeat.fps || 60,
+        heartbeat.timestamp || Date.now(),
+        heartbeat.lastError
+      )
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_METRICS_GET, async () => {
+    return systemMonitorService.getMetrics()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHECKLIST_RUN, async (_event, plan?: ServicePlan) => {
+    return checklistService.runChecklist(plan)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHECKLIST_FIX_ITEM, async (_event, itemId: string, actionType: string) => {
+    return checklistService.fixItem(itemId, actionType)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DIAGNOSTICS_GET_LOGS, async (_event, options) => {
+    return diagnosticsService.getLogs(options)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DIAGNOSTICS_EXPORT_ZIP, async () => {
+    return diagnosticsService.exportDiagnosticsZip()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REHEARSAL_SET_MODE, async (_event, enabled: boolean) => {
+    return rehearsalService.setRehearsalMode(enabled)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REHEARSAL_GET_STATUS, async () => {
+    return rehearsalService.getStatus()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REHEARSAL_GET_SUMMARY, async () => {
+    return rehearsalService.getSummary()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EMERGENCY_ACTIVATE, async () => {
+    return emergencyService.activateEmergency()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EMERGENCY_DEACTIVATE, async () => {
+    return emergencyService.deactivateEmergency()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.EMERGENCY_GET_STATUS, async () => {
+    return emergencyService.isEmergency()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SAFE_MODE_GET_STATUS, async () => {
+    return emergencyService.isSafeModeEnabled()
+  })
+
   // Hook DisplayManager events
   displayManager.on('displays-changed', (displays) => {
     logger.info(`Notifying windows of displays-changed (${displays.length} displays)`)
@@ -814,6 +1104,22 @@ export function registerIpcHandlers(): void {
 
   // Hook StateManager updates
   stateManager.on('state-updated', (state) => {
+    sessionRecoveryService.updateSessionState({ presenterState: state })
     windowManager.broadcastToAll(IPC_CHANNELS.STATE_UPDATED, state)
+  })
+
+  // Hook OutputHealthService events
+  outputHealthService.on('health-changed', (statuses) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.OUTPUT_HEALTH_CHANGED, statuses)
+  })
+
+  // Hook SystemMonitorService events
+  systemMonitorService.on('metrics-tick', (metrics) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.SYSTEM_METRICS_TICK, metrics)
+  })
+
+  // Hook RehearsalService events
+  rehearsalService.on('mode-changed', (active) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.REHEARSAL_MODE_CHANGED, active)
   })
 }

@@ -16,6 +16,11 @@ export class YouTubeOutputManager {
   private syncInterval: NodeJS.Timeout | null = null
   private onAdStatusCallback: ((isAd: boolean) => void) | null = null
   private onEndActionCallback: ((action: 'freeze' | 'background' | 'next') => void) | null = null
+  private onSyncCallback: ((tick: YouTubeSyncTick) => void) | null = null
+
+  public setSyncCallback(cb: (tick: YouTubeSyncTick) => void): void {
+    this.onSyncCallback = cb
+  }
 
   public setAdStatusCallback(cb: (isAd: boolean) => void): void {
     this.onAdStatusCallback = cb
@@ -226,6 +231,7 @@ export class YouTubeOutputManager {
   }
 
   public seek(seconds: number): void {
+    if (typeof seconds !== 'number' || isNaN(seconds)) return
     this.currentTime = seconds
     for (const view of this.outputViews.values()) {
       view.webContents.executeJavaScript(`
@@ -330,6 +336,18 @@ export class YouTubeOutputManager {
 
           if (this.onAdStatusCallback) {
             this.onAdStatusCallback(stats.isAd)
+          }
+
+          if (this.onSyncCallback && this.activeConfig) {
+            this.onSyncCallback({
+              videoId: this.activeConfig.youtubeId,
+              url: this.activeConfig.url,
+              currentTime: stats.currentTime,
+              duration: this.duration,
+              isPlaying: this.isPlaying,
+              isBrowserSource: false,
+              timestamp: Date.now()
+            })
           }
 
           // Check if video reached outPoint or ended
