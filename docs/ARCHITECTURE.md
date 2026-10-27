@@ -568,7 +568,80 @@ graph TD
 
 ---
 
-## 15. Arquitectura de Automatización: Macros, Disparadores, Props, Bucle y MIDI (Fase 8)
+## 16. Arquitectura de Transmisión, Grabación tipo OBS y Mezclador de Audio (Fase 9)
+
+```mermaid
+graph TD
+    subgraph CaptureInputs ["Fuentes de Entrada y Captura (Etapa B)"]
+        CAM["Cámaras / Capturadoras USB/HDMI\n(navigator.mediaDevices)"]
+        SCREEN["Captura de Pantalla / Ventana\n(desktopCapturer.getSources)"]
+        PRES_IN["Salida de Presentación Interna\n(Programa / Diapositivas / Letras)"]
+        MEDIA_IN["Archivos de Video, Audio e Imágenes"]
+        AUDIO_MIC["Micrófonos y Tarjetas de Audio"]
+    end
+
+    subgraph StudioEngine ["Estudio de Transmisión (Etapa C)"]
+        SCENE_MGR["Gestor de Escenas Multicapa\n(4 Escenas de Fábrica + Usuario)"]
+        PREV_MON["Monitor de Previo (16:9)"]
+        PROG_MON["Monitor de Programa (16:9)"]
+        TRANS_CTRL["Control de Transición (Corte / Fundido)"]
+        AUDIO_MIXER["Mezclador Digital Web Audio API\n(AnalyserNode, Lip-Sync Delay & Limiter)"]
+    end
+
+    subgraph ObsBridgeLayer ["Puente OBS Studio (Etapa A)"]
+        HTTP_SRV["RemoteServer (/outputs/*?transparent=true)"]
+        OBS_WS["OBS-WebSocket Client v5\n(RFC Protocol, SHA-256 Auth & SafeStorage)"]
+        OBS_STUDIO["OBS Studio Externo (Browser Sources)"]
+    end
+
+    subgraph EncodingAndOutput ["Codificación y Salida (Etapa D)"]
+        FFMPEG_ENG["BroadcastEngine (Proceso FFmpeg dedicado)"]
+        NVENC["Hardware Encoder: NVIDIA RTX (h264_nvenc p4)"]
+        CPU_FALLBACK["Software CPU Fallback (libx264 veryfast)"]
+        AAC_AUDIO["Audio Estéreo AAC (aac 192k)"]
+        RTMP_OUT["Servidor RTMP / RTMPS (YouTube, Facebook, Twitch)"]
+        LOCAL_REC["Grabación Simultánea en Disco (MP4 / MKV)"]
+    end
+
+    subgraph PhysicalDisplays ["Aislamiento de Salidas Físicas"]
+        AUDIENCE_DISP["Proyector Audiencia (HDMI 1)"]
+        STAGE_DISP["Monitor Escenario (HDMI 2)"]
+    end
+
+    CAM --> SCENE_MGR
+    SCREEN --> SCENE_MGR
+    PRES_IN --> SCENE_MGR
+    MEDIA_IN --> SCENE_MGR
+    AUDIO_MIC --> AUDIO_MIXER
+
+    SCENE_MGR --> PREV_MON
+    SCENE_MGR --> TRANS_CTRL
+    TRANS_CTRL --> PROG_MON
+    PROG_MON --> FFMPEG_ENG
+
+    PRES_IN -.->|Browser Source Transparente| HTTP_SRV
+    HTTP_SRV -.-> OBS_STUDIO
+    OBS_WS <--> OBS_STUDIO
+
+    AUDIO_MIXER -->|Mezcla Estéreo Sincronizada| FFMPEG_ENG
+    FFMPEG_ENG --> NVENC
+    FFMPEG_ENG -.->|Si no hay GPU RTX| CPU_FALLBACK
+    FFMPEG_ENG --> AAC_AUDIO
+    NVENC --> RTMP_OUT
+    NVENC --> LOCAL_REC
+
+    PRES_IN --> AUDIENCE_DISP
+    PRES_IN --> STAGE_DISP
+```
+
+### Componentes Clave de Transmisión:
+1. **`BroadcastEngine`**: Servicio del proceso principal que orquesta el ciclo de vida del subproceso `ffmpeg.exe`. Configura codificación acelerada por hardware NVIDIA RTX (`h264_nvenc`) con preset balanceado `p4` y perfil `high`, o fallback automático a `libx264` con preset `veryfast`. Maneja multiplexación de salida dual (RTMP y grabación simultánea en MP4/MKV) y parsea la salida continua de `stderr` para emitir telemetría precisa en tiempo real (bitrate kbps, FPS reales, fotogramas perdidos y duración).
+2. **`ObsWebSocketService`**: Cliente para obs-websocket v5 (RFC oficial). Soporta negociación `Hello`/`Identify` con desafío criptográfico SHA-256 (`safeStorage`), reconexión automática ante caídas de OBS, cambio de escenas, inicio/parada de transmisión y grabación, e integración directa con el motor de macros (`obs_control`).
+3. **Páginas de Salida para Fuente de Navegador (`/outputs/:role?transparent=true`)**: Plantillas HTML con renderizado sobre lienzo acelerado de 1080p con soporte de canal alfa transparente, superposición de props, banner de mensajes y soporte de oscurecimiento global (Blackout/Clear).
+4. **Mezclador de Audio Digital con Compensación Lip-Sync**: Arquitectura basada en Web Audio API (`AudioContext`, `AnalyserNode`, `DelayNode`, `DynamicsCompressorNode`). Proporciona medición real de volumen en decibelios (RMS y picos) con animación fluida, faders de volumen independientes (0 a 150%), botones Mute individuales y compensación precisa de retardo de sincronización de labios (0 a 1000 ms por fuente).
+5. **Aislamiento Total de Salidas Físicas**: Garantía arquitectónica de que la codificación de video por streaming ocurre en subprocesos independientes y nunca compite por recursos de rendering ni bloquea las ventanas de proyección en vivo para la congregación y el escenario.
+6. **Cumplimiento y Aviso Legal CCLI**: Recordatorio en interfaz y documentación sobre las regulaciones y derechos de autor para transmisión de música y alabanzas por internet.
+
 
 ```mermaid
 graph TD

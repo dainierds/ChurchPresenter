@@ -1,4 +1,4 @@
-=== ChurchPresenter verify:full Execution [2026-10-27T03:26:38.428Z] ===
+=== ChurchPresenter verify:full Execution [2026-10-27T04:09:41.660Z] ===
 
 
 >>> RUNNING: npx tsc --noEmit -p tsconfig.json
@@ -12,80 +12,106 @@
 C:\Users\daini\Videos\TEST2\src\main\health\system-monitor-service.ts
   81:16  warning  '_diskErr' is defined but never used  @typescript-eslint/no-unused-vars
 
+C:\Users\daini\Videos\TEST2\src\main\remote\client-templates.ts
+  920:38  warning  'requirePin' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
 C:\Users\daini\Videos\TEST2\src\renderer\operator\OperatorApp.tsx
     42:3   warning  'PresentationMessage' is defined but never used                      @typescript-eslint/no-unused-vars
-    79:3   warning  'Eye' is defined but never used                                      @typescript-eslint/no-unused-vars
-    80:3   warning  'Slash' is defined but never used                                    @typescript-eslint/no-unused-vars
-    81:3   warning  'Snowflake' is defined but never used                                @typescript-eslint/no-unused-vars
-    82:3   warning  'ShieldCheck' is defined but never used                              @typescript-eslint/no-unused-vars
-    83:3   warning  'Play' is defined but never used                                     @typescript-eslint/no-unused-vars
-    84:3   warning  'Settings' is defined but never used                                 @typescript-eslint/no-unused-vars
-    96:3   warning  'Search' is defined but never used                                   @typescript-eslint/no-unused-vars
-    97:3   warning  'Music' is defined but never used                                    @typescript-eslint/no-unused-vars
-    98:3   warning  'FileText' is defined but never used                                 @typescript-eslint/no-unused-vars
-    99:3   warning  'Layers' is defined but never used                                   @typescript-eslint/no-unused-vars
-   100:12  warning  'ImageIcon' is defined but never used                                @typescript-eslint/no-unused-vars
-   101:3   warning  'Palette' is defined but never used                                  @typescript-eslint/no-unused-vars
-   104:3   warning  'Send' is defined but never used                                     @typescript-eslint/no-unused-vars
-   105:3   warning  'Minus' is defined but never used                                    @typescript-eslint/no-unused-vars
-   107:3   warning  'Download' is defined but never used                                 @typescript-eslint/no-unused-vars
-   112:3   warning  'Database' is defined but never used                                 @typescript-eslint/no-unused-vars
-   113:3   warning  'FileUp' is defined but never used                                   @typescript-eslint/no-unused-vars
-   114:3   warning  'FileCheck' is defined but never used                                @typescript-eslint/no-unused-vars
-   115:3   warning  'History' is defined but never used                                  @typescript-eslint/no-unused-vars
-   116:3   warning  'Book' is defined but never used                                     @typescript-eslint/no-unused-vars
-   117:3   warning  'Video' is defined but never used                                    @typescript-eslint/no-unused-vars
-   119:3   warning  'VolumeX' is defined but never used                                  @typescript-eslint/no-unused-vars
-   120:3   warning  'Square' is defined but never used                                   @typescript-eslint/no-unused-vars
-   121:3   warning  'Pause' is defined but never used                                    @typescript-eslint/no-unused-vars
-   122:3   warning  'RotateCcw' is defined but never used                                @typescript-eslint/no-unused-vars
-   123:3   warning  'FolderPlus' is defined but never used                               @typescript-eslint/no-unused-vars
-   124:3   warning  'ExternalLink' is defined but never used                             @typescript-eslint/no-unused-vars
-   126:3   warning  'RefreshCw' is defined but never used                                @typescript-eslint/no-unused-vars
-   132:10  warning  'formatSeconds' is defined but never used                            @typescript-eslint/no-unused-vars
-   341:10  warning  'bibleRefInput' is assigned a value but never used                   @typescript-eslint/no-unused-vars
-   345:10  warning  'bibleSearchMode' is assigned a value but never used                 @typescript-eslint/no-unused-vars
-   345:27  warning  'setBibleSearchMode' is assigned a value but never used              @typescript-eslint/no-unused-vars
-   346:26  warning  'setBibleTextQuery' is assigned a value but never used               @typescript-eslint/no-unused-vars
-   347:10  warning  'bibleSearchResults' is assigned a value but never used              @typescript-eslint/no-unused-vars
-   348:32  warning  'setBibleTestamentFilter' is assigned a value but never used         @typescript-eslint/no-unused-vars
-   364:10  warning  'isStageMessageActive' is assigned a value but never used            @typescript-eslint/no-unused-vars
-   367:22  warning  'setLibraryTab' is assigned a value but never used                   @typescript-eslint/no-unused-vars
-   372:27  warning  'setMediaFilterType' is assigned a value but never used              @typescript-eslint/no-unused-vars
-   376:10  warning  'isImportingPpt' is assigned a value but never used                  @typescript-eslint/no-unused-vars
-   383:10  warning  'isVideoPlaying' is assigned a value but never used                  @typescript-eslint/no-unused-vars
-   384:10  warning  'videoCurrentTime' is assigned a value but never used                @typescript-eslint/no-unused-vars
-   385:10  warning  'videoDuration' is assigned a value but never used                   @typescript-eslint/no-unused-vars
-   386:23  warning  'setVideoVolume' is assigned a value but never used                  @typescript-eslint/no-unused-vars
-   387:21  warning  'setVideoLoop' is assigned a value but never used                    @typescript-eslint/no-unused-vars
-   388:24  warning  'setVideoInPoint' is assigned a value but never used                 @typescript-eslint/no-unused-vars
-   389:25  warning  'setVideoOutPoint' is assigned a value but never used                @typescript-eslint/no-unused-vars
-   390:26  warning  'setVideoEndAction' is assigned a value but never used               @typescript-eslint/no-unused-vars
-   449:10  warning  'independentAudio' is assigned a value but never used                @typescript-eslint/no-unused-vars
-   462:22  warning  'setPdfFitMode' is assigned a value but never used                   @typescript-eslint/no-unused-vars
-   474:26  warning  'setVideoFadeInSec' is assigned a value but never used               @typescript-eslint/no-unused-vars
-   475:27  warning  'setVideoFadeOutSec' is assigned a value but never used              @typescript-eslint/no-unused-vars
-   478:28  warning  'setSelectedMediaTag' is assigned a value but never used             @typescript-eslint/no-unused-vars
-   481:30  warning  'setExportIncludeMedia' is assigned a value but never used           @typescript-eslint/no-unused-vars
-  1815:9   warning  'allMediaTags' is assigned a value but never used                    @typescript-eslint/no-unused-vars
-  1827:9   warning  'filteredMediaItems' is assigned a value but never used              @typescript-eslint/no-unused-vars
-  1855:9   warning  'handleRunBibleTextSearch' is assigned a value but never used        @typescript-eslint/no-unused-vars
-  1870:9   warning  'handleSendStageMessage' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  1876:9   warning  'handleClearStageMessage' is assigned a value but never used         @typescript-eslint/no-unused-vars
-  1883:9   warning  'handleUpdateLiveProjection' is assigned a value but never used      @typescript-eslint/no-unused-vars
-  1891:9   warning  'handleAddItemToService' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  1940:9   warning  'handleAddHeaderItem' is assigned a value but never used             @typescript-eslint/no-unused-vars
-  1961:9   warning  'handleMovePlaylistItem' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  1984:9   warning  'handleRemovePlaylistItem' is assigned a value but never used        @typescript-eslint/no-unused-vars
-  2002:9   warning  'handleServiceArrangementChange' is assigned a value but never used  @typescript-eslint/no-unused-vars
-  2042:9   warning  'handleDuplicateCurrentService' is assigned a value but never used   @typescript-eslint/no-unused-vars
-  2052:9   warning  'handleSaveAsTemplate' is assigned a value but never used            @typescript-eslint/no-unused-vars
-  2255:9   warning  'handleDeleteSong' is assigned a value but never used                @typescript-eslint/no-unused-vars
-  2273:9   warning  'handleImportLibrary' is assigned a value but never used             @typescript-eslint/no-unused-vars
+    82:3   warning  'Eye' is defined but never used                                      @typescript-eslint/no-unused-vars
+    83:3   warning  'Slash' is defined but never used                                    @typescript-eslint/no-unused-vars
+    84:3   warning  'Snowflake' is defined but never used                                @typescript-eslint/no-unused-vars
+    85:3   warning  'ShieldCheck' is defined but never used                              @typescript-eslint/no-unused-vars
+    86:3   warning  'Play' is defined but never used                                     @typescript-eslint/no-unused-vars
+    87:3   warning  'Settings' is defined but never used                                 @typescript-eslint/no-unused-vars
+    99:3   warning  'Search' is defined but never used                                   @typescript-eslint/no-unused-vars
+   100:3   warning  'Music' is defined but never used                                    @typescript-eslint/no-unused-vars
+   101:3   warning  'FileText' is defined but never used                                 @typescript-eslint/no-unused-vars
+   102:3   warning  'Layers' is defined but never used                                   @typescript-eslint/no-unused-vars
+   103:12  warning  'ImageIcon' is defined but never used                                @typescript-eslint/no-unused-vars
+   104:3   warning  'Palette' is defined but never used                                  @typescript-eslint/no-unused-vars
+   107:3   warning  'Send' is defined but never used                                     @typescript-eslint/no-unused-vars
+   108:3   warning  'Minus' is defined but never used                                    @typescript-eslint/no-unused-vars
+   110:3   warning  'Download' is defined but never used                                 @typescript-eslint/no-unused-vars
+   115:3   warning  'Database' is defined but never used                                 @typescript-eslint/no-unused-vars
+   116:3   warning  'FileUp' is defined but never used                                   @typescript-eslint/no-unused-vars
+   117:3   warning  'FileCheck' is defined but never used                                @typescript-eslint/no-unused-vars
+   118:3   warning  'History' is defined but never used                                  @typescript-eslint/no-unused-vars
+   119:3   warning  'Book' is defined but never used                                     @typescript-eslint/no-unused-vars
+   120:3   warning  'Video' is defined but never used                                    @typescript-eslint/no-unused-vars
+   122:3   warning  'VolumeX' is defined but never used                                  @typescript-eslint/no-unused-vars
+   123:3   warning  'Square' is defined but never used                                   @typescript-eslint/no-unused-vars
+   124:3   warning  'Pause' is defined but never used                                    @typescript-eslint/no-unused-vars
+   125:3   warning  'RotateCcw' is defined but never used                                @typescript-eslint/no-unused-vars
+   126:3   warning  'FolderPlus' is defined but never used                               @typescript-eslint/no-unused-vars
+   127:3   warning  'ExternalLink' is defined but never used                             @typescript-eslint/no-unused-vars
+   129:3   warning  'RefreshCw' is defined but never used                                @typescript-eslint/no-unused-vars
+   135:10  warning  'formatSeconds' is defined but never used                            @typescript-eslint/no-unused-vars
+   344:10  warning  'bibleRefInput' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+   348:10  warning  'bibleSearchMode' is assigned a value but never used                 @typescript-eslint/no-unused-vars
+   348:27  warning  'setBibleSearchMode' is assigned a value but never used              @typescript-eslint/no-unused-vars
+   349:26  warning  'setBibleTextQuery' is assigned a value but never used               @typescript-eslint/no-unused-vars
+   350:10  warning  'bibleSearchResults' is assigned a value but never used              @typescript-eslint/no-unused-vars
+   351:32  warning  'setBibleTestamentFilter' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   367:10  warning  'isStageMessageActive' is assigned a value but never used            @typescript-eslint/no-unused-vars
+   370:22  warning  'setLibraryTab' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+   375:27  warning  'setMediaFilterType' is assigned a value but never used              @typescript-eslint/no-unused-vars
+   379:10  warning  'isImportingPpt' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+   386:10  warning  'isVideoPlaying' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+   387:10  warning  'videoCurrentTime' is assigned a value but never used                @typescript-eslint/no-unused-vars
+   388:10  warning  'videoDuration' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+   389:23  warning  'setVideoVolume' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+   390:21  warning  'setVideoLoop' is assigned a value but never used                    @typescript-eslint/no-unused-vars
+   391:24  warning  'setVideoInPoint' is assigned a value but never used                 @typescript-eslint/no-unused-vars
+   392:25  warning  'setVideoOutPoint' is assigned a value but never used                @typescript-eslint/no-unused-vars
+   393:26  warning  'setVideoEndAction' is assigned a value but never used               @typescript-eslint/no-unused-vars
+   468:10  warning  'independentAudio' is assigned a value but never used                @typescript-eslint/no-unused-vars
+   481:22  warning  'setPdfFitMode' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+   493:26  warning  'setVideoFadeInSec' is assigned a value but never used               @typescript-eslint/no-unused-vars
+   494:27  warning  'setVideoFadeOutSec' is assigned a value but never used              @typescript-eslint/no-unused-vars
+   497:28  warning  'setSelectedMediaTag' is assigned a value but never used             @typescript-eslint/no-unused-vars
+   500:30  warning  'setExportIncludeMedia' is assigned a value but never used           @typescript-eslint/no-unused-vars
+  1834:9   warning  'allMediaTags' is assigned a value but never used                    @typescript-eslint/no-unused-vars
+  1846:9   warning  'filteredMediaItems' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  1874:9   warning  'handleRunBibleTextSearch' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  1889:9   warning  'handleSendStageMessage' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  1895:9   warning  'handleClearStageMessage' is assigned a value but never used         @typescript-eslint/no-unused-vars
+  1902:9   warning  'handleUpdateLiveProjection' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  1910:9   warning  'handleAddItemToService' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  1959:9   warning  'handleAddHeaderItem' is assigned a value but never used             @typescript-eslint/no-unused-vars
+  1980:9   warning  'handleMovePlaylistItem' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  2003:9   warning  'handleRemovePlaylistItem' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  2021:9   warning  'handleServiceArrangementChange' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  2061:9   warning  'handleDuplicateCurrentService' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  2071:9   warning  'handleSaveAsTemplate' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  2274:9   warning  'handleDeleteSong' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  2292:9   warning  'handleImportLibrary' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\daini\Videos\TEST2\src\renderer\operator\components\BroadcastSettingsModal.tsx
+   5:3  warning  'Settings' is defined but never used  @typescript-eslint/no-unused-vars
+   8:3  warning  'Key' is defined but never used       @typescript-eslint/no-unused-vars
+  14:3  warning  'Folder' is defined but never used    @typescript-eslint/no-unused-vars
+  15:3  warning  'Tv' is defined but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\daini\Videos\TEST2\src\renderer\operator\components\BroadcastStudioPanel.tsx
+   5:3   warning  'Mic' is defined but never used                    @typescript-eslint/no-unused-vars
+   6:3   warning  'MicOff' is defined but never used                 @typescript-eslint/no-unused-vars
+  11:3   warning  'Sliders' is defined but never used                @typescript-eslint/no-unused-vars
+  12:3   warning  'Tv' is defined but never used                     @typescript-eslint/no-unused-vars
+  13:3   warning  'Monitor' is defined but never used                @typescript-eslint/no-unused-vars
+  14:3   warning  'Play' is defined but never used                   @typescript-eslint/no-unused-vars
+  20:3   warning  'RefreshCw' is defined but never used              @typescript-eslint/no-unused-vars
+  23:3   warning  'Cpu' is defined but never used                    @typescript-eslint/no-unused-vars
+  25:3   warning  'Check' is defined but never used                  @typescript-eslint/no-unused-vars
+  27:3   warning  'ExternalLink' is defined but never used           @typescript-eslint/no-unused-vars
+  57:10  warning  'audioDevices' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\MacroEditorModal.tsx
   52:23  warning  'setDescription' is assigned a value but never used  @typescript-eslint/no-unused-vars
   79:15  warning  'val' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\daini\Videos\TEST2\src\renderer\operator\components\ObsBridgeModal.tsx
+  2:27  warning  'Play' is defined but never used    @typescript-eslint/no-unused-vars
+  2:33  warning  'Square' is defined but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\OutputHealthModal.tsx
     2:23  warning  'RefreshCw' is defined but never used         @typescript-eslint/no-unused-vars
@@ -96,7 +122,7 @@ C:\Users\daini\Videos\TEST2\src\renderer\operator\components\OutputHealthModal.t
   113:21  warning  'isError' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\ProToolbar.tsx
-  80:3  warning  'systemMetrics' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  82:3  warning  'systemMetrics' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\PropEditorModal.tsx
   28:24  warning  'setFontSizeVmin' is assigned a value but never used    @typescript-eslint/no-unused-vars
@@ -111,10 +137,18 @@ C:\Users\daini\Videos\TEST2\src\renderer\operator\components\RehearsalSummaryMod
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\SessionRecoveryModal.tsx
   2:36  warning  'XCircle' is defined but never used  @typescript-eslint/no-unused-vars
 
+C:\Users\daini\Videos\TEST2\tests\obs-bridge.test.ts
+    8:10  warning  'safeStorageService' is defined but never used      @typescript-eslint/no-unused-vars
+  230:13  warning  'stopStreamSpy' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\daini\Videos\TEST2\tests\pipeline-benchmark.test.ts
+   41:11  warning  'startMemA' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  110:11  warning  'startMemB' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
 C:\Users\daini\Videos\TEST2\tests\theme-service.test.ts
   160:13  warning  'custom' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
-✖ 87 problems (0 errors, 87 warnings)
+✖ 109 problems (0 errors, 109 warnings)
 
 
 >>> SUCCESS: npx eslint . --ext .ts,.tsx
@@ -125,75 +159,101 @@ C:\Users\daini\Videos\TEST2\tests\theme-service.test.ts
 
 [1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/daini/Videos/TEST2[39m
 
+ [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
  [32m✓[39m tests/display-reconnection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m tests/youtube-utils.test.ts [2m([22m[2m18 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 34[2mms[22m[39m
- [32m✓[39m tests/session-recovery.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 11[2mms[22m[39m
- [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/display-assignment.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 204[2mms[22m[39m
- [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 107[2mms[22m[39m
+ [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 37[2mms[22m[39m
+ [32m✓[39m tests/display-assignment.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m tests/state-transitions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 215[2mms[22m[39m
- [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 252[2mms[22m[39m
- [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 254[2mms[22m[39m
+ [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/session-recovery.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 10[2mms[22m[39m
  [32m✓[39m tests/youtube-projection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 237[2mms[22m[39m
+ [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 260[2mms[22m[39m
+ [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 108[2mms[22m[39m
+ [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 260[2mms[22m[39m
+ [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 326[2mms[22m[39m
+   [33m[2m✓[22m[39m YouTube Playlist Pre-Service Verification (Fase 5C)[2m > [22mverifies a playlist with mixed items accurately [33m324[2mms[22m[39m
+ [32m✓[39m tests/obs-bridge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 324[2mms[22m[39m
+ [32m✓[39m tests/broadcast-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 337[2mms[22m[39m
  [32m✓[39m tests/search-utils.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 16[2mms[22m[39m
- [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 333[2mms[22m[39m
+ [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 373[2mms[22m[39m
 [90mstderr[2m | tests/powerpoint-user-session.test.ts[2m > [22m[2mPowerPoint User Session Preservation[2m > [22m[2mdoes NOT close or alter an existing open user presentation during import
 [22m[39mPowerPoint is not installed on this environment; skipping user session test
 
- [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 314[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m314[2mms[22m[39m
- [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 370[2mms[22m[39m
- [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 478[2mms[22m[39m
- [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 408[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m407[2mms[22m[39m
+ [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 488[2mms[22m[39m
  [32m✓[39m tests/library-backup.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 255[2mms[22m[39m
- [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 203[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 602[2mms[22m[39m
+ [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 234[2mms[22m[39m
+ [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 395[2mms[22m[39m
+ [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
  [32m✓[39m tests/prop-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 203[2mms[22m[39m
+ [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
  [32m✓[39m tests/presentation-loop.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/media-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 757[2mms[22m[39m
+ [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 84[2mms[22m[39m
+ [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 769[2mms[22m[39m
  [32m✓[39m tests/youtube-mirror.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/output-health.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 419[2mms[22m[39m
- [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 99[2mms[22m[39m
- [32m✓[39m tests/system-monitor.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 742[2mms[22m[39m
- [32m✓[39m tests/rehearsal-mode.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/media-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
  [32m✓[39m tests/safe-storage.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 172[2mms[22m[39m
- [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 557[2mms[22m[39m
- [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1781[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m1766[2mms[22m[39m
+ [32m✓[39m tests/system-monitor.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/rehearsal-mode.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/output-health.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+[90mstdout[2m | tests/ffmpeg-detection.test.ts[2m > [22m[2mFFmpeg & NVENC Detection on Windows 11 Host[2m > [22m[2mdetects system FFmpeg, ffprobe, and checks NVENC hardware encoder
+[22m[39mDetected FFmpeg Status: {
+  available: [33mtrue[39m,
+  path: [32m'C:\\Users\\daini\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.2-full_build\\bin\\ffmpeg.exe'[39m,
+  version: [32m'ffmpeg version 9.0.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers'[39m,
+  hasNvenc: [33mtrue[39m,
+  ffprobePath: [32m'C:\\Users\\daini\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.2-full_build\\bin\\ffprobe.exe'[39m
+}
+
+ [32m✓[39m tests/ffmpeg-detection.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 67[2mms[22m[39m
+ [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 158[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2114[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m2101[2mms[22m[39m
+[90mstdout[2m | tests/pipeline-benchmark.test.ts[2m > [22m[2mPipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22m[2mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements
+[22m[39m
+======================================================================
+   PIPELINE BENCHMARK RESULTS (ETAPA D)                              
+======================================================================
+Pipeline A (Container Remux): 0.63% CPU | Mem: 68.2 MB | Time: 2.36s
+Pipeline B (Raw YUV Pipe):    13.09% CPU | Mem: 71.2 MB | Time: 0.47s
+Encoder Used: h264_nvenc (NVIDIA RTX)
+======================================================================
+
+
+ [32m✓[39m tests/pipeline-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 2998[2mms[22m[39m
+   [33m[2m✓[22m[39m Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements [33m2997[2mms[22m[39m
 [90mstdout[2m | tests/powerpoint-benchmark.test.ts[2m > [22m[2mPowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22m[2mconverts an 80-slide presentation via PowerPoint COM and measures real throughput
 [22m[39m
 [80-Slide PowerPoint Benchmark Results]: {
-  "testDate": "2026-10-27T03:26:50.489Z",
-  "startMemMb": 68.6,
+  "testDate": "2026-10-27T04:10:11.914Z",
+  "startMemMb": 69.8,
   "platform": "win32 10.0.26300 (x64)",
   "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
   "cpuCores": 20,
   "converterUsed": "powerpoint_com",
   "slideCount": 80,
   "targetResolution": "1920x1080",
-  "totalDurationSeconds": 4.77,
-  "slidesPerSecond": 16.8,
-  "memoryRssMb": 74.1
+  "totalDurationSeconds": 5.08,
+  "slidesPerSecond": 15.7,
+  "memoryRssMb": 75.2
 }
 
- [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 4778[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m4778[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 5093[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m5093[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m42 passed[39m[22m[90m (42)[39m
-[2m      Tests [22m [1m[32m194 passed[39m[22m[90m (194)[39m
-[2m   Start at [22m 23:26:44
-[2m   Duration [22m 5.72s[2m (transform 1.44s, setup 0ms, collect 4.21s, tests 11.65s, environment 5ms, prepare 2.86s)[22m
+[2m Test Files [22m [1m[32m46 passed[39m[22m[90m (46)[39m
+[2m      Tests [22m [1m[32m207 passed[39m[22m[90m (207)[39m
+[2m   Start at [22m 00:10:05
+[2m   Duration [22m 6.80s[2m (transform 2.47s, setup 0ms, collect 8.23s, tests 16.72s, environment 5ms, prepare 9.98s)[22m
 
 
 >>> SUCCESS: npx vitest run
@@ -202,25 +262,25 @@ C:\Users\daini\Videos\TEST2\tests\theme-service.test.ts
 
 [36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
 transforming...
-[32m✓[39m 51 modules transformed.
+[32m✓[39m 54 modules transformed.
 rendering chunks...
-[2mout/main/[22m[36mindex.js  [39m[1m[2m484.39 kB[22m[1m[22m
-[32m✓ built in 316ms[39m
+[2mout/main/[22m[36mindex.js  [39m[1m[33m536.62 kB[39m[22m
+[32m✓ built in 319ms[39m
 [36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
 transforming...
 [32m✓[39m 2 modules transformed.
 rendering chunks...
-[2mout/preload/[22m[36mindex.js  [39m[1m[2m35.77 kB[22m[1m[22m
-[32m✓ built in 17ms[39m
+[2mout/preload/[22m[36mindex.js  [39m[1m[2m39.93 kB[22m[1m[22m
+[32m✓ built in 19ms[39m
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
 transforming...
-[32m✓[39m 1627 modules transformed.
+[32m✓[39m 1630 modules transformed.
 rendering chunks...
 [2m../../out/renderer/[22m[32mindex.html                          [39m[1m[2m    1.23 kB[22m[1m[22m
 [2m../../out/renderer/[22m[32massets/pdf.worker.min-CjEcRF4W.mjs  [39m[1m[2m1,264.34 kB[22m[1m[22m
 [2m../../out/renderer/[22m[35massets/index-C8bAwqq2.css           [39m[1m[2m  114.15 kB[22m[1m[22m
-[2m../../out/renderer/[22m[36massets/index-CRBXHXDP.js            [39m[1m[33m2,089.82 kB[39m[22m
-[32m✓ built in 1.94s[39m
+[2m../../out/renderer/[22m[36massets/index-HZ_9NVsV.js            [39m[1m[33m2,219.21 kB[39m[22m
+[32m✓ built in 1.98s[39m
 
 >>> SUCCESS: npx electron-vite build
 
@@ -229,7 +289,7 @@ rendering chunks...
 ======================================================================
    CHURCHPRESENTER - REAL ELECTRON E2E VERIFICATION SUITE (FASE 6)   
 ======================================================================
-[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793071613936
+[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793074215822
 [E2E] Launching real Electron application...
 [E2E] Operator window loaded successfully.
 
@@ -250,21 +310,21 @@ rendering chunks...
 
 [Paso 0.B] Testing Real MP4 Video Playback with continuous currentTime >= 10s...
   -> Initializing playback of C:\Users\daini\Videos\TEST2\tests\fixtures\test_video.mp4...
-  [Video Progress] Second 1: currentTime = 0.87s
-  [Video Progress] Second 2: currentTime = 1.88s
-  [Video Progress] Second 3: currentTime = 2.89s
-  [Video Progress] Second 4: currentTime = 3.90s
-  [Video Progress] Second 5: currentTime = 4.92s
-  [Video Progress] Second 6: currentTime = 5.92s
-  [Video Progress] Second 7: currentTime = 6.93s
-  [Video Progress] Second 8: currentTime = 7.94s
-  [Video Progress] Second 9: currentTime = 8.95s
-  [Video Progress] Second 10: currentTime = 9.96s
-  [Video Progress] Second 11: currentTime = 10.97s
+  [Video Progress] Second 1: currentTime = 0.85s
+  [Video Progress] Second 2: currentTime = 1.86s
+  [Video Progress] Second 3: currentTime = 2.86s
+  [Video Progress] Second 4: currentTime = 3.88s
+  [Video Progress] Second 5: currentTime = 4.89s
+  [Video Progress] Second 6: currentTime = 5.89s
+  [Video Progress] Second 7: currentTime = 6.91s
+  [Video Progress] Second 8: currentTime = 7.92s
+  [Video Progress] Second 9: currentTime = 8.92s
+  [Video Progress] Second 10: currentTime = 9.93s
+  [Video Progress] Second 11: currentTime = 10.95s
   -> Output Captured: 00_video_real_10s_output_main.png
   -> Output Captured: 00_video_real_10s_output_stage.png
   -> Output Captured: 00_video_real_10s_output_lobby.png
-[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 10.97s >= 10s en todas las salidas activas)
+[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 10.95s >= 10s en todas las salidas activas)
 
 [Paso 0.C] Testing YouTube Playback & Connectivity...
   -> Internet connection available. Testing YouTube live stream / video playback for 60 seconds...
@@ -369,7 +429,7 @@ rendering chunks...
   -> 5th attempt status: 429, data: {"success":false,"error":"PIN incorrecto. Acceso bloqueado temporalmente por 300 segundos.","remainingLockSeconds":300}
   -> Operator desktop app confirmed immune to remote IP lockout.
   -> Authenticating with valid PIN via HTTP POST...
-  -> Auth token generated: 1a46**** (sanitized)
+  -> Auth token generated: 2e33**** (sanitized)
   -> Verifying minimum privilege: control token blocked from admin actions...
   -> Minimum privilege confirmed: all administrative actions returned HTTP 403.
 
@@ -377,9 +437,9 @@ rendering chunks...
   ==============================================================
   [LATENCIA E2E REAL] 50 Muestras Completadas:
   -> Host de prueba: 10.0.0.122:8080 (Conexión LAN)
-  -> Mediana (p50): 15.52 ms
-  -> Percentil 95 (p95): 16.62 ms
-  -> Mínimo: 8.94 ms | Máximo: 19.67 ms
+  -> Mediana (p50): 15.45 ms
+  -> Percentil 95 (p95): 16.06 ms
+  -> Mínimo: 1.69 ms | Máximo: 17.95 ms
   ==============================================================
   -> Testing full remote controls integrity (navigation, clear-layer, emergency, timers, video, messages)...
   -> Output Captured: 16_remote_message_output_main.png
@@ -408,7 +468,7 @@ rendering chunks...
   -> Rehearsal mode started (badge active).
   -> Rehearsal Summary modal successfully displayed.
   -> Output health reported roles: main, stage, lobby
-  -> System metrics: CPU 7%, RAM 46%, Disk Free 260.5 GB
+  -> System metrics: CPU 8%, RAM 47%, Disk Free 259.3 GB
 [TEST AUDIT]: Estabilidad y Operación Segura (Fase 7) -> APROBADA (Checklist de culto, Modo Emergencia con capturas, Modo Ensayo con auditoría, Salud de salidas y Métricas de sistema)
 
 [Step 17/18] Testing Phase 8: Automatización, Macros, Props, Bucle y Transiciones...
@@ -426,7 +486,20 @@ rendering chunks...
   -> Presentation loop cycle tested: started=true, wasActive=true
 [TEST AUDIT]: Automatización, Macros y Props (Fase 8) -> APROBADA (Ejecución por botón, teclado, diapositiva, HTTP API, capa de props en vivo y ciclo de bucle)
 
-[Step 18/18] Auditing Console Errors and Unhandled Exceptions...
+[Step 18/19] Testing Phase 9: Transmisión y Grabación tipo OBS (Estudio, Previo/Programa, Audio Mixer & Puente OBS)...
+  -> Broadcast Studio Panel loaded with Previo and Programa viewports.
+  -> Verified default factory broadcast scenes.
+  -> Tested instant Cut transition.
+  -> Tested smooth Fade transition.
+  -> Output Captured: 23_broadcast_studio_outputs_output_main.png
+  -> Output Captured: 23_broadcast_studio_outputs_output_stage.png
+  -> Output Captured: 23_broadcast_studio_outputs_output_lobby.png
+  -> ObsBridgeModal opened and verified.
+  -> BroadcastSettingsModal opened with RTMP presets, NVENC options and CCLI notice.
+  -> Stream start confirmation modal verified.
+[TEST AUDIT]: Transmisión y Grabación tipo OBS (Fase 9) -> APROBADA (Estudio Previo/Programa, corte/fundido, audio mixer VU meters, configuración RTMP/NVENC, aislamiento de salidas y puente OBS)
+
+[Step 19/19] Auditing Console Errors and Unhandled Exceptions...
 ----------------------------------------------------------------------
 [Summary]: Console errors recorded: 0
 [Summary]: Unhandled exceptions recorded: 0

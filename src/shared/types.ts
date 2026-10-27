@@ -1233,6 +1233,22 @@ export interface ChurchPresenterApi {
   startObsRecord: () => Promise<{ success: boolean; error?: string }>
   stopObsRecord: () => Promise<{ success: boolean; error?: string }>
   onObsStatusChanged?: (callback: (status: ObsStatus) => void) => () => void
+
+  // Phase 9: Broadcast Studio, Streaming & Recording
+  getBroadcastSettings: () => Promise<BroadcastSettings>
+  saveBroadcastSettings: (settings: Partial<BroadcastSettings>) => Promise<BroadcastSettings>
+  getBroadcastScenes: () => Promise<BroadcastScene[]>
+  saveBroadcastScene: (scene: BroadcastScene) => Promise<BroadcastScene>
+  deleteBroadcastScene: (id: string) => Promise<boolean>
+  getAudioMixerConfig: () => Promise<BroadcastAudioMixerState>
+  saveAudioMixerConfig: (state: BroadcastAudioMixerState) => Promise<BroadcastAudioMixerState>
+  getBroadcastStatus: () => Promise<BroadcastStatus>
+  startBroadcastStream: () => Promise<{ success: boolean; error?: string }>
+  stopBroadcastStream: () => Promise<{ success: boolean; error?: string }>
+  startBroadcastRecord: () => Promise<{ success: boolean; error?: string }>
+  stopBroadcastRecord: () => Promise<{ success: boolean; error?: string }>
+  onBroadcastStatusChanged?: (callback: (status: BroadcastStatus) => void) => () => void
+  listDesktopSources: () => Promise<DesktopCaptureSource[]>
 }
 
 // =========================================================================
@@ -1549,6 +1565,99 @@ export interface LoopStatus {
   nextAdvanceInSeconds: number
   isPaused: boolean
   hasMusic: boolean
+}
+
+// =========================================================================
+// PHASE 9: Streaming, Recording & Studio Broadcast
+// =========================================================================
+
+export type BroadcastSourceType =
+  | 'video_device'
+  | 'desktop_capture'
+  | 'presentation'
+  | 'media_file'
+  | 'color'
+
+export interface BroadcastLayer {
+  id: string
+  name: string
+  type: BroadcastSourceType
+  deviceId?: string
+  sourceId?: string
+  mediaPath?: string
+  color?: string
+  x: number
+  y: number
+  width: number
+  height: number
+  crop?: { top: number; right: number; bottom: number; left: number }
+  opacity: number
+  zIndex: number
+  borderRadius?: number
+  visible: boolean
+}
+
+export interface BroadcastScene {
+  id: string
+  name: string
+  orderIndex: number
+  layers: BroadcastLayer[]
+  isDefault?: boolean
+  transitionType?: 'cut' | 'fade'
+  transitionDurationMs?: number
+}
+
+export interface BroadcastAudioSource {
+  id: string
+  name: string
+  deviceId?: string
+  type: 'presentation' | 'mic_input' | 'aux_input' | 'media'
+  volume: number
+  muted: boolean
+  delayMs: number
+}
+
+export interface BroadcastAudioMixerState {
+  sources: BroadcastAudioSource[]
+  masterVolume: number
+  masterMuted: boolean
+  limiterEnabled: boolean
+}
+
+export interface BroadcastSettings {
+  rtmpUrl: string
+  rtmpKeyEncrypted?: string
+  rtmpKey?: string
+  qualityPreset: '1080p30' | '720p30' | '1080p60'
+  recordLocal: boolean
+  recordingFormat: 'mp4' | 'mkv'
+  recordingPath?: string
+  autoReconnect: boolean
+  encoderPreference: 'nvenc' | 'x264'
+  audioDelayMs: number
+}
+
+export interface BroadcastStatus {
+  isStreaming: boolean
+  isRecording: boolean
+  durationSeconds: number
+  formattedTime: string
+  bitrateKbps: number
+  fps: number
+  droppedFrames: number
+  totalFrames: number
+  connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+  errorMessage?: string
+  currentSceneId?: string
+  activePreset: string
+  encoderUsed: 'nvenc' | 'x264' | 'none'
+  recordingFilePath?: string
+}
+
+export interface DesktopCaptureSource {
+  id: string
+  name: string
+  thumbnailDataUrl?: string
 }
 
 declare global {

@@ -249,5 +249,21 @@ export const IPC_CHANNELS = {
   OBS_STOP_STREAM: 'obs:stop-stream',
   OBS_START_RECORD: 'obs:start-record',
   OBS_STOP_RECORD: 'obs:stop-record',
-  OBS_STATUS_CHANGED: 'obs:status-changed'
+  OBS_STATUS_CHANGED: 'obs:status-changed',
+
+  // Broadcast Studio & Streaming
+  BROADCAST_GET_SETTINGS: 'broadcast:get-settings',
+  BROADCAST_SAVE_SETTINGS: 'broadcast:save-settings',
+  BROADCAST_GET_SCENES: 'broadcast:get-scenes',
+  BROADCAST_SAVE_SCENE: 'broadcast:save-scene',
+  BROADCAST_DELETE_SCENE: 'broadcast:delete-scene',
+  BROADCAST_START_STREAM: 'broadcast:start-stream',
+  BROADCAST_STOP_STREAM: 'broadcast:stop-stream',
+  BROADCAST_START_RECORD: 'broadcast:start-record',
+  BROADCAST_STOP_RECORD: 'broadcast:stop-record',
+  BROADCAST_GET_STATUS: 'broadcast:get-status',
+  BROADCAST_STATUS_CHANGED: 'broadcast:status-changed',
+  BROADCAST_GET_AUDIO_MIXER: 'broadcast:get-audio-mixer',
+  BROADCAST_SAVE_AUDIO_MIXER: 'broadcast:save-audio-mixer',
+  BROADCAST_LIST_DESKTOP_SOURCES: 'broadcast:list-desktop-sources'
 } as const

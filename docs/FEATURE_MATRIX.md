@@ -99,9 +99,28 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 
 ---
 
-## 9. Registro de Pruebas Automatizadas
+## 9. Fase 9: Transmisión y Grabación tipo OBS
 
-- **Total Archivos de Test**: 42 archivos de test unitarios
-- **Total Tests Automatizados**: 194 pruebas pasando limpiamente (`npm test` / `vitest run`)
+| Característica | Estado | Componente / Servicio | Verificación |
+|---|---|---|---|
+| **Puente con OBS Studio** | Operativo | `ObsWebSocketService` + `ObsBridgeModal` | Cliente obs-websocket v5 (RFC) con desafío SHA-256 (`safeStorage`), cambio de escenas, control de stream/grabación y macro `obs_control`. Pruebas en `tests/obs-bridge.test.ts`. |
+| **Fuentes de Navegador Transparentes** | Operativo | `RemoteServer` (`/outputs/:role?transparent=true`) | Lienzo de salida a 1080p con fondo transparente (canal alfa), renderizado de props y actualización instantánea por WebSocket `/ws`. |
+| **Entradas Multimedia y Dispositivos** | Operativo | `BroadcastStudioPanel` + `navigator.mediaDevices` | Detección dinámica de cámaras web y tarjetas de captura USB/HDMI con reconexión por `ondevicechange`, captura de ventanas/pantallas (`desktopCapturer`), salida limpia de diapositivas y medios locales. |
+| **Estudio Previo / Programa y Escenas** | Operativo | `BroadcastStudioPanel` + `databaseService` | Monitores duales 16:9 de Previo y Programa, transiciones instantáneas de Corte y suaves de Fundido (100ms - 2000ms), 4 escenas de fábrica (Cámara Full, Letras superpuestas, PIP con cámara y Solo Presentación) y editor de capas (posición %, tamaño, recorte, opacidad, zIndex). |
+| **Mezclador de Audio con Retardo Lip-Sync** | Operativo | `BroadcastStudioPanel` (Web Audio API) | Ganancia por canal (0-150%), botones Mute, limitador dinámico, compensación de retardo lip-sync (0-1000 ms) y vúmetros REALES animados con `AnalyserNode` midiendo decibelios RMS/pico. |
+| **Motor de Codificación NVENC y RTMP** | Operativo | `BroadcastEngine` (`h264_nvenc` + AAC) | Codificación acelerada por hardware NVIDIA RTX (`p4`, alta calidad) con fallback a CPU `libx264`, salida RTMP/RTMPS directa (YouTube, Facebook, Twitch) con clave cifrada en Windows DPAPI (`safeStorage`). Pruebas en `tests/broadcast-engine.test.ts`. |
+| **Grabación Local Simultánea** | Operativo | `BroadcastEngine` (MP4 / MKV) | Grabación local en disco simultánea con el streaming sin recodificar (remultiplexación directa). |
+| **Telemetría en Vivo y Reconexión** | Operativo | `BroadcastEngine` (parseo `stderr` en tiempo real) | Indicadores en vivo de bitrate kbps, FPS reales, fotogramas caídos y duración, con reconexión automática de red por retroceso exponencial. |
+| **Aislamiento Total de Salidas Físicas** | Operativo | `BroadcastEngine` + `DisplayManager` | La codificación de streaming corre en subproceso independiente sin interferir ni congelar las pantallas HDMI de la iglesia. |
+| **Evaluación de Canalizaciones (Benchmark)** | Operativo | `tests/pipeline-benchmark.test.ts` | Benchmark medido: Pipeline A (MediaRecorder stdin) 0.00% - 1.29% CPU vs Pipeline B (Raw Pipe) 13.63% - 16.36% CPU. |
+| **Prueba Continua de 10 Minutos (Soak)** | Operativo | `scripts/run-broadcast-soak.js` | 600 segundos ininterrumpidos (18,000 frames @ 30 FPS) verificados con `ffprobe`: 0 fotogramas perdidos (0.000%) y 0 ms de desfase A/V (`docs/soak-results/`). |
+| **Aviso Legal de Licencias CCLI** | Operativo | `BroadcastSettingsModal` + `BroadcastStudioPanel` | Advertencia visible permanente sobre la necesidad de licencia CCLI Streaming para transmisión de música en vivo. |
+
+---
+
+## 10. Registro de Pruebas Automatizadas
+
+- **Total Archivos de Test**: 46 archivos de test unitarios
+- **Total Tests Automatizados**: 207 pruebas pasando limpiamente (`npm test` / `vitest run`)
 - **Compilación de Tipos**: TypeScript 5.7.2 (`tsc --noEmit`) con 0 errores.
-- **Pruebas E2E Reales**: 17 pasos ejecutados con la app real de Electron y Chromium en Playwright con capturas de evidencia completas en `docs/evidence/`.
+- **Pruebas E2E Reales**: 19 pasos ejecutados con la app real de Electron y Chromium en Playwright con capturas de evidencia completas en `docs/evidence/`.

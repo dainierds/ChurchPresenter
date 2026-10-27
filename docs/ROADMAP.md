@@ -169,9 +169,37 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - **Receptor MIDI y Modo Aprendizaje**: Mapeo de notas y controles de pedales o controladores MIDI externos con asistente interactivo "Aprender MIDI" y panel explicativo con diagramas cuando no se detecta interfaz MIDI.
 - **Suite de Pruebas Unitarias y E2E Real**: Cobertura con pruebas unitarias (`tests/macro-engine.test.ts`, `tests/prop-service.test.ts`, `tests/presentation-loop.test.ts`) y validación E2E automatizada con la app real de Electron (Paso 17 en `scripts/run-e2e.js`) con capturas fotográficas de salidas en `docs/evidence/`.
 
-### Fase 9: Transmisión tipo OBS
-- Salida NDI o captura directa para software de streaming (OBS Studio / vMix).
-- Salida con canal alfa (Key/Fill) para subtitulado y lower thirds en vivo.
+### Fase 9: Transmisión y Grabación tipo OBS (Completada)
+- **ETAPA A: Puente con OBS Studio**:
+  - Salidas locales HTTP seguras para cada rol (`/outputs/audience`, `/outputs/stage`, `/outputs/lobby` y `/outputs/program`) para utilizar como "Fuente de Navegador" (Browser Source) en OBS Studio a 1080p nativo con fondo transparente opcional (`?transparent=true`).
+  - Cliente oficial de OBS WebSocket v5 (`obs-websocket-service`) con negociación RPC RFC, desafío criptográfico SHA-256 (`safeStorage`), reconexión automática, cambio de escenas, control de transmisión y grabación, y acciones de macro `obs_control`.
+  - Modal integrado de configuración y puente OBS (`ObsBridgeModal.tsx`) con copia rápida de URLs y pruebas de conexión.
+- **ETAPA B: Entradas Multimedia y Dispositivos de Captura**:
+  - Detección e inventario dinámico de cámaras web, tarjetas de captura HDMI/USB (Cam Link, Elgato, AverMedia) vía `navigator.mediaDevices.enumerateDevices()` y escucha en tiempo real de conexión/desconexión con `ondevicechange`.
+  - Captura de ventanas y pantallas completas de Windows 11 mediante `desktopCapturer.getSources` de Electron.
+  - Salida interna de la aplicación (presentación de letras, diapositivas y medios) integrada como fuente limpia de transmisión.
+  - Soporte de archivos de video, audio e imágenes locales y fondos de color sólido.
+- **ETAPA C: Escenas y Mezclador de Audio**:
+  - Escenas multicapa con posicionamiento porcentual (X, Y), dimensiones (Width, Height), recorte (crop), opacidad y ordenamiento zIndex.
+  - Modos Previo y Programa con transiciones inmediatas (Corte) y transiciones suaves (Fundido con duración configurable de 100ms a 2000ms).
+  - 4 escenas prediseñadas de fábrica: Cámara Principal Full, Cámara con Letras Superpuestas (Chroma/Alpha), Diapositiva PIP con Cámara, y Solo Presentación Programa.
+  - Mezclador de audio digital integrado con Web Audio API: control de ganancia individual, silenciado (Mute), limitador dinámico (Compressor), compensación de retardo lip-sync por fuente (0 a 1000 ms), y vúmetros REALES animados basados en `AnalyserNode` con cálculo RMS y picos de decibelios.
+- **ETAPA D: Codificación y Salida (NVENC RTX + RTMP + Grabación Local)**:
+  - Motor de codificación FFmpeg por hardware acelerado por GPU NVIDIA RTX (`h264_nvenc`) con fallback transparente a CPU `libx264` y audio estéreo AAC (`aac`).
+  - Evaluación comparativa de pipelines documentada en `DECISIONS.md`: Pipeline A (Container remux stdin) consume 0.00% a 1.29% de CPU vs 13.63% a 16.36% de Pipeline B (Raw YUV pipe), demostrando la superioridad del streaming contenedor.
+  - Transmisión RTMP/RTMPS directa (YouTube Live, Facebook Live, Twitch o servidores personalizados) con clave cifrada con DPAPI (`safeStorage`).
+  - Grabación local simultánea en disco en formatos MP4 y MKV tolerante a apagones.
+  - Telemetría en tiempo real: bitrate kbps, FPS reales, fotogramas perdidos y duración de transmisión.
+  - Reconexión automática con retroceso exponencial ante caídas de red.
+  - Diálogos obligatorios de confirmación antes de iniciar y antes de detener la transmisión.
+  - Aislamiento total garantizado: las pantallas físicas del templo (Audiencia y Escenario) permanecen inmunes a la carga y estado de la transmisión.
+  - Aviso legal visible sobre licencias de transmisión de alabanza (CCLI Streaming License).
+- **Prueba de Larga Duración (Soak Test 10 Minutos)**:
+  - Ejecución continua de 10 minutos (600s, 18,000 fotogramas @ 30 FPS) con patrón sintético de color, contador de fotogramas y pitido sincronizado de 1000 Hz (`scripts/run-broadcast-soak.js`).
+  - Verificación fotograma a fotograma con `ffprobe`: 18,000 / 18,000 fotogramas codificados, 0 fotogramas perdidos (0.000%), 30 FPS exactos y 0 ms de desfase audio/video. Archivo maestro en `docs/soak-results/broadcast_10min_recorded.mp4`.
+- **Suite de Pruebas Unitarias y E2E Real**:
+  - Pruebas unitarias: `tests/ffmpeg-detection.test.ts`, `tests/obs-bridge.test.ts`, `tests/broadcast-engine.test.ts`, `tests/pipeline-benchmark.test.ts`.
+  - Validación E2E automatizada con la app real de Electron (Paso 18 en `scripts/run-e2e.js`) con capturas de evidencia fotográfica en `docs/evidence/`.
 
 ### Fase 10: Extras
 - Funcionalidades avanzadas de iglesia (anuncios rotativos de lobby, conteo regresivo previo al servicio, sincronización en nube de librerías).

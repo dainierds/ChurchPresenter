@@ -210,7 +210,9 @@ export class ObsWebSocketService {
     if (this.ws) {
       try {
         this.ws.close()
-      } catch {}
+      } catch {
+        // ws already closed
+      }
       this.ws = null
     }
     this.handleDisconnect()
@@ -349,7 +351,9 @@ export class ObsWebSocketService {
         this.status.recordTimecode = recRes.outputTimecode
       }
       this.notifyStatus()
-    } catch {}
+    } catch {
+      // ignore status refresh errors
+    }
   }
 
   public async refreshScenes(): Promise<string[]> {
@@ -362,7 +366,9 @@ export class ObsWebSocketService {
         this.notifyStatus()
         return scenesList
       }
-    } catch {}
+    } catch {
+      // ignore scene fetch errors
+    }
     return this.status.scenes
   }
 

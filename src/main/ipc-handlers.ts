@@ -1,4 +1,4 @@
-import { ipcMain, app, dialog, BrowserWindow } from 'electron'
+import { ipcMain, app, dialog, BrowserWindow, desktopCapturer } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-events'
 import {
   GlobalControls,
@@ -53,6 +53,7 @@ import { propService } from './props/prop-service'
 import { loopService } from './loop/loop-service'
 import { midiService } from './midi/midi-service'
 import { obsWebSocketService } from './broadcast/obs-websocket-service'
+import { broadcastEngine } from './broadcast/broadcast-engine'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -1280,6 +1281,77 @@ export function registerIpcHandlers(): void {
 
   obsWebSocketService.setOnStatusChanged((st) => {
     windowManager.broadcastToAll(IPC_CHANNELS.OBS_STATUS_CHANGED, st)
+  })
+
+  // Phase 9: Broadcast Studio, Streaming & Recording
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_GET_SETTINGS, async () => {
+    return databaseService.getBroadcastSettings()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_SAVE_SETTINGS, async (_event, settings) => {
+    return databaseService.saveBroadcastSettings(settings)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_GET_SCENES, async () => {
+    return databaseService.getBroadcastScenes()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_SAVE_SCENE, async (_event, scene) => {
+    return databaseService.saveBroadcastScene(scene)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_DELETE_SCENE, async (_event, id: string) => {
+    return databaseService.deleteBroadcastScene(id)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_GET_AUDIO_MIXER, async () => {
+    return databaseService.getAudioMixerConfig()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_SAVE_AUDIO_MIXER, async (_event, mixerState) => {
+    return databaseService.saveAudioMixerConfig(mixerState)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_GET_STATUS, async () => {
+    return broadcastEngine.getStatus()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_START_STREAM, async () => {
+    return broadcastEngine.start({ stream: true })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_STOP_STREAM, async () => {
+    return broadcastEngine.stop({ stream: true })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_START_RECORD, async () => {
+    return broadcastEngine.start({ record: true })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_STOP_RECORD, async () => {
+    return broadcastEngine.stop({ record: true })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_LIST_DESKTOP_SOURCES, async () => {
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 320, height: 180 },
+        fetchWindowIcons: false
+      })
+      return sources.map((s) => ({
+        id: s.id,
+        name: s.name,
+        thumbnailDataUrl: s.thumbnail.toDataURL()
+      }))
+    } catch (err: any) {
+      logger.warn('[Broadcast] Error listing desktop sources:', err.message)
+      return []
+    }
+  })
+
+  broadcastEngine.on('status-changed', (st) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, st)
   })
 
   // Hook DisplayManager events

@@ -17,15 +17,16 @@ import {
   CheckCircle2,
   Activity,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Radio
 } from 'lucide-react'
-import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics, LoopStatus } from '../../../shared/types'
+import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics, LoopStatus, BroadcastStatus } from '../../../shared/types'
 
 interface ProToolbarProps {
   searchQuery: string
   onSearchChange: (query: string) => void
-  activeMode: 'show' | 'edit' | 'bible' | 'youtube' | 'more'
-  onModeChange: (mode: 'show' | 'edit' | 'bible' | 'youtube' | 'more') => void
+  activeMode: 'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast'
+  onModeChange: (mode: 'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast') => void
   onAddTextSlide: () => void
   onOpenThemeModal: () => void
   onOpenMessageModal?: () => void
@@ -36,6 +37,7 @@ interface ProToolbarProps {
   isEmergencyActive?: boolean
   onToggleEmergency?: () => void
   systemMetrics?: SystemMetrics | null
+  broadcastStatus?: BroadcastStatus | null
   state: PresenterState | null
   displays: DisplayInfo[]
   assignments: RoleAssignment
@@ -78,6 +80,7 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   isEmergencyActive,
   onToggleEmergency,
   systemMetrics,
+  broadcastStatus,
   state,
   displays,
   assignments,
@@ -204,6 +207,15 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           <span>YouTube</span>
         </button>
         <button
+          className={`pro-mode-btn ${activeMode === 'broadcast' ? 'active pro-mode-broadcast' : ''}`}
+          onClick={() => onModeChange('broadcast')}
+          title="Estudio de Transmisión en Vivo, Grabación y Mezclador"
+          style={activeMode === 'broadcast' ? { borderColor: '#FF7A00', color: '#FF7A00' } : {}}
+        >
+          <Radio size={14} color={activeMode === 'broadcast' ? '#FF7A00' : 'currentColor'} />
+          <span>Transmisión</span>
+        </button>
+        <button
           className={`pro-mode-btn ${activeMode === 'more' ? 'active' : ''}`}
           onClick={() => onModeChange('more')}
           title="Configuración y Más Herramientas"
@@ -215,6 +227,34 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
 
       {/* Screen Status Buttons & Media Drawer Button */}
       <div className="pro-screen-status-pills">
+        {/* Phase 9: Live Stream / Recording Status Pill */}
+        {(broadcastStatus?.isStreaming || broadcastStatus?.isRecording) && (
+          <button
+            type="button"
+            className="pro-status-pill-btn"
+            onClick={() => onModeChange('broadcast')}
+            title="Transmisión o Grabación en curso. Clic para ir al Estudio."
+            style={{
+              backgroundColor: broadcastStatus.isStreaming ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 122, 0, 0.18)',
+              borderColor: broadcastStatus.isStreaming ? '#ef4444' : '#FF7A00',
+              color: broadcastStatus.isStreaming ? '#f87171' : '#FF7A00',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: broadcastStatus.isStreaming ? '#ef4444' : '#FF7A00'
+              }}
+            />
+            <span>{broadcastStatus.isStreaming ? `EN VIVO ${broadcastStatus.formattedTime || ''}` : 'GRABANDO'}</span>
+          </button>
+        )}
         <button
           type="button"
           className={`pro-status-pill-btn ${isMediaDrawerOpen ? 'active drawer-open' : ''}`}

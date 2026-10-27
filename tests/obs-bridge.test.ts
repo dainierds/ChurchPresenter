@@ -235,6 +235,8 @@ describe('Phase 9 - Stage A: OBS Bridge & Browser Source', () => {
         name: 'Cambio de Escena OBS',
         color: '#FF7A00',
         icon: 'Video',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         actions: [
           {
             id: 'act_1',

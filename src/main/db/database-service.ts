@@ -14,7 +14,10 @@ import {
   PresentationTimer,
   YouTubeItem,
   MacroItem,
-  PropItem
+  PropItem,
+  BroadcastScene,
+  BroadcastSettings,
+  BroadcastAudioMixerState
 } from '../../shared/types'
 
 export interface Migration {
@@ -649,6 +652,173 @@ const MIGRATIONS: Migration[] = [
           }
         }
         stmtProp.free()
+      } catch {
+        // ignore
+      }
+    }
+  },
+  {
+    version: 11,
+    name: 'phase_9_broadcast_scenes_and_settings',
+    up: (db: Database) => {
+      // Broadcast Scenes table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS broadcast_scenes (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          order_index INTEGER DEFAULT 0,
+          layers_json TEXT NOT NULL,
+          is_default INTEGER DEFAULT 0,
+          transition_type TEXT DEFAULT 'fade',
+          transition_duration_ms INTEGER DEFAULT 300,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+      `)
+
+      // Seed default broadcast scenes
+      try {
+        const stmt = db.prepare('SELECT COUNT(*) as cnt FROM broadcast_scenes;')
+        if (stmt.step()) {
+          const row = stmt.getAsObject()
+          if (Number(row.cnt || 0) === 0) {
+            const now = new Date().toISOString()
+            const defaultScenes = [
+              {
+                id: 'scene_camera_full',
+                name: 'Cámara Principal (Pantalla Completa)',
+                order_index: 0,
+                is_default: 1,
+                transition_type: 'cut',
+                transition_duration_ms: 0,
+                layers: [
+                  {
+                    id: 'layer_cam_1',
+                    name: 'Cámara Principal',
+                    type: 'video_device',
+                    x: 0,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    opacity: 1,
+                    zIndex: 1,
+                    visible: true
+                  }
+                ]
+              },
+              {
+                id: 'scene_camera_lyrics',
+                name: 'Cámara con Letras Superpuestas',
+                order_index: 1,
+                is_default: 0,
+                transition_type: 'fade',
+                transition_duration_ms: 300,
+                layers: [
+                  {
+                    id: 'layer_cam_2',
+                    name: 'Cámara Fondo',
+                    type: 'video_device',
+                    x: 0,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    opacity: 1,
+                    zIndex: 1,
+                    visible: true
+                  },
+                  {
+                    id: 'layer_pres_overlay',
+                    name: 'Letras y Salida',
+                    type: 'presentation',
+                    x: 0,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    opacity: 1,
+                    zIndex: 2,
+                    visible: true
+                  }
+                ]
+              },
+              {
+                id: 'scene_slide_pip',
+                name: 'Diapositiva con Cámara Pequeña (PIP)',
+                order_index: 2,
+                is_default: 0,
+                transition_type: 'fade',
+                transition_duration_ms: 300,
+                layers: [
+                  {
+                    id: 'layer_slide_bg',
+                    name: 'Diapositiva Programa',
+                    type: 'presentation',
+                    x: 0,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    opacity: 1,
+                    zIndex: 1,
+                    visible: true
+                  },
+                  {
+                    id: 'layer_cam_pip',
+                    name: 'Cámara PIP (Esquina)',
+                    type: 'video_device',
+                    x: 72,
+                    y: 68,
+                    width: 25,
+                    height: 28,
+                    opacity: 1,
+                    zIndex: 2,
+                    borderRadius: 8,
+                    visible: true
+                  }
+                ]
+              },
+              {
+                id: 'scene_presentation_only',
+                name: 'Solo Presentación (Programa)',
+                order_index: 3,
+                is_default: 0,
+                transition_type: 'fade',
+                transition_duration_ms: 300,
+                layers: [
+                  {
+                    id: 'layer_pres_full',
+                    name: 'Salida de Presentación Completa',
+                    type: 'presentation',
+                    x: 0,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    opacity: 1,
+                    zIndex: 1,
+                    visible: true
+                  }
+                ]
+              }
+            ]
+
+            defaultScenes.forEach((s) => {
+              db.run(
+                `INSERT INTO broadcast_scenes (id, name, order_index, layers_json, is_default, transition_type, transition_duration_ms, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                [
+                  s.id,
+                  s.name,
+                  s.order_index,
+                  JSON.stringify(s.layers),
+                  s.is_default,
+                  s.transition_type,
+                  s.transition_duration_ms,
+                  now,
+                  now
+                ]
+              )
+            })
+          }
+        }
+        stmt.free()
       } catch {
         // ignore
       }
@@ -1822,6 +1992,175 @@ export class DatabaseService {
       id
     ])
     return true
+  }
+
+  // =========================================================================
+  // Phase 9: Broadcast Scenes & Settings
+  // =========================================================================
+
+  public getBroadcastScenes(): BroadcastScene[] {
+    try {
+      const rows = this.query<{
+        id: string
+        name: string
+        order_index: number
+        layers_json: string
+        is_default: number
+        transition_type: string
+        transition_duration_ms: number
+      }>('SELECT * FROM broadcast_scenes ORDER BY order_index ASC, created_at ASC;')
+
+      return rows.map((r) => {
+        let layers = []
+        try {
+          layers = JSON.parse(r.layers_json || '[]')
+        } catch {
+          layers = []
+        }
+
+        return {
+          id: r.id,
+          name: r.name,
+          orderIndex: Number(r.order_index || 0),
+          layers,
+          isDefault: Boolean(r.is_default),
+          transitionType: (r.transition_type as any) || 'fade',
+          transitionDurationMs: Number(r.transition_duration_ms || 300)
+        }
+      })
+    } catch (err) {
+      logger.error('Failed to get broadcast scenes from database:', err)
+      return []
+    }
+  }
+
+  public saveBroadcastScene(scene: BroadcastScene): BroadcastScene {
+    const now = new Date().toISOString()
+    const isNew = !this.getBroadcastScenes().some((s) => s.id === scene.id)
+    if (isNew) {
+      this.run(
+        `INSERT INTO broadcast_scenes (id, name, order_index, layers_json, is_default, transition_type, transition_duration_ms, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          scene.id,
+          scene.name,
+          scene.orderIndex ?? 0,
+          JSON.stringify(scene.layers || []),
+          scene.isDefault ? 1 : 0,
+          scene.transitionType || 'fade',
+          scene.transitionDurationMs || 300,
+          now,
+          now
+        ]
+      )
+    } else {
+      this.run(
+        `UPDATE broadcast_scenes
+         SET name = ?, order_index = ?, layers_json = ?, is_default = ?, transition_type = ?, transition_duration_ms = ?, updated_at = ?
+         WHERE id = ?;`,
+        [
+          scene.name,
+          scene.orderIndex ?? 0,
+          JSON.stringify(scene.layers || []),
+          scene.isDefault ? 1 : 0,
+          scene.transitionType || 'fade',
+          scene.transitionDurationMs || 300,
+          now,
+          scene.id
+        ]
+      )
+    }
+    return scene
+  }
+
+  public deleteBroadcastScene(id: string): boolean {
+    this.run('DELETE FROM broadcast_scenes WHERE id = ?;', [id])
+    return true
+  }
+
+  public getBroadcastSettings(): BroadcastSettings {
+    const url = this.getConfig('broadcast_rtmp_url') || ''
+    const keyEnc = this.getConfig('broadcast_rtmp_key_enc') || ''
+    const preset = (this.getConfig('broadcast_quality_preset') as any) || '1080p30'
+    const recordLocal = this.getConfig('broadcast_record_local') !== '0'
+    const recordingFormat = (this.getConfig('broadcast_recording_format') as any) || 'mp4'
+    const recordingPath = this.getConfig('broadcast_recording_path') || ''
+    const autoReconnect = this.getConfig('broadcast_auto_reconnect') !== '0'
+    const encoder = (this.getConfig('broadcast_encoder_preference') as any) || 'nvenc'
+    const delay = parseInt(this.getConfig('broadcast_audio_delay_ms') || '0', 10) || 0
+
+    return {
+      rtmpUrl: url,
+      rtmpKeyEncrypted: keyEnc,
+      qualityPreset: preset,
+      recordLocal,
+      recordingFormat,
+      recordingPath: recordingPath || undefined,
+      autoReconnect,
+      encoderPreference: encoder,
+      audioDelayMs: delay
+    }
+  }
+
+  public saveBroadcastSettings(settings: Partial<BroadcastSettings>): BroadcastSettings {
+    if (settings.rtmpUrl !== undefined) this.setConfig('broadcast_rtmp_url', settings.rtmpUrl)
+    if (settings.rtmpKeyEncrypted !== undefined) this.setConfig('broadcast_rtmp_key_enc', settings.rtmpKeyEncrypted)
+    if (settings.qualityPreset !== undefined) this.setConfig('broadcast_quality_preset', settings.qualityPreset)
+    if (settings.recordLocal !== undefined) this.setConfig('broadcast_record_local', settings.recordLocal ? '1' : '0')
+    if (settings.recordingFormat !== undefined) this.setConfig('broadcast_recording_format', settings.recordingFormat)
+    if (settings.recordingPath !== undefined) this.setConfig('broadcast_recording_path', settings.recordingPath)
+    if (settings.autoReconnect !== undefined) this.setConfig('broadcast_auto_reconnect', settings.autoReconnect ? '1' : '0')
+    if (settings.encoderPreference !== undefined) this.setConfig('broadcast_encoder_preference', settings.encoderPreference)
+    if (settings.audioDelayMs !== undefined) this.setConfig('broadcast_audio_delay_ms', String(settings.audioDelayMs))
+
+    return this.getBroadcastSettings()
+  }
+
+  public getAudioMixerConfig(): BroadcastAudioMixerState {
+    const raw = this.getConfig('broadcast_audio_mixer_json')
+    if (raw) {
+      try {
+        return JSON.parse(raw)
+      } catch {
+        // fallback to default mixer state
+      }
+    }
+    return {
+      sources: [
+        {
+          id: 'source_presentation',
+          name: 'Presentación (Salida)',
+          type: 'presentation',
+          volume: 1.0,
+          muted: false,
+          delayMs: 0
+        },
+        {
+          id: 'source_mic_1',
+          name: 'Micrófono Principal',
+          type: 'mic_input',
+          volume: 1.0,
+          muted: false,
+          delayMs: 0
+        },
+        {
+          id: 'source_aux',
+          name: 'Audio Auxiliar / Música',
+          type: 'aux_input',
+          volume: 0.8,
+          muted: false,
+          delayMs: 0
+        }
+      ],
+      masterVolume: 1.0,
+      masterMuted: false,
+      limiterEnabled: true
+    }
+  }
+
+  public saveAudioMixerConfig(config: BroadcastAudioMixerState): BroadcastAudioMixerState {
+    this.setConfig('broadcast_audio_mixer_json', JSON.stringify(config))
+    return config
   }
 
   private schedulePersist(): void {

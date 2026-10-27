@@ -849,3 +849,36 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
      - Endpoint HTTP REST local autenticado con token de operador: `POST /api/macros/:id/run` para integración inmediata con Elgato Stream Deck y Bitfocus Companion.
      - Receptor MIDI con modo de captura interactiva ("Aprender MIDI") para pedales o teclados musicales.
 
+---
+
+## 27. Evaluación de Arquitecturas de Streaming (MediaRecorder Remux vs Raw YUV Pipe), Aceleración por Hardware NVENC y Cumplimiento Legal CCLI (Fase 9)
+
+- **Contexto**:
+  - Para transmitir cultos en vivo a plataformas como YouTube Live, Facebook Live o Twitch, el software debe codificar una señal Full HD 1080p a 30 o 60 FPS con audio de alta fidelidad, grabando simultáneamente una copia maestra en disco y garantizando que las pantallas físicas de la congregación nunca se ralenticen ni sufran cortes.
+  - Se debe decidir la canalización (pipeline) de ingesta hacia FFmpeg: ¿escribir fotogramas crudos sin comprimir (Raw YUV420p / BGRA) a través de un pipe IPC de Node.js, o remultiplexar un flujo ligero empaquetado por MediaRecorder en el renderer?
+- **Mediciones y Evaluación Comparativa de Canalizaciones (`benchmark-broadcast-pipelines-results.json`)**:
+  - **Pipeline A (MediaRecorder Container Remux via stdin)**:
+    - Uso de CPU en Node.js: **0.00% a 1.29%**
+    - Consumo de memoria RAM: **67.2 MB**
+    - Throughput de transferencia IPC: **~4.5 Mbps** (flujo de video comprimido por hardware).
+  - **Pipeline B (Raw Pipe YUV420p / BGRA sin compresión previa)**:
+    - Uso de CPU en Node.js: **13.63% a 16.36%** (más de 13 veces mayor carga de procesador).
+    - Consumo de memoria RAM: **70.2 MB a 71.1 MB**
+    - Throughput de transferencia IPC: **~93.3 MB/s** (746.4 Mbps ininterrumpidos saturando tuberías IPC de Node).
+  - **Decisión**: Se selecciona y recomienda empíricamente **Pipeline A**. La transferencia masiva de 93.3 megabytes por segundo en Pipeline B genera una sobrecarga inaceptable en el event loop de Node.js, mientras que Pipeline A aprovecha los codificadores de hardware de la plataforma reduciendo la carga de CPU a prácticamente cero.
+- **Decisiones Técnicas Complementarias**:
+  1. **Aceleración por Hardware NVIDIA RTX (NVENC `h264_nvenc`)**:
+     - Se prioriza el codificador de hardware dedicado `h264_nvenc` con preset balanceado `p4` (`medium`), tasa de bits constante o variable con VBV y perfil `high`.
+     - Si el equipo no cuenta con tarjeta NVIDIA RTX o el driver falla, el motor activa un fallback transparente e instantáneo al codificador por software de CPU `libx264` con preset `veryfast`.
+  2. **Grabación Local Dual sin Doble Codificación**:
+     - El pipeline de FFmpeg utiliza multiplexación con la opción `-tee` o mapeo de salida dual para generar el stream RTMP hacia internet y el archivo local (MP4 o MKV tolerante a apagones) a partir del mismo stream de compresión de video, evitando el costo de codificar dos veces la misma imagen.
+  3. **Puente con OBS Studio mediante obs-websocket v5**:
+     - Para templos que ya cuentan con producción audiovisual avanzada en OBS Studio, se implementa un puente de doble vía:
+       - Salidas HTTP locales (`/outputs/:role?transparent=true`) que OBS ingesta como "Browser Source" con canal alfa transparente y soporte de props.
+       - Cliente oficial obs-websocket v5 (RFC) autenticado mediante desafío criptográfico SHA-256 con contraseñas cifradas en Windows DPAPI (`safeStorage`), permitiendo controlar OBS (escenas, inicio/detención de stream y grabación) directamente desde ChurchPresenter.
+  4. **Aislamiento Total de Salidas de Proyección**:
+     - Toda la codificación y transmisión se ejecuta en un proceso desacoplado del sistema operativo (`ffmpeg.exe`). Los procesos renderizadores de las pantallas físicas de la iglesia (`main`, `stage`, `lobby`) no comparten buffers de render con la transmisión, garantizando inmunidad absoluta ante caídas de internet o congestión de ancho de banda.
+  5. **Cumplimiento Legal y Licenciamiento CCLI**:
+     - Se incorpora una advertencia visual prominente en la interfaz del estudio y en los diálogos de configuración recordando al operador que transmitir alabanzas y música eclesiástica por internet requiere una licencia vigente (p. ej., CCLI Streaming License).
+
+

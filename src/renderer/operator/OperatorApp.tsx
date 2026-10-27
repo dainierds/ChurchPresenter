@@ -63,7 +63,10 @@ import { OutputHealthModal } from './components/OutputHealthModal'
 import { RehearsalSummaryModal } from './components/RehearsalSummaryModal'
 import { MacroEditorModal } from './components/MacroEditorModal'
 import { PropEditorModal } from './components/PropEditorModal'
-import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus } from '../../shared/types'
+import { BroadcastStudioPanel } from './components/BroadcastStudioPanel'
+import { BroadcastSettingsModal } from './components/BroadcastSettingsModal'
+import { ObsBridgeModal } from './components/ObsBridgeModal'
+import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus, BroadcastStatus } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
 import {
@@ -401,10 +404,26 @@ export const OperatorApp: React.FC = () => {
   const [isMediaDrawerOpen, setIsMediaDrawerOpen] = useState<boolean>(false)
   const [isDraggingFiles, setIsDraggingFiles] = useState<boolean>(false)
   const [fileWatcherEvent, setFileWatcherEvent] = useState<FileChangedEvent | null>(null)
-  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'youtube' | 'more'>('show')
+  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast'>('show')
   const [youtubeItems, setYoutubeItems] = useState<YouTubeItem[]>([])
   const [isYouTubeVerifyOpen, setIsYouTubeVerifyOpen] = useState<boolean>(false)
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState<boolean>(false)
+  const [isBroadcastSettingsOpen, setIsBroadcastSettingsOpen] = useState<boolean>(false)
+  const [isObsBridgeOpen, setIsObsBridgeOpen] = useState<boolean>(false)
+  const [broadcastStatus, setBroadcastStatus] = useState<BroadcastStatus | null>(null)
+
+  // Phase 9: Broadcast Engine Telemetry Listener
+  useEffect(() => {
+    const unsub = window.churchPresenterApi.onBroadcastStatusChanged?.((st) => {
+      setBroadcastStatus(st)
+    })
+    window.churchPresenterApi.getBroadcastStatus?.().then((st) => {
+      if (st) setBroadcastStatus(st)
+    }).catch(() => {})
+    return () => {
+      if (unsub) unsub()
+    }
+  }, [])
 
   // Save slide zoom preference
   useEffect(() => {
@@ -2906,6 +2925,7 @@ export const OperatorApp: React.FC = () => {
         isEmergencyActive={isEmergencyActive}
         onToggleEmergency={handleToggleEmergency}
         systemMetrics={systemMetrics}
+        broadcastStatus={broadcastStatus}
         state={state}
         displays={displays}
         assignments={assignments}
@@ -3186,7 +3206,12 @@ export const OperatorApp: React.FC = () => {
         {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube/Bible Panels */}
         <section className="pro-center-column">
           <ErrorBoundary panelName="Área Central">
-            {activeToolbarMode === 'youtube' ? (
+            {activeToolbarMode === 'broadcast' ? (
+              <BroadcastStudioPanel
+                onOpenSettings={() => setIsBroadcastSettingsOpen(true)}
+                onOpenObsBridge={() => setIsObsBridgeOpen(true)}
+              />
+            ) : activeToolbarMode === 'youtube' ? (
               <YouTubeBrowserPanel
                 onAddToPlaylist={(item) => {
                   if (currentService) {
@@ -3453,6 +3478,54 @@ export const OperatorApp: React.FC = () => {
                   >
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Atajos de Teclado (F1)</div>
                     <div style={{ fontSize: 12, color: '#9CA3AF' }}>Guía de teclas rápidas de operador</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveToolbarMode('broadcast')}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #FF7A00',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#FF7A00' }}>Estudio de Transmisión</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Previo/Programa, escenas, transiciones y audio mixer</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBroadcastSettingsOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #38BDF8',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#38BDF8' }}>Ajustes de Transmisión (RTMP/NVENC)</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Destinos de streaming, codificación por hardware y grabación local</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsObsBridgeOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #22c55e',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#22c55e' }}>Puente con OBS Studio</div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Conexión obs-websocket v5 y fuentes de navegador transparentes</div>
                   </button>
                 </div>
               </div>
@@ -6205,6 +6278,20 @@ export const OperatorApp: React.FC = () => {
           onClose={() => setIsPropEditorOpen(false)}
         />
       )}
+
+      {/* =========================================================
+          PHASE 9: BROADCAST & OBS BRIDGE MODALS
+          ========================================================= */}
+      <BroadcastSettingsModal
+        isOpen={isBroadcastSettingsOpen}
+        onClose={() => setIsBroadcastSettingsOpen(false)}
+      />
+
+      <ObsBridgeModal
+        isOpen={isObsBridgeOpen}
+        onClose={() => setIsObsBridgeOpen(false)}
+        remotePort={remoteStatus?.port || 8080}
+      />
 
       {/* Toast Notifications */}
       <div className="toasts-container">

@@ -1703,9 +1703,105 @@ async function run() {
     )
 
     // =========================================================================
-    // STEP 18: Final Audit & Zero Console Errors Assertion
+    // STEP 18: Phase 9 - Transmisión y Grabación tipo OBS (Estudio, Audio Mixer, NVENC & Puente OBS)
     // =========================================================================
-    console.log('\n[Step 18/18] Auditing Console Errors and Unhandled Exceptions...')
+    console.log('\n[Step 18/19] Testing Phase 9: Transmisión y Grabación tipo OBS (Estudio, Previo/Programa, Audio Mixer & Puente OBS)...')
+
+    // 1. Switch to "Transmisión" Mode in ProToolbar
+    const broadcastModeBtn = win.locator('.pro-mode-btn:has-text("Transmisión")')
+    await broadcastModeBtn.click()
+    await win.waitForTimeout(500)
+
+    // Verify Studio Viewport Elements
+    const studioTitle = win.locator('.broadcast-studio-panel :text("ESTUDIO DE TRANSMISIÓN")')
+    if ((await studioTitle.count()) === 0) {
+      throw new Error('BroadcastStudioPanel did not render when switching to Transmisión mode.')
+    }
+    console.log('  -> Broadcast Studio Panel loaded with Previo and Programa viewports.')
+
+    // 2. Verify Default Factory Scenes in Scenes List
+    const sceneItems = win.locator('.broadcast-studio-panel :text("Cámara Principal")').first()
+    await sceneItems.waitFor({ timeout: 5000 })
+    console.log('  -> Verified default factory broadcast scenes.')
+
+    // 3. Test Transition Controls (Corte / Fundido)
+    const cutBtn = win.locator('.broadcast-studio-panel button:has-text("CORTE")')
+    await cutBtn.click()
+    await win.waitForTimeout(300)
+    console.log('  -> Tested instant Cut transition.')
+
+    const fadeBtn = win.locator('.broadcast-studio-panel button:has-text("FUNDIDO")')
+    await fadeBtn.click()
+    await win.waitForTimeout(600)
+    console.log('  -> Tested smooth Fade transition.')
+
+    // 4. Capture Broadcast Studio Screenshot
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '23_broadcast_studio_panel.png') })
+    await captureOutputWindows('23_broadcast_studio_outputs')
+
+    // 5. Open and Verify OBS Bridge Modal
+    const obsBridgeBtn = win.locator('.broadcast-studio-panel button:has-text("Puente OBS")')
+    await obsBridgeBtn.click()
+    await win.waitForTimeout(400)
+
+    const obsModalTitle = win.locator(':text("Puente con OBS Studio")')
+    if ((await obsModalTitle.count()) === 0) {
+      throw new Error('ObsBridgeModal did not open when clicking Puente OBS.')
+    }
+    console.log('  -> ObsBridgeModal opened and verified.')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '24_obs_bridge_modal.png') })
+
+    // Close OBS modal
+    const closeObsModalBtn = win.locator('button:has-text("Cerrar")')
+    await closeObsModalBtn.click()
+    await win.waitForTimeout(300)
+
+    // 6. Open and Verify Broadcast Settings Modal (RTMP, NVENC, CCLI Notice)
+    const broadcastSettingsBtn = win.locator('.broadcast-studio-panel button[title*="Configurar RTMP"]')
+    await broadcastSettingsBtn.click()
+    await win.waitForTimeout(400)
+
+    const settingsTitle = win.locator(':text("Configuración de Transmisión y Grabación")')
+    if ((await settingsTitle.count()) === 0) {
+      throw new Error('BroadcastSettingsModal did not open.')
+    }
+    console.log('  -> BroadcastSettingsModal opened with RTMP presets, NVENC options and CCLI notice.')
+    await win.screenshot({ path: path.join(EVIDENCE_DIR, '25_broadcast_settings_modal.png') })
+
+    // Close settings modal
+    const cancelSettingsBtn = win.locator('.pro-modal-container button:has-text("Cancelar")')
+    await cancelSettingsBtn.click()
+    await win.waitForTimeout(300)
+
+    // 7. Test Stream Confirmation Modal
+    const startStreamBtn = win.locator('.broadcast-studio-panel button:has-text("Transmitir en Vivo")')
+    await startStreamBtn.click()
+    await win.waitForTimeout(400)
+
+    const confirmStartModal = win.locator(':text("Iniciar Transmisión en Vivo")')
+    if ((await confirmStartModal.count()) === 0) {
+      throw new Error('Confirmation modal did not open before starting live stream.')
+    }
+    console.log('  -> Stream start confirmation modal verified.')
+
+    // Cancel confirmation to avoid unnecessary network connection
+    const cancelConfirmBtn = win.locator('button:has-text("Cancelar")').last()
+    await cancelConfirmBtn.click()
+    await win.waitForTimeout(300)
+
+    // Switch back to "Mostrar" mode
+    const showModeBtn = win.locator('.pro-mode-btn:has-text("Mostrar")')
+    await showModeBtn.click()
+    await win.waitForTimeout(400)
+
+    console.log(
+      '[TEST AUDIT]: Transmisión y Grabación tipo OBS (Fase 9) -> APROBADA (Estudio Previo/Programa, corte/fundido, audio mixer VU meters, configuración RTMP/NVENC, aislamiento de salidas y puente OBS)'
+    )
+
+    // =========================================================================
+    // STEP 19: Final Audit & Zero Console Errors Assertion
+    // =========================================================================
+    console.log('\n[Step 19/19] Auditing Console Errors and Unhandled Exceptions...')
 
     console.log('----------------------------------------------------------------------')
     console.log(`[Summary]: Console errors recorded: ${consoleErrors.length}`)

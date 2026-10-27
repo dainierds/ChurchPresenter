@@ -16,6 +16,8 @@ export interface FfmpegStatus {
   available: boolean
   path: string | null
   version: string | null
+  hasNvenc?: boolean
+  ffprobePath?: string | null
 }
 
 export interface ConversionProgress {
@@ -51,11 +53,36 @@ export class FfmpegService {
       'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe'
     ]
 
+    // Scan WinGet package paths
+    const wingetPackagesDir = path.join(process.env.LOCALAPPDATA || '', 'Microsoft\\WinGet\\Packages')
+    if (fs.existsSync(wingetPackagesDir)) {
+      try {
+        const dirs = fs.readdirSync(wingetPackagesDir)
+        for (const d of dirs) {
+          if (d.includes('Gyan.FFmpeg') || d.includes('ffmpeg')) {
+            const packagePath = path.join(wingetPackagesDir, d)
+            const subdirs = fs.readdirSync(packagePath)
+            for (const sub of subdirs) {
+              const candidate = path.join(packagePath, sub, 'bin', 'ffmpeg.exe')
+              if (fs.existsSync(candidate)) {
+                standardPaths.unshift(candidate)
+              }
+            }
+          }
+        }
+      } catch {
+        // winget dir not accessible or not present
+      }
+    }
+
     for (const p of standardPaths) {
       if (fs.existsSync(p)) {
         const ver = await this.queryFfmpegVersion(p)
         if (ver) {
-          return { available: true, path: p, version: ver }
+          const hasNvenc = await this.queryNvencSupport(p)
+          const ffprobeCandidate = path.join(path.dirname(p), 'ffprobe.exe')
+          const ffprobePath = fs.existsSync(ffprobeCandidate) ? ffprobeCandidate : null
+          return { available: true, path: p, version: ver, hasNvenc, ffprobePath }
         }
       }
     }
@@ -63,10 +90,32 @@ export class FfmpegService {
     // 3. Check system PATH
     const pathVer = await this.queryFfmpegVersion('ffmpeg')
     if (pathVer) {
-      return { available: true, path: 'ffmpeg', version: pathVer }
+      const hasNvenc = await this.queryNvencSupport('ffmpeg')
+      const ffprobeVer = await this.queryFfmpegVersion('ffprobe')
+      return { available: true, path: 'ffmpeg', version: pathVer, hasNvenc, ffprobePath: ffprobeVer ? 'ffprobe' : null }
     }
 
-    return { available: false, path: null, version: null }
+    return { available: false, path: null, version: null, hasNvenc: false, ffprobePath: null }
+  }
+
+  public queryNvencSupport(ffmpegBin: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        const proc = spawn(ffmpegBin, ['-encoders'])
+        let stdout = ''
+        proc.stdout?.on('data', (d) => (stdout += d.toString()))
+        proc.on('error', () => resolve(false))
+        proc.on('close', (code) => {
+          if (code === 0 && stdout.includes('h264_nvenc')) {
+            resolve(true)
+          } else {
+            resolve(false)
+          }
+        })
+      } catch {
+        resolve(false)
+      }
+    })
   }
 
   private queryFfmpegVersion(ffmpegBin: string): Promise<string | null> {

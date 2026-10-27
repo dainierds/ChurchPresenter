@@ -939,7 +939,27 @@ const api: ChurchPresenterApi = {
     const handler = (_event: any, status: any) => callback(status)
     ipcRenderer.on(IPC_CHANNELS.OBS_STATUS_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.OBS_STATUS_CHANGED, handler)
-  }
+  },
+
+  // Phase 9: Broadcast Studio, Streaming & Recording
+  getBroadcastSettings: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_GET_SETTINGS),
+  saveBroadcastSettings: (settings: any) => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_SAVE_SETTINGS, settings),
+  getBroadcastScenes: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_GET_SCENES),
+  saveBroadcastScene: (scene: any) => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_SAVE_SCENE, scene),
+  deleteBroadcastScene: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_DELETE_SCENE, id),
+  getAudioMixerConfig: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_GET_AUDIO_MIXER),
+  saveAudioMixerConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_SAVE_AUDIO_MIXER, config),
+  getBroadcastStatus: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_GET_STATUS),
+  startBroadcastStream: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_START_STREAM),
+  stopBroadcastStream: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_STOP_STREAM),
+  startBroadcastRecord: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_START_RECORD),
+  stopBroadcastRecord: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_STOP_RECORD),
+  onBroadcastStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
+  },
+  listDesktopSources: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_LIST_DESKTOP_SOURCES)
 }
 
 try {
