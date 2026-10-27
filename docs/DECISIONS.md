@@ -815,3 +815,37 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
      - Permite con un solo clic o atajo congelar y silenciar medios instantáneamente mientras se superpone el logotipo institucional o fondo seguro en todas las salidas físicas, conservando intacto el flujo de trabajo del operador para reanudar cuando el incidente sea superado.
   5. **Cifrado de Ajustes Sensibles con `safeStorage`**:
      - Los datos confidenciales (como claves o configuraciones privadas) se cifran en disco utilizando la DPAPI de Windows a través de `safeStorage.encryptString()`, garantizando que no se almacenen credenciales en texto plano en la base de datos o archivos JSON.
+
+---
+
+## 26. Arquitectura de Automatización, Motor de Macros en Proceso Principal, Props y Seguridad de Comandos (Fase 8)
+
+- **Contexto**:
+  - En cultos en vivo, la coordinación entre encender el proyector, poner música instrumental de fondo, lanzar un temporizador de 5 minutos, limpiar capas y enviar la diapositiva inicial requiere pulsar múltiples botones en un orden estricto.
+  - Se requiere un sistema de Macros que automatice secuencias de acciones con pausas opcionales, activación por botones, atajos, diapositivas, peticiones HTTP (Stream Deck) y eventos MIDI.
+  - Además, se requiere una capa de superposición gráfica independiente ("Props") para logos fijos de transmisión, tercios inferiores de ofrendas o anuncios sin alterar el contenido de las canciones.
+- **Decisiones Técnicas**:
+  1. **Ejecución de Macros Exclusiva en el Proceso Principal (Main Process)**:
+     - Las macros se ejecutan de forma aislada y determinista dentro de `MacroEngine` en el proceso principal de Node.js, nunca en los renderizadores de React.
+     - Esto evita que una macro se congele o aborte si una pestaña o componente React se desmonta o sufre re-renderizados.
+     - Cada ejecución tiene un identificador único, registro detallado en los logs de la app, y soporte para cancelación inmediata mediante `stopAllMacros()`.
+  2. **Prevención Estricta de Bucles Infinitos y Límite de Profundidad**:
+     - Las macros pueden invocar otras macros mediante la acción `trigger_macro`.
+     - Para prevenir desbordamiento de pila o bucles infinitos causados por llamadas cíclicas (p. ej., Macro A -> Macro B -> Macro A):
+       - Se mantiene un conjunto `callStack` con los IDs de las macros en ejecución activa. Si un ID ya está en la pila, la llamada se aborta inmediatamente con error controlado.
+       - Se impone un límite máximo de profundidad de **5 niveles** (`MAX_DEPTH = 5`).
+       - Se establece un tiempo máximo global de ejecución de **60 segundos** por macro.
+  3. **Seguridad y Bloqueo de Comandos Externos del Sistema Operativo**:
+     - Por política de seguridad del templo, la acción `execute_command` (ejecución de scripts o programas del sistema operativo) está **desactivada y bloqueada por defecto**.
+     - El motor de macros rechaza cualquier acción de este tipo con un mensaje explícito a menos que el usuario habilite deliberadamente una bandera booleana en la configuración con advertencia visible de riesgos.
+  4. **Capa Dedicada de Props en Salidas Físicas**:
+     - Los Props se renderizan en una capa independiente `.output-props-layer` en `OutputApp.tsx`, superpuesta por encima de `.layer-content`.
+     - Respetan los controles globales de emergencia: al pulsar Negro (F1) o Limpiar Todo (F2), la capa de Props se oculta automáticamente.
+     - Soporta asignación granular por rol de pantalla (`targetRoles`: Sala, Escenario, Lobby).
+  5. **Disparadores Múltiples (Triggers)**:
+     - Disparo manual desde botón en el panel lateral derecho del operador.
+     - Atajo de teclado directo con detección en ventana del operador.
+     - Disparadores en diapositivas (`onEnter` al proyectar la diapositiva y `onExit` al abandonarla) con distintivo visual `⚡ M`.
+     - Endpoint HTTP REST local autenticado con token de operador: `POST /api/macros/:id/run` para integración inmediata con Elgato Stream Deck y Bitfocus Companion.
+     - Receptor MIDI con modo de captura interactiva ("Aprender MIDI") para pedales o teclados musicales.
+

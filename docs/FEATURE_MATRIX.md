@@ -84,8 +84,24 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 
 ---
 
-## 8. Registro de Pruebas Automatizadas
+## 8. Fase 8: Automatización (Macros, Props, Bucles, Transiciones y MIDI)
 
-- **Total Archivos de Test**: 39 archivos
-- **Total Tests Automatizados**: 182 pruebas pasando limpiamente (`npm test`)
+| Característica | Estado | Componente / Servicio | Verificación |
+|---|---|---|---|
+| **Motor de Macros Aislado** | Operativo | `MacroEngine` (Main Process) | Ejecución secuencial aislada, pausas (`delayMs`), parada de emergencia, prevención de bucles infinitos, límite de profundidad <= 5, timeout 60s, y bloqueo de comandos de SO por defecto. Pruebas en `tests/macro-engine.test.ts`. |
+| **Editor y Panel de Macros** | Operativo | `RightSidePanel` (Tab Macros) + `MacroEditorModal` | Pestaña activada con tarjetas visuales, creación, edición, duplicación, eliminación, ejecución paso a paso e historial. |
+| **Disparadores (Triggers)** | Operativo | `MacroEngine` + `OperatorApp` + `RemoteServer` | Disparo manual por botón, atajos de teclado, en entrada/salida de diapositiva (`onEnter`/`onExit`), en ítem de playlist, control remoto web, eventos MIDI y HTTP API local (`POST /api/macros/:id/run`). |
+| **Indicadores en Diapositivas / Playlist** | Operativo | `SlideGridPanel` + `PlaylistPanel` | Distintivo `⚡ M` en diapositivas o elementos con macros asociadas. |
+| **Capa de Props (Superpuestos)** | Operativo | `PropService` + `RightSidePanel` (Tab Props) + `OutputApp` | Elementos gráficos (logotipos, tercio inferior con datos bancarios, textos, cuentas regresivas) en capa superior `.output-props-layer` con animaciones CSS, asignables por rol de salida y respetando Negro y Limpiar. Pruebas en `tests/prop-service.test.ts`. |
+| **Presentaciones en Bucle** | Operativo | `LoopService` + `ProToolbar` | Avance automático por tiempo, bucle infinito, shuffle opcional, música de fondo sincronizada, insignia con cuenta regresiva en toolbar y detención suave. Pruebas en `tests/presentation-loop.test.ts`. |
+| **Transiciones entre Diapositivas** | Operativo | `OutputApp.tsx` + `output.css` | Corte, fundido, deslizar y zoom por CSS Keyframes, configurables por tema o diapositiva, sin parpadeos de DOM y desactivables globalmente. |
+| **Receptor MIDI y Aprendizaje** | Operativo | `MidiService` + `MacroEditorModal` | Entrada MIDI (Web MIDI API) con asignación de notas/CC y asistente interactivo de captura "Aprender MIDI". |
+
+---
+
+## 9. Registro de Pruebas Automatizadas
+
+- **Total Archivos de Test**: 42 archivos de test unitarios
+- **Total Tests Automatizados**: 194 pruebas pasando limpiamente (`npm test` / `vitest run`)
 - **Compilación de Tipos**: TypeScript 5.7.2 (`tsc --noEmit`) con 0 errores.
+- **Pruebas E2E Reales**: 17 pasos ejecutados con la app real de Electron y Chromium en Playwright con capturas de evidencia completas en `docs/evidence/`.

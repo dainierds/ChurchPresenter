@@ -147,9 +147,27 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - **Prueba de larga duración (Soak Test)**: Script `npm run soak` para simulación de cultos de 4 horas midiendo RSS, FPS, fugas de memoria y errores minuto a minuto con registros reales en `docs/soak-results/`.
 - **Documentación del operador y mantenimiento**: Guía de uso en español para el templo (`docs/GUIA_OPERADOR.md`) y procedimiento de actualización y reversión (`docs/PROCEDIMIENTO_ACTUALIZACION.md`).
 
-### Fase 8: Automatización
-- Integración MIDI / Companion / Stream Deck para disparo de señales y macros.
-- Planificación de cultos y listas de reproducción secuenciales automáticas.
+### Fase 8: Automatización (Completada)
+- **Motor de Macros Aislado (`MacroEngine`)**: Ejecución secuencial en el proceso principal de Node.js con control de pausas (`delayMs`), manejo de errores sin bloquear la app, parada de emergencia (`stopAllMacros`), ejecución paso a paso (`runStep`) y registro detallado de auditoría.
+- **Acciones Compatibles de Macros**: Enviar elemento o diapositiva a vivo, avance/retroceso de diapositivas y elementos, limpieza independiente por capa (Fondo, Diapo, Mensaje, Audio, Medios, Todo), controles globales (Negro, Logo, Congelar), control de temporizadores (iniciar, pausar, reiniciar), reproducción y pausa de medios/video, música ambiental con fundido de audio (`fade-out`), avisos instantáneos (`show_message`, `hide_message`), activación/desactivación de props (`show_prop`, `hide_prop`), cambio de tema dinámico por salida (`change_theme`), pausas de espera (`wait`) y ejecución encadenada de otras macros (`trigger_macro`).
+- **Seguridad y Bloqueo de Comandos Externos**: Prohibición por defecto de ejecución de comandos del sistema operativo (`execute_command`) para proteger la integridad del templo; solo habilitable con autorización explícita en configuración y advertencia documentada.
+- **Prevención de Bucles y Límite de Profundidad**: Seguimiento de la pila de llamadas (`callStack`), detección determinista de referencias circulares recursivas, límite máximo de profundidad de 5 niveles y tiempo de ejecución global acotado a 60 segundos por macro.
+- **Editor y Panel de Macros en Columna Derecha**: Activación completa de la pestaña "Macros" con lista de biblioteca, botones de ejecución directa con indicación de color e icono, creación, edición, duplicación, eliminación, ejecución paso a paso e interruptor de detención global de emergencia.
+- **Disparadores Múltiples (Triggers)**:
+  - Disparo manual desde botón en el panel de macros.
+  - Atajos de teclado locales o globales configurables.
+  - Disparadores al entrar (`onEnter`) o salir (`onExit`) de una diapositiva en vivo.
+  - Disparadores al seleccionar un elemento de playlist.
+  - Botones táctiles de control remoto web (`/ws`).
+  - Eventos MIDI (Note On / Control Change) mapeables.
+  - Programador horario diario o semanal.
+  - Petición HTTP local autenticada `POST /api/macros/:id/run` para integración nativa con Elgato Stream Deck y Bitfocus Companion.
+- **Indicador Visual en Diapositivas y Playlist**: Distintivo `⚡ M` prominente en miniaturas de diapositivas y elementos de playlist con macros asociadas.
+- **Capa de Props (Elementos Superpuestos)**: Activación de la pestaña "Props" para capas gráficas flotantes independientes de las diapositivas (logotipos, tercio inferior con datos bancarios de ofrendas, banners de texto, cuentas regresivas) con soporte de opacidad, posicionamiento (`topLeft`, `bottomCenter`, etc.), animaciones CSS de entrada y salida, asignación selectiva por roles de salida (`targetRoles`), y respeto estricto de Negro (F1) y Limpiar (F2).
+- **Presentaciones en Bucle (Loop Presentations)**: Motor de auto-avance (`LoopService`) para elementos de bienvenida o anuncios con intervalo por diapositiva configurable, conteo regresivo en barra de herramientas, bucle infinito, modo aleatorio opcional (shuffle), pista de música de fondo sincronizada, y botón de detención suave con transición fluida.
+- **Transiciones entre Diapositivas**: Efectos de transición acelerados por hardware en CSS Keyframes (Corte, Fundido, Deslizar Izquierda/Derecha/Arriba/Abajo, Zoom) con duración configurable en milisegundos, asignables globalmente, por tema o por diapositiva individual, sin parpadeos de DOM ni recargas innecesarias de video, y desactivables globalmente desde la barra de herramientas.
+- **Receptor MIDI y Modo Aprendizaje**: Mapeo de notas y controles de pedales o controladores MIDI externos con asistente interactivo "Aprender MIDI" y panel explicativo con diagramas cuando no se detecta interfaz MIDI.
+- **Suite de Pruebas Unitarias y E2E Real**: Cobertura con pruebas unitarias (`tests/macro-engine.test.ts`, `tests/prop-service.test.ts`, `tests/presentation-loop.test.ts`) y validación E2E automatizada con la app real de Electron (Paso 17 en `scripts/run-e2e.js`) con capturas fotográficas de salidas en `docs/evidence/`.
 
 ### Fase 9: Transmisión tipo OBS
 - Salida NDI o captura directa para software de streaming (OBS Studio / vMix).

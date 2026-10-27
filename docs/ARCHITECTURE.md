@@ -566,6 +566,76 @@ graph TD
 7. **`DiagnosticsService`**: Proporciona el visor interno de registros filtrable por severidad y búsqueda, y la generación de un paquete de diagnóstico `.zip` mediante `adm-zip` que incluye registros, especificaciones de hardware y configuración sanitizada (sin contraseñas, PINs ni tokens).
 8. **`RehearsalService`**: Permite activar el Modo Ensayo con insignia visual, registrando cada cambio de diapositiva e incidente en un archivo de log dedicado (`rehearsal-<fecha>.log`) y generando un reporte final al concluir el ensayo.
 
+---
+
+## 15. Arquitectura de Automatización: Macros, Disparadores, Props, Bucle y MIDI (Fase 8)
+
+```mermaid
+graph TD
+    subgraph Triggers ["Fuentes de Disparo (Triggers)"]
+        UI_BTN["Botón en UI (Panel Macros)"]
+        KBD["Atajo de Teclado (Global/Local)"]
+        SLIDE_TRG["Diapositiva (onEnter / onExit)"]
+        ITEM_TRG["Elemento Playlist (onSelect)"]
+        REMOTE_TRG["Control Remoto Web (Touch /ws)"]
+        MIDI_TRG["Controlador MIDI (Web MIDI API)"]
+        SCHED_TRG["Programador Horario (Cron / Reloj)"]
+        HTTP_API["API HTTP Local (Stream Deck / Companion)"]
+    end
+
+    subgraph MacroSubsystem ["Motor de Macros y Props (Main Process)"]
+        ME["MacroEngine\n(Ejecución Secuencial Aislada)"]
+        PS["PropService\n(Gestor de Props en Vivo)"]
+        LS["LoopService\n(Temporizador de Auto-Avance)"]
+        MIDI["MidiService\n(Router & Learn Mode)"]
+        DB["DatabaseService (Migración 10)\nTablas: macros, props"]
+    end
+
+    subgraph CorePresenter ["Control del Presentador"]
+        SM["PresenterStateManager"]
+        MS["MessageService"]
+        TS["ThemeService"]
+        MM["MasterMediaSyncService"]
+    end
+
+    subgraph OutputSurfaces ["Superficie de Salida (OutputApp.tsx)"]
+        TRANS["Transiciones de Diapositiva (CSS Keyframes)"]
+        PROP_LAYER["Capa Superior: .output-props-layer\n(Lower Thirds, Logos, Relojes)"]
+    end
+
+    UI_BTN --> ME
+    KBD --> ME
+    SLIDE_TRG --> ME
+    ITEM_TRG --> ME
+    REMOTE_TRG --> ME
+    MIDI_TRG --> MIDI
+    MIDI --> ME
+    SCHED_TRG --> ME
+    HTTP_API --> ME
+
+    ME --> DB
+    ME --> PS
+    ME --> LS
+    ME --> SM
+    ME --> MS
+    ME --> TS
+    ME --> MM
+
+    PS -->|activeProps| SM
+    LS -->|nextSlide / goLive| SM
+    SM -->|state-updated| OutputSurfaces
+    OutputSurfaces --> TRANS
+    OutputSurfaces --> PROP_LAYER
+```
+
+### Componentes de Automatización:
+1. **`MacroEngine`**: Motor de ejecución secuencial en el proceso principal. Aísla cada acción con manejo de tiempos de espera (`delayMs`), límite estricto de recursión (profundidad máxima de 5 llamadas), detección de ciclos infinitos, timeout global de ejecución de 60 segundos y botón de interrupción inmediata (`stopAllMacros`). Por motivos de seguridad del templo, la ejecución de comandos del sistema operativo (`execute_command`) está estrictamente bloqueada por defecto y requiere activación explícita en configuración con advertencia.
+2. **`PropService`**: Servicio de ciclo de vida de elementos superpuestos (Props). Administra capas flotantes persistentes independientes del contenido de las diapositivas (logotipos de esquina, tercios inferiores con datos de ofrenda, banners de texto, cuentas regresivas), respetando el ocultamiento con Negro (Blackout) y Limpiar (Clear). Soporta filtrado selectivo por roles de salida (`targetRoles`).
+3. **`LoopService`**: Motor de automatización para presentaciones en bucle de anuncios, bienvenida o actividades semanales. Gestiona temporizadores de avance automático por diapositiva con cuenta atrás en tiempo real, reinicio continuo al finalizar la última diapositiva, modo aleatorio opcional (shuffle), pista de música de fondo sincronizada y detención suave con transición fluida.
+4. **`MidiService`**: Interfaz de recepción MIDI basada en la Web MIDI API de Electron. Permite mapear eventos `noteon` y `controlchange` (CC) a macros o acciones de proyección directa. Incluye un asistente interactivo de aprendizaje ("Aprender MIDI") y panel guiado para operadores cuando no hay interfaces conectadas.
+5. **Transiciones entre Diapositivas sin Parpadeo**: Implementación por CSS Keyframes en la capa de contenido (`.anim-fade`, `.anim-slide_left`, `.anim-slide_right`, `.anim-slide_up`, `.anim-slide_down`, `.anim-zoom`) con duración configurable en milisegundos, asignable por tema o por diapositiva individual, y desactivable globalmente desde la barra de herramientas para equipos con hardware modesto.
+
+
 
 
 

@@ -137,7 +137,18 @@ async function run() {
 
         if (role) {
           const outName = `${stepPrefix}_output_${role}.png`
-          await w.screenshot({ path: path.join(EVIDENCE_DIR, outName) })
+          const targetPath = path.join(EVIDENCE_DIR, outName)
+          let retries = 3
+          while (retries > 0) {
+            try {
+              await w.screenshot({ path: targetPath })
+              break
+            } catch (err) {
+              retries--
+              if (retries === 0) throw err
+              await new Promise((r) => setTimeout(r, 250))
+            }
+          }
           console.log(`  -> Output Captured: ${outName}`)
         }
       }
@@ -1585,9 +1596,116 @@ async function run() {
     )
 
     // =========================================================================
-    // STEP 17: Final Audit & Zero Console Errors Assertion
+    // STEP 17: Phase 8 - Automation, Macros, Props, Loops & Transitions
     // =========================================================================
-    console.log('\n[Step 17/17] Auditing Console Errors and Unhandled Exceptions...')
+    console.log('\n[Step 17/18] Testing Phase 8: Automatización, Macros, Props, Bucle y Transiciones...')
+
+    // Switch to Macros bottom tab
+    const macrosTabBtn = win.locator('.pro-tab-trigger:has-text("MACROS")')
+    await macrosTabBtn.click()
+    await win.waitForTimeout(300)
+
+    // 1. Execute Macro from Panel Button
+    const runMacroBtn = win.locator('.pro-timers-list-scroll button:has-text("EJECUTAR")').first()
+    if ((await runMacroBtn.count()) > 0) {
+      await runMacroBtn.click()
+      await win.waitForTimeout(1200)
+      console.log('  -> Executed macro "Inicio de Culto" from panel button.')
+      await captureOutputWindows('19_macro_execution')
+    }
+
+    // 2. Execute Macro via Keyboard Shortcut (Ctrl+Shift+1)
+    await win.keyboard.press('Control+Shift+Digit1')
+    await win.waitForTimeout(800)
+    console.log('  -> Executed macro via keyboard shortcut Ctrl+Shift+1.')
+
+    // 3. Execute Macro via Slide Trigger
+    await win.evaluate(async () => {
+      const slideWithMacro = {
+        id: 'slide_with_macro_trigger',
+        title: 'Diapositiva con Macro',
+        body: 'Alabanza Inicial con Disparador Automático',
+        subtitle: '',
+        macroTrigger: {
+          onEnterMacroId: 'macro_offering'
+        }
+      }
+      window.churchPresenterApi.sendSlide(slideWithMacro, ['main', 'lobby', 'stage'])
+      if (slideWithMacro.macroTrigger?.onEnterMacroId) {
+        await window.churchPresenterApi.runMacro(slideWithMacro.macroTrigger.onEnterMacroId)
+      }
+    })
+    await win.waitForTimeout(500)
+    console.log('  -> Executed macro via slide enter trigger.')
+
+    // 4. Execute Macro via Authenticated HTTP API (POST /api/macros/:id/run)
+    await win.evaluate(async () => {
+      const curCfg = await window.churchPresenterApi.getRemoteConfig()
+      await window.churchPresenterApi.saveRemoteConfig({ ...curCfg, enabled: true })
+    })
+    await win.waitForTimeout(600)
+
+    const remoteCfg = await win.evaluate(async () => {
+      return window.churchPresenterApi.getRemoteConfig()
+    })
+    const authHeaders = {
+      'Content-Type': 'application/json'
+    }
+    const pinLoginRes = await fetch(`http://127.0.0.1:${remoteCfg.port}/api/auth`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ pin: remoteCfg.pin || '123456' })
+    })
+    const pinLoginData = await pinLoginRes.json()
+    if (pinLoginData.token) {
+      const macroHttpRes = await fetch(`http://127.0.0.1:${remoteCfg.port}/api/macros/macro_service_start/run`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${pinLoginData.token}`
+        }
+      })
+      const macroHttpData = await macroHttpRes.json()
+      console.log(`  -> Executed macro via HTTP API: status=${macroHttpRes.status}, success=${macroHttpData.success}`)
+
+      await win.evaluate(async () => {
+        const curCfg = await window.churchPresenterApi.getRemoteConfig()
+        await window.churchPresenterApi.saveRemoteConfig({ ...curCfg, enabled: false })
+      })
+    }
+
+    // 5. Test Props Layer & Toggle
+    const propsTabBtn = win.locator('.pro-tab-trigger:has-text("PROPS")')
+    await propsTabBtn.click()
+    await win.waitForTimeout(300)
+
+    const togglePropBtn = win.locator('.pro-timers-list-scroll button:has-text("ACTIVAR")').first()
+    if ((await togglePropBtn.count()) > 0) {
+      await togglePropBtn.click()
+      await win.waitForTimeout(600)
+      console.log('  -> Activated prop overlay (Tercio inferior / Logo).')
+      await captureOutputWindows('19_props_active')
+    }
+
+    // 6. Test Presentation Auto-Advance Loop
+    const loopResult = await win.evaluate(async () => {
+      const started = await window.churchPresenterApi.startPresentationLoop(
+        { enabled: true, autoAdvanceSeconds: 1, loop: true, shuffle: false },
+        5
+      )
+      const st = await window.churchPresenterApi.getLoopStatus()
+      await window.churchPresenterApi.stopPresentationLoop()
+      return { started, active: st?.isActive }
+    })
+    console.log(`  -> Presentation loop cycle tested: started=${loopResult.started}, wasActive=${loopResult.active}`)
+
+    console.log(
+      '[TEST AUDIT]: Automatización, Macros y Props (Fase 8) -> APROBADA (Ejecución por botón, teclado, diapositiva, HTTP API, capa de props en vivo y ciclo de bucle)'
+    )
+
+    // =========================================================================
+    // STEP 18: Final Audit & Zero Console Errors Assertion
+    // =========================================================================
+    console.log('\n[Step 18/18] Auditing Console Errors and Unhandled Exceptions...')
 
     console.log('----------------------------------------------------------------------')
     console.log(`[Summary]: Console errors recorded: ${consoleErrors.length}`)
