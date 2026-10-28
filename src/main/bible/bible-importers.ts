@@ -517,8 +517,10 @@ export function parseSqliteBible(
 }
 
 /**
- * Zefania XML Format Importer
- * Supported standard in OpenLP, Sword, and church projection tools.
+ * Zefania XML & Standard Bible XML Format Importer
+ * Supported standards:
+ * 1. Zefania XML: <BIBLEBOOK bnumber="..."> <CHAPTER cnumber="..."> <VERS vnumber="...">
+ * 2. Standard Bible XML / YouVersion / OpenSong: <bible translation="..."> <book number="..."> <chapter number="..."> <verse number="...">
  */
 export function parseZefaniaXml(xmlContent: string): ParsedBibleImport {
   if (!xmlContent || typeof xmlContent !== 'string') {
@@ -528,45 +530,121 @@ export function parseZefaniaXml(xmlContent: string): ParsedBibleImport {
   const verses: BibleVerse[] = []
 
   // Extract Bible metadata from root or header tags
-  const nameMatch = xmlContent.match(/biblename=["']([^"']+)["']/i) || xmlContent.match(/<title>([^<]+)<\/title>/i)
-  const name = nameMatch ? nameMatch[1].trim() : 'Biblia Zefania'
-  const abbrev = name.substring(0, 10).toUpperCase()
+  const nameMatch =
+    xmlContent.match(/translation=["']([^"']+)["']/i) ||
+    xmlContent.match(/biblename=["']([^"']+)["']/i) ||
+    xmlContent.match(/<title>([^<]+)<\/title>/i)
 
-  // Match each BIBLEBOOK tag
-  const bookRegex = /<BIBLEBOOK\s+[^>]*bnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/BIBLEBOOK>/gi
-  let bookMatch: RegExpExecArray | null
+  let name = nameMatch ? nameMatch[1].trim() : 'Biblia XML'
+  // Clean translation name if it contains descriptive notes in parentheses
+  if (name.includes('(Más información')) {
+    name = name.split('(Más información')[0].trim()
+  }
 
-  while ((bookMatch = bookRegex.exec(xmlContent)) !== null) {
-    const bookNumber = parseInt(bookMatch[1], 10)
-    const bookContent = bookMatch[2]
-    const bookObj = BIBLE_BOOKS.find((b) => b.number === bookNumber)
-    const bookName = bookObj ? bookObj.name : `Libro ${bookNumber}`
+  const statusMatch = xmlContent.match(/status=["']([^"']+)["']/i) || xmlContent.match(/copyright=["']([^"']+)["']/i)
+  const copyright = statusMatch ? statusMatch[1].trim() : 'Dominio Público'
 
-    // Match each CHAPTER
-    const chapRegex = /<CHAPTER\s+[^>]*cnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/CHAPTER>/gi
-    let chapMatch: RegExpExecArray | null
+  // Determine abbreviation
+  let abbrev = ''
+  if (/RVR\s*1960|Reina[- ]Valera\s*1960/i.test(name) || /RVR1960/i.test(xmlContent.substring(0, 500))) {
+    abbrev = 'RVR60'
+  } else if (/RVA\s*2015|Reina[- ]Valera\s*Actualizada/i.test(name) || /RVA2015/i.test(xmlContent.substring(0, 500))) {
+    abbrev = 'RVA15'
+  } else {
+    abbrev = name.replace(/[^A-Za-z0-9]/g, '').substring(0, 8).toUpperCase() || 'BIBLIA'
+  }
 
-    while ((chapMatch = chapRegex.exec(bookContent)) !== null) {
-      const chapter = parseInt(chapMatch[1], 10)
-      const chapContent = chapMatch[2]
+  // Dialect A: Zefania XML (<BIBLEBOOK>)
+  const isZefania = /<BIBLEBOOK[\s>]/i.test(xmlContent)
+  // Dialect B: Standard Bible XML (<book>)
+  const isStandardXml = /<book[\s>]/i.test(xmlContent)
 
-      // Match each VERS
-      const verseRegex = /<VERS\s+[^>]*vnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/VERS>/gi
-      let verseMatch: RegExpExecArray | null
+  if (isZefania) {
+    const bookRegex = /<BIBLEBOOK\s+[^>]*bnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/BIBLEBOOK>/gi
+    let bookMatch: RegExpExecArray | null
 
-      while ((verseMatch = verseRegex.exec(chapContent)) !== null) {
-        const verseNum = parseInt(verseMatch[1], 10)
-        const text = cleanXmlEntities(verseMatch[2])
+    while ((bookMatch = bookRegex.exec(xmlContent)) !== null) {
+      const bookNumber = parseInt(bookMatch[1], 10)
+      const bookContent = bookMatch[2]
+      const bookObj = BIBLE_BOOKS.find((b) => b.number === bookNumber)
+      const bookName = bookObj ? bookObj.name : `Libro ${bookNumber}`
 
-        if (text) {
-          verses.push({
-            bookNumber,
-            bookName,
-            chapter,
-            verse: verseNum,
-            text,
-            translationAbbrev: abbrev
-          })
+      const chapRegex = /<CHAPTER\s+[^>]*cnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/CHAPTER>/gi
+      let chapMatch: RegExpExecArray | null
+
+      while ((chapMatch = chapRegex.exec(bookContent)) !== null) {
+        const chapter = parseInt(chapMatch[1], 10)
+        const chapContent = chapMatch[2]
+
+        const verseRegex = /<VERS\s+[^>]*vnumber=["'](\d+)["'][^>]*>([\s\S]*?)<\/VERS>/gi
+        let verseMatch: RegExpExecArray | null
+
+        while ((verseMatch = verseRegex.exec(chapContent)) !== null) {
+          const verseNum = parseInt(verseMatch[1], 10)
+          const text = cleanXmlEntities(verseMatch[2])
+
+          if (text) {
+            verses.push({
+              bookNumber,
+              bookName,
+              chapter,
+              verse: verseNum,
+              text,
+              translationAbbrev: abbrev
+            })
+          }
+        }
+      }
+    }
+  } else if (isStandardXml) {
+    const bookRegex = /<book\s+[^>]*(?:number|id|bnumber)=["']([^"']+)["'][^>]*>([\s\S]*?)<\/book>/gi
+    let bookMatch: RegExpExecArray | null
+
+    while ((bookMatch = bookRegex.exec(xmlContent)) !== null) {
+      const rawBookId = bookMatch[1].trim()
+      let bookNumber = parseInt(rawBookId, 10)
+      let bookObj = !isNaN(bookNumber) && bookNumber >= 1 && bookNumber <= 66
+        ? BIBLE_BOOKS.find((b) => b.number === bookNumber)
+        : null
+
+      if (!bookObj) {
+        bookObj = resolveBibleBook(rawBookId)
+        if (bookObj) {
+          bookNumber = bookObj.number
+        }
+      }
+
+      if (!bookObj && (!bookNumber || isNaN(bookNumber))) {
+        continue
+      }
+
+      const bookName = bookObj ? bookObj.name : `Libro ${bookNumber}`
+      const bookContent = bookMatch[2]
+
+      const chapRegex = /<chapter\s+[^>]*(?:number|cnumber)=["'](\d+)["'][^>]*>([\s\S]*?)<\/chapter>/gi
+      let chapMatch: RegExpExecArray | null
+
+      while ((chapMatch = chapRegex.exec(bookContent)) !== null) {
+        const chapter = parseInt(chapMatch[1], 10)
+        const chapContent = chapMatch[2]
+
+        const verseRegex = /<verse\s+[^>]*(?:number|vnumber)=["'](\d+)["'][^>]*>([\s\S]*?)<\/verse>/gi
+        let verseMatch: RegExpExecArray | null
+
+        while ((verseMatch = verseRegex.exec(chapContent)) !== null) {
+          const verseNum = parseInt(verseMatch[1], 10)
+          const text = cleanXmlEntities(verseMatch[2])
+
+          if (text) {
+            verses.push({
+              bookNumber,
+              bookName,
+              chapter,
+              verse: verseNum,
+              text,
+              translationAbbrev: abbrev
+            })
+          }
         }
       }
     }
@@ -580,8 +658,8 @@ export function parseZefaniaXml(xmlContent: string): ParsedBibleImport {
     name,
     abbrev,
     language: 'es',
-    copyright: 'Dominio Público',
-    licenseNotice: 'Importado desde Zefania XML',
+    copyright,
+    licenseNotice: isZefania ? 'Importado desde Zefania XML' : 'Importado desde Bible XML',
     isPublicDomain: true,
     verses
   }

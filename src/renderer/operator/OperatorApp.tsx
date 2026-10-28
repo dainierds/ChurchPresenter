@@ -2348,10 +2348,22 @@ export const OperatorApp: React.FC = () => {
     }
     const cleanBase = base.replace(/\.[^/.]+$/, '').trim()
     if (!importName) {
-      setImportName(cleanBase)
+      if (/RVR1960/i.test(cleanBase)) {
+        setImportName('Reina-Valera 1960')
+      } else if (/RVA2015/i.test(cleanBase)) {
+        setImportName('Reina Valera Actualizada 2015')
+      } else {
+        setImportName(cleanBase)
+      }
     }
     if (!importAbbrev) {
-      setImportAbbrev(cleanBase.replace(/[^A-Za-z0-9]/g, '').substring(0, 8).toUpperCase() || 'BIB')
+      if (/RVR1960/i.test(cleanBase)) {
+        setImportAbbrev('RVR60')
+      } else if (/RVA2015/i.test(cleanBase)) {
+        setImportAbbrev('RVA15')
+      } else {
+        setImportAbbrev(cleanBase.replace(/[^A-Za-z0-9]/g, '').substring(0, 8).toUpperCase() || 'BIB')
+      }
     }
     setImportBibleError(null)
   }
@@ -4208,7 +4220,7 @@ export const OperatorApp: React.FC = () => {
                       >
                         <option value="sqlite">Base de Datos SQLite (.sqlite, .db, .bible)</option>
                         <option value="json">JSON (ChurchPresenter o Genérico)</option>
-                        <option value="zefania">Zefania XML (.xml)</option>
+                        <option value="zefania">Zefania / Standard Bible XML (.xml)</option>
                         <option value="osis">OSIS XML (.osis / .xml)</option>
                         <option value="usfm">USFM (.usfm / .txt)</option>
                       </select>

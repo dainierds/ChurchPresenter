@@ -208,6 +208,52 @@ describe('Bible Importers (All Formats & Requirements)', () => {
       expect(res.verses[0].text).toContain('crió Dios los cielos')
     })
 
+    it('parses Standard Bible XML format (<bible><book><chapter><verse>)', () => {
+      const standardXml = `<?xml version="1.0" encoding="UTF-8"?>
+        <bible translation="Spanish RVR 1960 (Más información)" status="Texto bíblico Reina-Valera 1960">
+          <testament name="Old">
+            <book number="1">
+              <chapter number="1">
+                <verse number="1">En el principio creó Dios los cielos y la tierra.</verse>
+                <verse number="2">Y la tierra estaba desordenada y vacía.</verse>
+              </chapter>
+            </book>
+          </testament>
+        </bible>
+      `
+
+      const res = parseZefaniaXml(standardXml)
+      expect(res.name).toBe('Spanish RVR 1960')
+      expect(res.abbrev).toBe('RVR60')
+      expect(res.copyright).toBe('Texto bíblico Reina-Valera 1960')
+      expect(res.verses).toHaveLength(2)
+      expect(res.verses[0].bookNumber).toBe(1)
+      expect(res.verses[0].bookName).toBe('Génesis')
+      expect(res.verses[0].chapter).toBe(1)
+      expect(res.verses[0].verse).toBe(1)
+      expect(res.verses[0].text).toBe('En el principio creó Dios los cielos y la tierra.')
+    })
+
+    it('parses real SpanishRVR1960Bible.xml from disk if present', () => {
+      const fs = require('fs')
+      const targetPath = 'C:/Users/daini/Downloads/SpanishRVR1960Bible.xml'
+      if (!fs.existsSync(targetPath)) return
+
+      const raw = fs.readFileSync(targetPath, 'utf-8')
+      const res = parseZefaniaXml(raw)
+      expect(res.name).toContain('Spanish RVR 1960')
+      expect(res.abbrev).toBe('RVR60')
+      expect(res.verses.length).toBe(31104)
+
+      const summary = validateBibleData(res)
+      expect(summary.bookCount).toBe(66)
+      expect(summary.missingBooks).toHaveLength(0)
+      expect(summary.sampleVerses[0].reference).toBe('Génesis 1:1')
+      expect(summary.sampleVerses[0].text).toContain('En el principio creó Dios')
+      expect(summary.sampleVerses[2].reference).toBe('Juan 3:16')
+      expect(summary.sampleVerses[2].text).toContain('Porque de tal manera amó Dios al mundo')
+    })
+
     it('throws error on empty or malformed Zefania XML', () => {
       expect(() => parseZefaniaXml('')).toThrow(/vacío o inválido/)
       expect(() => parseZefaniaXml('<XMLBIBLE></XMLBIBLE>')).toThrow(/no contiene elementos BIBLEBOOK/)
