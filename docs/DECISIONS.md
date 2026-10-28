@@ -928,3 +928,11 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
 
 
 
+
+### DECISIÓN 11: Descarga Local de YouTube con yt-dlp y Monitoreo de Progreso en Vivo
+- **Contexto**: Al descargar videos de YouTube desde el panel de navegación integrado, la presencia de parámetros de lista de reproducción (como `&list=RD...` o `&index=1`) provocaba que `yt-dlp` intentara indexar y descargar mezclas completas de 50+ canciones. Adicionalmente, la falta de comunicación IPC del progreso dejaba el botón en "Descargando..." sin retroalimentación visual para el operador.
+- **Solución Implementada**:
+  1. **Sanitización de URL**: Se extrae únicamente el ID del video (`videoId`) mediante `parseYouTubeUrl` y se reconstruye la URL canónica limpia (`https://www.youtube.com/watch?v=${videoId}`) acompañada de la bandera `--no-playlist`. Esto previene trampas de listas de reproducción y bloqueos por caracteres `&` en el shell de Windows.
+  2. **Monitoreo en Tiempo Real**: Se añade la bandera `--newline` a `yt-dlp` y se analiza `stdout` línea por línea para extraer porcentaje, velocidad de descarga (MB/s) y tiempo estimado restante (ETA), emitiendo el evento `youtube:download-progress` hacia la interfaz de usuario.
+  3. **Retroalimentación Visual**: `YouTubeBrowserPanel` renderiza una barra de progreso en vivo con colores de la paleta oficial (naranja `#FF7A00`, verde `#22C55E`, azul claro `#38BDF8`), mostrando el porcentaje tanto en la barra como en el botón de descarga.
+  4. **Aislamiento de Sesión y Bloqueador de Anuncios**: Las reglas de cancelación de peticiones publicitarias se aislaron de forma estricta en la partición persistente de YouTube (`persist:youtube`), evitando emisiones de `net::ERR_BLOCKED_BY_CLIENT` en la sesión por defecto de la aplicación.

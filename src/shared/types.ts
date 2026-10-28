@@ -465,6 +465,14 @@ export interface YouTubeItem {
   updatedAt: string
 }
 
+export interface YouTubeDownloadProgress {
+  percent: number
+  speed?: string
+  eta?: string
+  totalSize?: string
+  statusText?: string
+}
+
 export interface ServiceItem {
   id: string
   type: ServiceItemType
@@ -1129,6 +1137,7 @@ export interface ChurchPresenterApi {
   downloadYouTubeVideo: (youtubeUrl: string) => Promise<{ success: boolean; item?: MediaItem; error?: string }>
   onYouTubeAdStatus: (callback: (isAd: boolean) => void) => () => void
   onYouTubeSyncTick: (callback: (tick: YouTubeSyncTick) => void) => () => void
+  onYouTubeDownloadProgress?: (callback: (progress: YouTubeDownloadProgress) => void) => () => void
 
   // Diagnostics & Logging
   logFpsDrop: (role: string, fps: number, displayId?: number) => void

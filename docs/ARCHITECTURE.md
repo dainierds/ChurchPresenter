@@ -437,6 +437,7 @@ graph TD
 4. **Enrutamiento de Audio Exclusivo**: El audio se emite exclusivamente por el rol de salida asignado (por defecto Sala), silenciando por hardware las pantallas accesorias.
 5. **Verificación Pre-Culto de la Lista**: El operador dispone del botón "Verificar playlist", que comprueba en lote el estado de disponibilidad e incrustabilidad de todos los videos de YouTube del servicio antes del inicio de la reunión.
 6. **Integración con Emergencias y Monitor de Escenario**: Los controles de Negro (F1), Limpiar (F2) y Congelar (F4) actúan directamente sobre la reproducción de YouTube, y el monitor de escenario presenta el título y los cronómetros de tiempo transcurrido y restante.
+7. **Descarga Local Segura y Barra de Progreso en Vivo**: Integración con `yt-dlp` y `ffmpeg` con sanitización de URL canónica (`&list=...` suprimido) para evitar bucles de descarga de listas o mezclas, canal IPC de eventos de progreso en tiempo real (`youtube:download-progress`) e indicador visual reactivo con porcentaje, tasa de transferencia (MB/s) y tiempo estimado restante.
 
 ---
 

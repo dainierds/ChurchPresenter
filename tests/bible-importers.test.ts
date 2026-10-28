@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
+import fs from 'fs'
 import initSqlJs, { SqlJsStatic } from 'sql.js'
 import {
   parseJsonBible,
@@ -235,7 +236,6 @@ describe('Bible Importers (All Formats & Requirements)', () => {
     })
 
     it('parses real SpanishRVR1960Bible.xml from disk if present', () => {
-      const fs = require('fs')
       const targetPath = 'C:/Users/daini/Downloads/SpanishRVR1960Bible.xml'
       if (!fs.existsSync(targetPath)) return
 

@@ -37,6 +37,7 @@ import {
   YouTubeItem,
   YouTubeAvailabilityStatus,
   YouTubeSyncTick,
+  YouTubeDownloadProgress,
   ServiceItem,
   RemoteServerConfig,
   RemoteServerStatus,
@@ -628,6 +629,14 @@ const api: ChurchPresenterApi = {
     ipcRenderer.on(IPC_CHANNELS.YOUTUBE_SYNC_TICK, handler)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.YOUTUBE_SYNC_TICK, handler)
+    }
+  },
+
+  onYouTubeDownloadProgress: (callback: (progress: YouTubeDownloadProgress) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, progress: YouTubeDownloadProgress) => callback(progress)
+    ipcRenderer.on(IPC_CHANNELS.YOUTUBE_DOWNLOAD_PROGRESS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.YOUTUBE_DOWNLOAD_PROGRESS, handler)
     }
   },
 

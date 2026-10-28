@@ -927,12 +927,18 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.YOUTUBE_DOWNLOAD_VIDEO, async (_event, youtubeUrl: string) => {
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_DOWNLOAD_VIDEO, async (event, youtubeUrl: string) => {
     const mediaDir = path.join(app.getPath('userData'), 'media')
     if (!fs.existsSync(mediaDir)) {
       fs.mkdirSync(mediaDir, { recursive: true })
     }
-    const result = await youtubeService.downloadVideoToLocal(youtubeUrl, mediaDir)
+    const result = await youtubeService.downloadVideoToLocal(youtubeUrl, mediaDir, (progress) => {
+      try {
+        event.sender.send(IPC_CHANNELS.YOUTUBE_DOWNLOAD_PROGRESS, progress)
+      } catch (_err) {
+        // Window might have closed during download
+      }
+    })
     if (result.success && result.filePath) {
       const importedItem = await mediaService.importMediaFile(result.filePath, ['YouTube'])
       return { success: true, item: importedItem }

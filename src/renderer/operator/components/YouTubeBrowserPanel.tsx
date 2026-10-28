@@ -14,7 +14,7 @@ import {
   XCircle,
   Info
 } from 'lucide-react'
-import { ServiceItem, YouTubeItem } from '../../../shared/types'
+import { ServiceItem, YouTubeItem, YouTubeDownloadProgress } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 
 interface YouTubeBrowserPanelProps {
@@ -34,6 +34,7 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   const [disclaimerOpen, setDisclaimerOpen] = useState<boolean>(false)
   const [statusToast, setStatusToast] = useState<{ message: string; type: 'info' | 'success' | 'warn' | 'error' } | null>(null)
   const [downloading, setDownloading] = useState<boolean>(false)
+  const [downloadProgress, setDownloadProgress] = useState<YouTubeDownloadProgress | null>(null)
 
   // Check first-time disclaimer
   useEffect(() => {
@@ -76,6 +77,11 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       setIsAdActive(isAd)
     })
 
+    // Listen to download progress
+    const unsubProgress = window.churchPresenterApi?.onYouTubeDownloadProgress?.((progress) => {
+      setDownloadProgress(progress)
+    })
+
     // Poll current URL periodically
     const pollInterval = setInterval(async () => {
       try {
@@ -94,9 +100,25 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       clearInterval(pollInterval)
       window.removeEventListener('resize', updateBounds)
       unsubAd?.()
+      unsubProgress?.()
       window.churchPresenterApi?.closeYouTubeBrowser()
     }
   }, [])
+
+  // Re-adjust browser bounds when download progress bar toggles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      window.churchPresenterApi?.setYouTubeBrowserBounds({
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      })
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [downloading, downloadProgress !== null])
 
   // Auto-dismiss toast after 4s
   useEffect(() => {
@@ -239,6 +261,7 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
     }
 
     setDownloading(true)
+    setDownloadProgress({ percent: 0, statusText: 'Iniciando conexión con yt-dlp...' })
     setStatusToast({
       message: 'Iniciando descarga local con yt-dlp hacia la biblioteca de medios...',
       type: 'info'
@@ -264,6 +287,7 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       })
     } finally {
       setDownloading(false)
+      setTimeout(() => setDownloadProgress(null), 2500)
     }
   }
 
@@ -347,10 +371,50 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
             title="Descargar archivo MP4 local a la biblioteca de medios"
           >
             <Download size={15} />
-            <span>{downloading ? 'Descargando...' : 'Descargar'}</span>
+            <span>
+              {downloading
+                ? downloadProgress && downloadProgress.percent > 0
+                  ? `Descargando (${Math.round(downloadProgress.percent)}%)...`
+                  : 'Descargando...'
+                : 'Descargar'}
+            </span>
           </button>
         </div>
       </div>
+
+      {/* Live Download Progress Bar */}
+      {(downloading || downloadProgress !== null) && (
+        <div className="pro-yt-progress-container">
+          <div className="pro-yt-progress-header">
+            <div className="pro-yt-progress-status">
+              <Download size={14} className="pro-yt-progress-icon spinning" />
+              <span className="pro-yt-progress-label">
+                {downloadProgress?.statusText || 'Descargando video...'}
+              </span>
+            </div>
+            <div className="pro-yt-progress-meta">
+              {downloadProgress?.speed && (
+                <span className="pro-yt-progress-badge">{downloadProgress.speed}</span>
+              )}
+              {downloadProgress?.eta && (
+                <span className="pro-yt-progress-badge">ETA: {downloadProgress.eta}</span>
+              )}
+              {downloadProgress?.totalSize && (
+                <span className="pro-yt-progress-badge">{downloadProgress.totalSize}</span>
+              )}
+              <span className="pro-yt-progress-percent">
+                {Math.round(downloadProgress?.percent || 0)}%
+              </span>
+            </div>
+          </div>
+          <div className="pro-yt-progress-track">
+            <div
+              className="pro-yt-progress-fill"
+              style={{ width: `${Math.min(100, Math.max(0, downloadProgress?.percent || 0))}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Embedded Native WebContentsView Container */}
       <div className="pro-yt-view-container" ref={containerRef}>

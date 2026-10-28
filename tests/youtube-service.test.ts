@@ -92,3 +92,34 @@ describe('YouTube Playlist Pre-Service Verification (Fase 5C)', () => {
     expect(report.failedCount).toBe(1)
   })
 })
+
+describe('YouTube yt-dlp Integration & Progress Tracking', () => {
+  it('detects yt-dlp binary path on the host system', () => {
+    const ytDlpPath = YouTubeService.findYtDlpPath()
+    expect(ytDlpPath).toBeDefined()
+    expect(typeof ytDlpPath).toBe('string')
+  })
+
+  it('detects ffmpeg binary path for yt-dlp merging', () => {
+    const ffmpegPath = YouTubeService.findFfmpegPath()
+    expect(ffmpegPath).toBeDefined()
+  })
+
+  it('notifies download progress callback with initial status', async () => {
+    const progressEvents: any[] = []
+    const onProgress = (p: any) => {
+      progressEvents.push(p)
+    }
+
+    // Call download with mock or invalid path to test invocation and initial progress notification
+    const _res = await youtubeService.downloadVideoToLocal(
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&index=1',
+      process.env.TEMP || '.',
+      onProgress
+    )
+
+    expect(progressEvents.length).toBeGreaterThan(0)
+    expect(progressEvents[0].percent).toBe(0)
+    expect(progressEvents[0].statusText).toContain('yt-dlp')
+  }, 15000)
+})

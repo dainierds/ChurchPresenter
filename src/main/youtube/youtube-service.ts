@@ -3,6 +3,7 @@ import fs from 'fs'
 import { logger } from '../logger'
 import {
   YouTubeAvailabilityStatus,
+  YouTubeDownloadProgress,
   ServiceItem
 } from '../../shared/types'
 import { parseYouTubeUrl } from '../../shared/youtube-utils'
@@ -68,57 +69,52 @@ export class YouTubeService {
   public initializeSession(): void {
     if (this.initialized) return
 
-    const sessions = [
-      session.fromPartition(YouTubeService.SESSION_PARTITION),
-      session.defaultSession
-    ]
+    const ytSession = session.fromPartition(YouTubeService.SESSION_PARTITION)
 
-    for (const ses of sessions) {
-      // 1. Deny dangerous hardware permissions (camera, microphone, geolocation, notifications)
-      ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-        logger.info(`YouTube session: denied permission request for '${permission}'`)
-        callback(false)
-      })
+    // 1. Deny dangerous hardware permissions (camera, microphone, geolocation, notifications)
+    ytSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+      logger.info(`YouTube session: denied permission request for '${permission}'`)
+      callback(false)
+    })
 
-      // 2. Deny device permission requests
-      if (typeof (ses as any).setDevicePermissionHandler === 'function') {
-        (ses as any).setDevicePermissionHandler(() => false)
+    // 2. Deny device permission requests
+    if (typeof (ytSession as any).setDevicePermissionHandler === 'function') {
+      (ytSession as any).setDevicePermissionHandler(() => false)
+    }
+
+    // 3. Inject Referer and Origin headers to prevent Error 152 / 153 "Video Player configuration error"
+    try {
+      const headerFilter = {
+        urls: [
+          '*://*.youtube.com/*',
+          '*://*.youtube-nocookie.com/*',
+          '*://*.googlevideo.com/*'
+        ]
       }
-
-      // 3. Inject Referer and Origin headers to prevent Error 152 / 153 "Video Player configuration error"
-      try {
-        ses.webRequest.onBeforeSendHeaders(
-          {
-            urls: [
-              '*://*.youtube.com/*',
-              '*://*.youtube-nocookie.com/*',
-              '*://*.googlevideo.com/*'
-            ]
-          },
-          (details, callback) => {
-            const requestHeaders = { ...details.requestHeaders }
-            requestHeaders['Referer'] = 'https://www.youtube.com/'
-            requestHeaders['Origin'] = 'https://www.youtube.com'
-            callback({ requestHeaders })
-          }
-        )
-      } catch (err) {
-        logger.warn('Failed to configure YouTube header injection:', err)
+      const headerModifier = (details: any, callback: any) => {
+        const requestHeaders = { ...details.requestHeaders }
+        requestHeaders['Referer'] = 'https://www.youtube.com/'
+        requestHeaders['Origin'] = 'https://www.youtube.com'
+        callback({ requestHeaders })
       }
+      ytSession.webRequest.onBeforeSendHeaders(headerFilter, headerModifier)
+      session.defaultSession.webRequest.onBeforeSendHeaders(headerFilter, headerModifier)
+    } catch (err) {
+      logger.warn('Failed to configure YouTube header injection:', err)
+    }
 
-      // 4. Implement ad-blocking via WebRequest API
-      try {
-        ses.webRequest.onBeforeRequest(
-          { urls: YouTubeService.AD_BLOCK_PATTERNS },
-          (details, callback) => {
-            logger.debug(`[AdBlocker] Blocked ad request: ${details.url.substring(0, 80)}`)
-            callback({ cancel: true })
-          }
-        )
-        logger.info('YouTube session: Ad-blocking webRequest filters initialized.')
-      } catch (err) {
-        logger.warn('Failed to configure ad-blocking webRequest:', err)
-      }
+    // 4. Implement ad-blocking via WebRequest API strictly on the dedicated YouTube partition
+    try {
+      ytSession.webRequest.onBeforeRequest(
+        { urls: YouTubeService.AD_BLOCK_PATTERNS },
+        (details, callback) => {
+          logger.debug(`[AdBlocker] Blocked ad request: ${details.url.substring(0, 80)}`)
+          callback({ cancel: true })
+        }
+      )
+      logger.info('YouTube session: Ad-blocking webRequest filters initialized on dedicated partition.')
+    } catch (err) {
+      logger.warn('Failed to configure ad-blocking webRequest:', err)
     }
 
     this.initialized = true
@@ -277,7 +273,9 @@ export class YouTubeService {
             if (fs.existsSync(exePath)) return exePath
           }
         }
-      } catch {}
+      } catch (_err) {
+        // Fallback to next detection method
+      }
     }
 
     // 2. Check WinGet Links
@@ -307,10 +305,14 @@ export class YouTubeService {
                 const p = path.join(wingetDir, d, s, 'bin', 'ffmpeg.exe')
                 if (fs.existsSync(p)) return p
               }
-            } catch {}
+            } catch (_err) {
+              // Subfolder read error
+            }
           }
         }
-      } catch {}
+      } catch (_err) {
+        // Fallback to null
+      }
     }
     return null
   }
@@ -320,32 +322,83 @@ export class YouTubeService {
    */
   public async downloadVideoToLocal(
     youtubeUrl: string,
-    outputDirectory: string
+    outputDirectory: string,
+    onProgress?: (progress: YouTubeDownloadProgress) => void
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     return new Promise((resolve) => {
       const ytDlpPath = YouTubeService.findYtDlpPath() || 'yt-dlp'
       const ffmpegPath = YouTubeService.findFfmpegPath()
 
+      // Sanitize URL to strip &list=... and other query params to prevent playlist traps
+      const parsed = parseYouTubeUrl(youtubeUrl)
+      const cleanUrl = parsed.videoId
+        ? `https://www.youtube.com/watch?v=${parsed.videoId}`
+        : youtubeUrl
+
       const args = [
+        '--newline',
+        '--no-playlist',
         '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        '--output', path.join(outputDirectory, 'yt_%(id)s.%(ext)s'),
-        '--no-playlist'
+        '--output', path.join(outputDirectory, 'yt_%(id)s.%(ext)s')
       ]
 
       if (ffmpegPath) {
         args.push('--ffmpeg-location', path.dirname(ffmpegPath))
       }
-      args.push(youtubeUrl)
+      args.push(cleanUrl)
 
       logger.info(`Starting YouTube download with: ${ytDlpPath} ${args.join(' ')}`)
 
-      const proc = spawn(ytDlpPath, args, { shell: true })
+      onProgress?.({
+        percent: 0,
+        statusText: 'Iniciando descarga con yt-dlp...'
+      })
+
+      const isExe = ytDlpPath.toLowerCase().endsWith('.exe') && fs.existsSync(ytDlpPath)
+      const proc = spawn(ytDlpPath, args, { shell: !isExe })
 
       let stderr = ''
       let stdout = ''
+      let stdoutBuffer = ''
 
-      proc.stdout.on('data', (d) => { stdout += d.toString() })
-      proc.stderr.on('data', (d) => { stderr += d.toString() })
+      proc.stdout.on('data', (d) => {
+        const text = d.toString()
+        stdout += text
+        stdoutBuffer += text
+        const lines = stdoutBuffer.split(/\r?\n/)
+        stdoutBuffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const dlMatch = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?([^\s]+)(?:\s+at\s+([^\s]+))?(?:\s+ETA\s+([^\s]+))?/i)
+          if (dlMatch) {
+            const percent = parseFloat(dlMatch[1])
+            const totalSize = dlMatch[2]
+            const speed = dlMatch[3] || ''
+            const eta = dlMatch[4] || ''
+            onProgress?.({
+              percent,
+              totalSize,
+              speed: speed.includes('Unknown') ? '' : speed,
+              eta: eta.includes('Unknown') ? '' : eta,
+              statusText: `Descargando... ${percent.toFixed(0)}%`
+            })
+          } else if (line.includes('[Merger]') || line.includes('Merging formats')) {
+            onProgress?.({
+              percent: 99,
+              statusText: 'Uniendo video y audio...'
+            })
+          } else if (line.includes('[download] 100%')) {
+            onProgress?.({
+              percent: 100,
+              statusText: 'Completando descarga...'
+            })
+          }
+        }
+      })
+
+      proc.stderr.on('data', (d) => {
+        stderr += d.toString()
+      })
 
       proc.on('error', (err) => {
         logger.error('Failed to spawn yt-dlp process:', err)
@@ -364,7 +417,6 @@ export class YouTubeService {
             target = match[1].trim()
           } else {
             try {
-              const parsed = parseYouTubeUrl(youtubeUrl)
               if (parsed.videoId) {
                 const expected = path.join(outputDirectory, `yt_${parsed.videoId}.mp4`)
                 if (fs.existsSync(expected)) target = expected
@@ -376,9 +428,15 @@ export class YouTubeService {
                   .sort((a, b) => b.mtime - a.mtime)
                 if (files.length > 0) target = files[0].file
               }
-            } catch {}
+            } catch (_err) {
+              // Could not list directory
+            }
           }
           logger.info(`YouTube download completed successfully: ${target}`)
+          onProgress?.({
+            percent: 100,
+            statusText: 'Descarga finalizada'
+          })
           resolve({ success: true, filePath: target })
         } else {
           logger.warn(`yt-dlp exited with non-zero code ${code}: ${stderr}`)
@@ -391,9 +449,6 @@ export class YouTubeService {
     })
   }
 
-  /**
-   * JavaScript snippet to be injected into YouTube views to automatically skip and suppress ads.
-   */
   public static getAdSkipperScript(): string {
     return `
       (function() {
