@@ -1,0 +1,159 @@
+{
+  "testDate": "2026-10-28T03:15:13.082Z",
+  "optionA_Embed": {
+    "tested": 10,
+    "passed": 0,
+    "failed": 10,
+    "avgStartupTimeMs": 0,
+    "details": [
+      {
+        "id": "aqz-KE-bpKQ",
+        "title": "Blender - Big Buck Bunny",
+        "success": false,
+        "startupMs": 825,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "eRsGyueVLvQ",
+        "title": "Blender - Sintel",
+        "success": false,
+        "startupMs": 1483,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "R6MlUcmOul8",
+        "title": "Blender - Tears of Steel",
+        "success": false,
+        "startupMs": 544,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "UXqq0ZvbOnk",
+        "title": "Blender - Charge",
+        "success": false,
+        "startupMs": 548,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "TLkA0RELQ1g",
+        "title": "Blender - Elephants Dream",
+        "success": false,
+        "startupMs": 547,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "21X5lGlDOfg",
+        "title": "NASA - Earth from Space",
+        "success": false,
+        "startupMs": 552,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "4P8xYT68ys8",
+        "title": "NASA - James Webb Telescope",
+        "success": false,
+        "startupMs": 547,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "1bwkY0KwRuY",
+        "title": "Yamilka - A Dios Sea La Gloria",
+        "success": false,
+        "startupMs": 576,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "GRxofEmo3HA",
+        "title": "Vivaldi - Four Seasons",
+        "success": false,
+        "startupMs": 547,
+        "reason": "Video player configuration error"
+      },
+      {
+        "id": "jW3oT8e860E",
+        "title": "Google - Android Developers",
+        "success": false,
+        "startupMs": 545,
+        "reason": "Video player configuration error"
+      }
+    ]
+  },
+  "optionB_WatchPage": {
+    "tested": 10,
+    "passed": 7,
+    "failed": 3,
+    "avgStartupTimeMs": 2067,
+    "details": [
+      {
+        "id": "aqz-KE-bpKQ",
+        "title": "Blender - Big Buck Bunny",
+        "success": true,
+        "startupMs": 3466,
+        "reason": "ok"
+      },
+      {
+        "id": "eRsGyueVLvQ",
+        "title": "Blender - Sintel",
+        "success": true,
+        "startupMs": 2150,
+        "reason": "ok"
+      },
+      {
+        "id": "R6MlUcmOul8",
+        "title": "Blender - Tears of Steel",
+        "success": true,
+        "startupMs": 1849,
+        "reason": "ok"
+      },
+      {
+        "id": "UXqq0ZvbOnk",
+        "title": "Blender - Charge",
+        "success": true,
+        "startupMs": 1589,
+        "reason": "ok"
+      },
+      {
+        "id": "TLkA0RELQ1g",
+        "title": "Blender - Elephants Dream",
+        "success": true,
+        "startupMs": 1552,
+        "reason": "ok"
+      },
+      {
+        "id": "21X5lGlDOfg",
+        "title": "NASA - Earth from Space",
+        "success": false,
+        "startupMs": 5322,
+        "reason": "Video unavailable\nThis live stream recording is not available."
+      },
+      {
+        "id": "4P8xYT68ys8",
+        "title": "NASA - James Webb Telescope",
+        "success": false,
+        "startupMs": 8569,
+        "reason": "timeout"
+      },
+      {
+        "id": "1bwkY0KwRuY",
+        "title": "Yamilka - A Dios Sea La Gloria",
+        "success": true,
+        "startupMs": 2143,
+        "reason": "ok"
+      },
+      {
+        "id": "GRxofEmo3HA",
+        "title": "Vivaldi - Four Seasons",
+        "success": true,
+        "startupMs": 1717,
+        "reason": "ok"
+      },
+      {
+        "id": "jW3oT8e860E",
+        "title": "Google - Android Developers",
+        "success": false,
+        "startupMs": 8578,
+        "reason": "timeout"
+      }
+    ]
+  }
+}

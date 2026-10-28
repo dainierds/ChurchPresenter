@@ -179,8 +179,9 @@ export function buildYouTubeEmbedUrl(
     params.set('loop', '1')
     params.set('playlist', videoId)
   }
-  params.set('origin', options.origin || 'https://www.youtube.com')
-  params.set('widget_referrer', 'https://www.youtube.com')
+  if (options.origin) {
+    params.set('origin', options.origin)
+  }
 
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
 }

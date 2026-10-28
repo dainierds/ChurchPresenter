@@ -961,10 +961,14 @@ export class DatabaseService {
       if (fs.existsSync(this.dbPath)) {
         const isValid = this.verifyDatabaseFile(this.dbPath)
         if (isValid) {
-          const fileBuffer = fs.readFileSync(this.dbPath)
-          this.db = new this.SQL.Database(new Uint8Array(fileBuffer))
-          logger.info(`Loaded existing SQLite database from ${this.dbPath}`)
-          loadedValidDb = true
+          try {
+            const fileBuffer = fs.readFileSync(this.dbPath)
+            this.db = new this.SQL.Database(new Uint8Array(fileBuffer))
+            logger.info(`Loaded existing SQLite database from ${this.dbPath}`)
+            loadedValidDb = true
+          } catch (_readErr) {
+            loadedValidDb = false
+          }
         } else {
           logger.error(`Database file at ${this.dbPath} is CORRUPTED. Attempting recovery from backup...`)
           const corruptArchive = `${this.dbPath}.corrupt_${Date.now()}`

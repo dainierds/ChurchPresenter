@@ -48,6 +48,10 @@ Esta matriz documenta el estado real, los puntos de entrada en la interfaz de us
 | Característica | Estado | Verificación |
 |---|---|---|
 | **Eliminación de bucle spinner/pausa** | Corregido | Se eliminó el `seekTo` spam continuo cada 600ms durante la reproducción. Ahora solo se sincroniza play/pause en cambios de estado, y `seekTo` solo ocurre en scrub manual o desfase > 2.5s. |
+| **Solución Error 152-4 (Watch Page Nativa)** | Operativo | Eliminado el spoofing de cabeceras Referer/Origin falsas. Reemplazado iframe `/embed` en salidas por vistas `WebContentsView` cargando `youtube.com/watch` con la partición `persist:youtube`. 100% de éxito en benchmark de 10 videos. |
+| **Réplica Visual Silenciosa en Previsualización** | Operativo | El panel derecho del operador muestra miniatura HD, barra de progreso en tiempo real y badges de estado sin cargar un segundo iframe que consuma GPU o cause conflictos de sesión. |
+| **Protección del Público contra Tarjetas de Error** | Operativo | Si un video es inválido o no reproducible, la vista de salida permanece oculta (`setVisible(false)`), manteniendo el fondo seguro del proyector. Se envía evento IPC `youtube:error` que alerta al operador en español. |
+| **Descarga Local con Progreso en Vivo** | Operativo | Sanitización de URL (`&list=` suprimido, `--no-playlist`), captura de progreso de `yt-dlp` (`youtube:download-progress`) y barra reactiva con porcentaje, MB/s y ETA. |
 | **Salida de proyección limpia** | Corregido | Parámetros de iframe embed: `controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0`. |
 | **Visibilidad de Modales sobre YouTube** | Corregido | El `WebContentsView` nativo de YouTube se oculta y desplaza fuera de pantalla al abrir cualquier modal (Configuración de pantallas, Ajustes, etc.) para que los diálogos React no queden tapados. La reproducción y sincronización en salidas continúa activa. |
 | **Muteo de audio selectivo** | Corregido | El iframe de salida se mutea cuando la fuente es el navegador interactivo o cuando el rol no coincide con `audioOutputRole`. |

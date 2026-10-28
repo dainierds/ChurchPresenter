@@ -433,11 +433,23 @@ graph TD
 ### Características de la Integración de YouTube:
 1. **Aislamiento de Sesión y Persistencia**: Usa la partición de sesión dedicada `persist:youtube`. Las cookies, inicio de sesión (Google / YouTube Premium) y preferencias del usuario se almacenan en el perfil de datos local de manera segura y persistente. La aplicación jamás intercepta ni lee contraseñas.
 2. **Navegación Restringida a Dominios Esenciales**: Bloqueo estricto de navegación a cualquier dominio externo a `youtube.com`, `google.com`, `accounts.google.com`, `gstatic.com`, `ytimg.com`, `googlevideo.com` y `googleusercontent.com`. Enlaces externos se derivan automáticamente al navegador del sistema operativo.
-3. **Reproducción por Vistas Nativas sin Parpadeo (Opción b)**: En lugar de un iframe con almacenamiento particionado, las salidas utilizan vistas `WebContentsView` asociadas a `persist:youtube`. Durante la preparación se precargan en pausa y con visibilidad oculta; al pulsar "En vivo", se activan al instante sin recarga ni parpadeo.
-4. **Enrutamiento de Audio Exclusivo**: El audio se emite exclusivamente por el rol de salida asignado (por defecto Sala), silenciando por hardware las pantallas accesorias.
-5. **Verificación Pre-Culto de la Lista**: El operador dispone del botón "Verificar playlist", que comprueba en lote el estado de disponibilidad e incrustabilidad de todos los videos de YouTube del servicio antes del inicio de la reunión.
-6. **Integración con Emergencias y Monitor de Escenario**: Los controles de Negro (F1), Limpiar (F2) y Congelar (F4) actúan directamente sobre la reproducción de YouTube, y el monitor de escenario presenta el título y los cronómetros de tiempo transcurrido y restante.
-7. **Descarga Local Segura y Barra de Progreso en Vivo**: Integración con `yt-dlp` y `ffmpeg` con sanitización de URL canónica (`&list=...` suprimido) para evitar bucles de descarga de listas o mezclas, canal IPC de eventos de progreso en tiempo real (`youtube:download-progress`) e indicador visual reactivo con porcentaje, tasa de transferencia (MB/s) y tiempo estimado restante.
+3. **Reproducción por Vistas Nativas sin Parpadeo (Opción B - Watch Page Oficial)**:
+   - Para erradicar definitivamente el error `152-4` y las restricciones de incrustación de terceros, las pantallas de salida no usan iframes incrustados (`/embed`), sino vistas nativas dedicadas `WebContentsView` cargando la página auténtica `https://www.youtube.com/watch?v=ID`.
+   - Utilizan la partición compartida del usuario `persist:youtube`, beneficiándose inmediatamente de cualquier suscripción Premium o sesión iniciada en el buscador.
+   - La vista se ajusta exactamente al viewport de la ventana con `#movie_player` fijado a pantalla completa (100vw x 100vh) mediante inyección CSS nativa limpia, ocultando barras de navegación y comentarios sin alterar el video.
+   - El control de reproducción (reproducir, pausar, saltar, volumen, silencio) se realiza mediante ejecución de scripts seguros con simulación de gesto de usuario.
+   - La publicidad oficial se reproduce con normalidad según las políticas de YouTube.
+4. **Previsualización del Operador con Réplica Visual Silenciosa**:
+   - Para no duplicar la decodificación de video en GPU ni generar conflictos de concurrencia de sesión en YouTube, el panel de previsualización del operador no incrusta un segundo iframe ni reproductor.
+   - En su lugar, presenta una réplica visual de alta fidelidad: miniatura en alta resolución del video, badge animado de estado ("YOUTUBE EN VIVO" o "YOUTUBE EN PAUSA"), indicador "RÉPLICA SILENCIOSA", cronómetro maestro y barra de progreso continua sincronizada con el proceso principal.
+5. **Protección Total del Público y Notificación al Operador**:
+   - La vista de salida se mantiene oculta (`setVisible(false)`) mientras se prepara el video.
+   - Si YouTube reporta un video caído, restringido o inexistente, la vista de salida permanece oculta mostrando el fondo seguro (negro o fondo de diapositiva); el público **jamás** ve tarjetas de error de YouTube ni botones de "Watch video on YouTube".
+   - El proceso principal detecta el fallo (`#player-error-message-container`) y emite el evento IPC `youtube:error`, alertando al operador en su pantalla con un mensaje en español con el código y la causa exacta.
+6. **Enrutamiento de Audio Exclusivo**: El audio se emite exclusivamente por el rol de salida asignado (por defecto Sala), silenciando por hardware las pantallas accesorias.
+7. **Verificación Pre-Culto de la Lista**: El operador dispone del botón "Verificar playlist", que comprueba en lote el estado de disponibilidad e incrustabilidad de todos los videos de YouTube del servicio antes del inicio de la reunión.
+8. **Integración con Emergencias y Monitor de Escenario**: Los controles de Negro (F1), Limpiar (F2) y Congelar (F4) actúan directamente sobre la reproducción de YouTube, y el monitor de escenario presenta el título y los cronómetros de tiempo transcurrido y restante.
+9. **Descarga Local Segura y Barra de Progreso en Vivo**: Integración con `yt-dlp` y `ffmpeg` con sanitización de URL canónica (`&list=...` suprimido) para evitar bucles de descarga de listas o mezclas, canal IPC de eventos de progreso en tiempo real (`youtube:download-progress`) e indicador visual reactivo con porcentaje, tasa de transferencia (MB/s) y tiempo estimado restante.
 
 ---
 

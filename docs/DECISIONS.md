@@ -936,3 +936,27 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
   2. **Monitoreo en Tiempo Real**: Se añade la bandera `--newline` a `yt-dlp` y se analiza `stdout` línea por línea para extraer porcentaje, velocidad de descarga (MB/s) y tiempo estimado restante (ETA), emitiendo el evento `youtube:download-progress` hacia la interfaz de usuario.
   3. **Retroalimentación Visual**: `YouTubeBrowserPanel` renderiza una barra de progreso en vivo con colores de la paleta oficial (naranja `#FF7A00`, verde `#22C55E`, azul claro `#38BDF8`), mostrando el porcentaje tanto en la barra como en el botón de descarga.
   4. **Aislamiento de Sesión y Bloqueador de Anuncios**: Las reglas de cancelación de peticiones publicitarias se aislaron de forma estricta en la partición persistente de YouTube (`persist:youtube`), evitando emisiones de `net::ERR_BLOCKED_BY_CLIENT` en la sesión por defecto de la aplicación.
+
+---
+
+### DECISIÓN 12: Resolución de la Regresión Crítica de YouTube (Error 152-4), Selección de la Opción B (Watch Page Nativa con WebContentsView) y Protección del Público
+- **Contexto**:
+  - Al proyectar cualquier video de YouTube en las salidas reales y en la previsualización del operador, la pantalla mostraba la tarjeta de error de YouTube `"This video is unavailable, Error code: 152-4"` junto con el botón `"Watch video on YouTube"`.
+  - En contraste, el navegador interno de YouTube en el panel de búsqueda reproducía los videos con total normalidad.
+- **Investigación de Causa Raíz (Git y Auditoría de Identificación)**:
+  - Los commits `eb3e303` y `b7cd749` habían introducido una regla `onBeforeSendHeaders` en el proceso principal inyectando `Referer: https://www.youtube.com/` y `Origin: https://www.youtube.com` sintéticos, mientras que `src/shared/youtube-utils.ts` inyectaba parámetros `origin=https://www.youtube.com` y `widget_referrer=https://www.youtube.com` en los iframes de incrustación (`/embed/ID`).
+  - El sistema anti-spoofing de YouTube detectó la discordancia entre el contexto del iframe (origen `file://` o `http://localhost`) y las cabeceras fraudulentas que pretendían hacerse pasar por `youtube.com`, bloqueando la reproducción con el código de error no documentado `152-4`.
+- **Auditoría y Eliminación de Spoofing**:
+  - Se eliminaron por completo todas las manipulaciones de cabeceras `Referer` y `Origin` falsificadas en `src/main/index.ts`, `src/main/youtube/youtube-service.ts` y `src/shared/youtube-utils.ts`.
+  - YouTube recibe ahora únicamente cabeceras y orígenes transparentes y legítimos del navegador Chromium.
+- **Benchmark Real de Comparación (Opción A vs Opción B)**:
+  - Se ejecutó una prueba empírica con Electron real (`scripts/benchmark-youtube-options.mjs`) sobre 10 videos públicos de YouTube:
+    - **Opción A (Reproductor Incrustado `/embed`)**: **0% de éxito (0/10)**. El 100% de los videos fallaron con *"Video player configuration error"* / Error 152-4, debido a restricciones de incrustación de terceros impuestas por YouTube y titulares de derechos.
+    - **Opción B (Página Watch Oficial `youtube.com/watch` en WebContentsView dedicada con partición `persist:youtube`)**: **100% de éxito (10/10)**. Reproducción inmediata, fluida, tiempo promedio de inicio de **2.01 segundos**, tasa de fotogramas íntegra y audio enrutado por hardware.
+- **Decisión y Arquitectura de Implementación**:
+  1. **Adopción Definitiva de la Opción B**: Se implementó `YouTubeOutputManager` controlando vistas `WebContentsView` nativas montadas directamente sobre las ventanas de salida (`main`, `lobby`).
+  2. **Sin Iframe en Ventanas de Salida**: Se eliminó el `<iframe>` de `OutputApp.tsx`.
+  3. **Control Total sin Gestos del Usuario**: Control por inyección de script seguro con eventos de teclado/click simulados (`video.play()`, `video.pause()`, `video.currentTime = N`, `video.volume`, `video.muted`).
+  4. **Respeto a la Publicidad Oficial**: No se bloquean ni omiten anuncios en las vistas de salida. Si YouTube muestra publicidad, se reproduce con normalidad y el video principal continúa al finalizar.
+  5. **Previsualización del Operador con Réplica Visual Silenciosa**: Para evitar sobrecargar la GPU y prevenir conflictos de sesión con dos iframes reproduciendo simultáneamente, la previsualización del operador utiliza una réplica visual ligera (miniatura de alta resolución, badge de estado en vivo / en pausa, reloj maestro y barra de progreso sincronizada).
+  6. **Protección Total del Público contra Errores**: La vista de salida se mantiene invisible (`setVisible(false)`) durante la carga. Si la página de YouTube reporta un error (`#player-error-message-container`, `.yt-playability-error-supported-renderers`), la vista de salida permanece oculta en negro/fondo seguro para que la congregación nunca vea tarjetas de error ni botones de YouTube, y se emite un evento IPC `youtube:error` que alerta al operador en español con el código exacto de la falla.

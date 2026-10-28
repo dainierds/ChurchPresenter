@@ -82,28 +82,7 @@ export class YouTubeService {
       (ytSession as any).setDevicePermissionHandler(() => false)
     }
 
-    // 3. Inject Referer and Origin headers to prevent Error 152 / 153 "Video Player configuration error"
-    try {
-      const headerFilter = {
-        urls: [
-          '*://*.youtube.com/*',
-          '*://*.youtube-nocookie.com/*',
-          '*://*.googlevideo.com/*'
-        ]
-      }
-      const headerModifier = (details: any, callback: any) => {
-        const requestHeaders = { ...details.requestHeaders }
-        requestHeaders['Referer'] = 'https://www.youtube.com/'
-        requestHeaders['Origin'] = 'https://www.youtube.com'
-        callback({ requestHeaders })
-      }
-      ytSession.webRequest.onBeforeSendHeaders(headerFilter, headerModifier)
-      session.defaultSession.webRequest.onBeforeSendHeaders(headerFilter, headerModifier)
-    } catch (err) {
-      logger.warn('Failed to configure YouTube header injection:', err)
-    }
-
-    // 4. Implement ad-blocking via WebRequest API strictly on the dedicated YouTube partition
+    // 3. Implement ad-blocking via WebRequest API strictly on the dedicated YouTube partition
     try {
       ytSession.webRequest.onBeforeRequest(
         { urls: YouTubeService.AD_BLOCK_PATTERNS },

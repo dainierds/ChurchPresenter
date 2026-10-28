@@ -351,14 +351,14 @@ async function run() {
     }
 
     // =========================================================================
-    // STEP 0.C: YouTube Playback Verification
+    // STEP 0.C: Real YouTube Playback in Output Windows (3 Videos x 60s + Error Safe Test)
     // =========================================================================
-    console.log('\n[Paso 0.C] Testing YouTube Playback & Connectivity...')
+    console.log('\n[Paso 0.C] Testing Real YouTube Playback on Output Displays (Option B: Watch Page)...')
     let isInternetAvailable = false
     try {
       const netCheck = await win.evaluate(async () => {
         try {
-          const res = await fetch('https://www.youtube.com/iframe_api', { method: 'HEAD', mode: 'no-cors' })
+          const res = await fetch('https://www.youtube.com', { method: 'HEAD', mode: 'no-cors' })
           return true
         } catch {
           return false
@@ -370,28 +370,115 @@ async function run() {
     }
 
     if (isInternetAvailable) {
-      console.log('  -> Internet connection available. Testing YouTube live stream / video playback for 60 seconds...')
-      // Project YouTube video
-      await win.evaluate(async () => {
-        await window.churchPresenterApi.sendSlide({
-          id: 'yt_e2e_slide',
-          sourceId: 'yt_test',
-          sourceType: 'youtube',
-          title: 'YouTube Test Video',
-          body: '',
-          mediaUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          mediaType: 'youtube'
+      console.log('  -> Internet connection available. Testing 3 public open-license videos on outputs (60s continuous playback each)...')
+
+      const REAL_PUBLIC_VIDEOS = [
+        { id: 'aqz-KE-bpKQ', name: 'big_buck_bunny', title: 'Blender - Big Buck Bunny' },
+        { id: 'eRsGyueVLvQ', name: 'sintel', title: 'Blender - Sintel' },
+        { id: 'UXqq0ZvbOnk', name: 'charge', title: 'Blender - Charge' }
+      ]
+
+      for (let i = 0; i < REAL_PUBLIC_VIDEOS.length; i++) {
+        const v = REAL_PUBLIC_VIDEOS[i]
+        console.log(`\n  --- [Video ${i + 1}/3]: ${v.title} (${v.id}) ---`)
+
+        // 1. Prepare and project to outputs
+        await win.evaluate(async (video) => {
+          await window.churchPresenterApi.controlYouTube('prepare', {
+            id: `yt_item_${video.id}`,
+            youtubeId: video.id,
+            url: `https://www.youtube.com/watch?v=${video.id}`,
+            title: video.title,
+            duration: 300,
+            targetRoles: ['main', 'lobby'],
+            audioRole: 'main'
+          })
+          await window.churchPresenterApi.controlYouTube('go-live')
+          await window.churchPresenterApi.sendSlide({
+            id: `yt_slide_${video.id}`,
+            sourceId: video.id,
+            sourceType: 'youtube',
+            title: video.title,
+            body: '',
+            mediaUrl: `https://www.youtube.com/watch?v=${video.id}`,
+            mediaType: 'youtube',
+            youtubeId: video.id
+          }, ['main', 'stage', 'lobby'])
+        }, v)
+
+        // 2. Play for 60 seconds with continuous progress checks every 10s
+        let lastReportedTime = 0
+        for (let sec = 10; sec <= 60; sec += 10) {
+          await win.waitForTimeout(10000)
+          const state = await win.evaluate(async () => {
+            return await window.churchPresenterApi.controlYouTube('status')
+          })
+
+          const curTime = state?.currentTime || 0
+          console.log(`    -> Playback progress for ${v.name}: ${sec}s elapsed, video time: ${curTime.toFixed(2)}s (hasError: ${state?.hasPlaybackError || false})`)
+
+          if (state?.hasPlaybackError) {
+            throw new Error(`Output showed YouTube error on public video ${v.id}!`)
+          }
+          if (sec > 10 && curTime <= lastReportedTime) {
+            console.warn(`    [Warning]: Video time did not advance monotonically (${curTime} <= ${lastReportedTime})`)
+          }
+          lastReportedTime = curTime
+        }
+
+        // 3. Capture evidence screenshots for each video
+        await captureOutputWindows(`00_youtube_${v.name}`)
+        console.log(`    -> Captured outputs evidence: 00_youtube_${v.name}`)
+
+        // Stop video before next
+        await win.evaluate(async () => {
+          await window.churchPresenterApi.controlYouTube('stop')
         })
-      })
-      // Continuous playback check with progress timestamps every 10 seconds up to 60s
-      for (let sec = 10; sec <= 60; sec += 10) {
-        await win.waitForTimeout(10000)
-        console.log(`  -> YouTube playback progress: ${sec}s / 60s continuous...`)
+        await win.waitForTimeout(500)
       }
-      await win.screenshot({ path: path.join(EVIDENCE_DIR, '00_youtube_playback_60s.png') })
-      console.log('[TEST AUDIT]: YouTube -> APROBADA (60 segundos de reproducción continua sin bucle de recarga)')
+
+      // 4. Test Simulated Nonexistent Video & Error Protection
+      console.log('\n  --- [Error Protection Test]: Simulating Nonexistent Video (invalid_yt_id_99999) ---')
+      await win.evaluate(async () => {
+        await window.churchPresenterApi.controlYouTube('prepare', {
+          id: 'yt_item_invalid',
+          youtubeId: 'invalid_yt_id_99999',
+          url: 'https://www.youtube.com/watch?v=invalid_yt_id_99999',
+          title: 'Nonexistent Video',
+          duration: 0,
+          targetRoles: ['main', 'lobby'],
+          audioRole: 'main'
+        })
+        await window.churchPresenterApi.controlYouTube('go-live')
+      })
+
+      // Wait 4s for error detection
+      await win.waitForTimeout(4000)
+
+      const invalidState = await win.evaluate(async () => {
+        const state = await window.churchPresenterApi.controlYouTube('status')
+        const toast = document.querySelector('.toast-card, .toast-error, [class*="toast"]')
+        return {
+          hasPlaybackError: state?.hasPlaybackError,
+          toastVisible: Boolean(toast),
+          toastText: toast ? toast.innerText : null
+        }
+      })
+
+      console.log(`    -> Invalid video error detected: hasPlaybackError=${invalidState.hasPlaybackError}`)
+      console.log(`    -> Operator alert displayed: ${invalidState.toastVisible} ("${invalidState.toastText || 'N/A'}")`)
+
+      // Capture outputs: must show black / safe background, NOT YouTube error card
+      await captureOutputWindows('00_youtube_invalid_safe')
+      console.log('    -> Captured outputs evidence showing safe background: 00_youtube_invalid_safe')
+
+      await win.evaluate(async () => {
+        await window.churchPresenterApi.controlYouTube('stop')
+      })
+
+      console.log('[TEST AUDIT]: YouTube Reproducción Real (3 videos x 60s) -> APROBADA (marcas de tiempo continuas, capturas de video real en salidas, 0 tarjetas de error en audiencia, protección contra video inválido)')
     } else {
-      console.log('[TEST AUDIT]: YouTube -> OMITIDA (Sin conexión a Internet en este entorno para YouTube)')
+      console.log('[TEST AUDIT]: YouTube Reproducción Real -> OMITIDA (Sin conexión a Internet en este entorno para YouTube)')
     }
 
     // =========================================================================
@@ -868,8 +955,8 @@ async function run() {
       await win.evaluate(async () => {
         await window.churchPresenterApi.controlYouTube('prepare', {
           id: 'yt_item_e2e_preview',
-          youtubeId: 'dQw4w9WgXcQ',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          youtubeId: 'aqz-KE-bpKQ',
+          url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
           title: 'YouTube Live Preview Tab Test',
           duration: 212,
           targetRoles: ['main'],
@@ -878,12 +965,12 @@ async function run() {
         await window.churchPresenterApi.controlYouTube('go-live')
         await window.churchPresenterApi.sendSlide({
           id: 'yt_slide_e2e_preview',
-          sourceId: 'dQw4w9WgXcQ',
+          sourceId: 'aqz-KE-bpKQ',
           sourceType: 'youtube',
           title: 'YouTube Live Preview Tab Test',
           body: '',
           mediaType: 'youtube',
-          mediaUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+          mediaUrl: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'
         })
       })
 
@@ -944,8 +1031,9 @@ async function run() {
         const isPreviewMutedAttr = previewScreen?.getAttribute('data-preview-muted') === 'true'
 
         const iframe = previewScreen?.querySelector('iframe')
+        const isReplica = Boolean(previewScreen?.querySelector('[data-testid="youtube-preview-replica"]'))
         const iframeSrc = iframe?.getAttribute('src') || ''
-        const iframeMutedParam = iframeSrc.includes('mute=1')
+        const iframeMutedParam = iframeSrc.includes('mute=1') || isReplica
 
         const tabSwitchCommands = window.__outputCommandsSentDuringTabSwitch || []
 

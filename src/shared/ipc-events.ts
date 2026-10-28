@@ -130,6 +130,7 @@ export const IPC_CHANNELS = {
   YOUTUBE_DOWNLOAD_VIDEO: 'youtube:download-video',
   YOUTUBE_AD_STATUS: 'youtube:ad-status',
   YOUTUBE_DOWNLOAD_PROGRESS: 'youtube:download-progress',
+  YOUTUBE_ERROR: 'youtube:error',
 
   // Native Dialogs & File Access
   DIALOG_OPEN_FILE: 'dialog:open-file',

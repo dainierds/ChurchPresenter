@@ -806,6 +806,10 @@ export function registerIpcHandlers(): void {
     windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
   })
 
+  youtubeOutputManager.setErrorCallback((err) => {
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_ERROR, err)
+  })
+
   youTubeBrowserManager.setSyncCallback((tick) => {
     youtubeOutputManager.syncToTick(tick)
     windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)

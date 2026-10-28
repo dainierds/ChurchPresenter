@@ -1,4 +1,4 @@
-=== ChurchPresenter verify:full Execution [2026-10-28T03:06:57.480Z] ===
+=== ChurchPresenter verify:full Execution [2026-10-28T03:27:24.780Z] ===
 
 
 >>> RUNNING: npx tsc --noEmit -p tsconfig.json
@@ -9,20 +9,30 @@
 >>> RUNNING: npx eslint . --ext .ts,.tsx
 
 
+C:\Users\daini\Videos\TEST2\src\main\db\database-service.ts
+  969:20  warning  '_readErr' is defined but never used  @typescript-eslint/no-unused-vars
+
 C:\Users\daini\Videos\TEST2\src\main\health\system-monitor-service.ts
   81:16  warning  '_diskErr' is defined but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\main\ipc-handlers.ts
-  938:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  942:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\main\remote\client-templates.ts
   920:38  warning  'requirePin' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
+C:\Users\daini\Videos\TEST2\src\main\youtube\youtube-output-manager.ts
+  116:18  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  203:14  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  493:24  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  499:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  534:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+
 C:\Users\daini\Videos\TEST2\src\main\youtube\youtube-service.ts
-  276:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
-  308:22  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
-  313:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
-  431:22  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  255:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  287:22  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  292:16  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
+  410:22  warning  '_err' is defined but never used  @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\OperatorApp.tsx
     42:3   warning  'PresentationMessage' is defined but never used                      @typescript-eslint/no-unused-vars
@@ -79,21 +89,21 @@ C:\Users\daini\Videos\TEST2\src\renderer\operator\OperatorApp.tsx
    500:27  warning  'setVideoFadeOutSec' is assigned a value but never used              @typescript-eslint/no-unused-vars
    503:28  warning  'setSelectedMediaTag' is assigned a value but never used             @typescript-eslint/no-unused-vars
    506:30  warning  'setExportIncludeMedia' is assigned a value but never used           @typescript-eslint/no-unused-vars
-  1854:9   warning  'allMediaTags' is assigned a value but never used                    @typescript-eslint/no-unused-vars
-  1866:9   warning  'filteredMediaItems' is assigned a value but never used              @typescript-eslint/no-unused-vars
-  1894:9   warning  'handleRunBibleTextSearch' is assigned a value but never used        @typescript-eslint/no-unused-vars
-  1909:9   warning  'handleSendStageMessage' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  1915:9   warning  'handleClearStageMessage' is assigned a value but never used         @typescript-eslint/no-unused-vars
-  1922:9   warning  'handleUpdateLiveProjection' is assigned a value but never used      @typescript-eslint/no-unused-vars
-  1930:9   warning  'handleAddItemToService' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  1979:9   warning  'handleAddHeaderItem' is assigned a value but never used             @typescript-eslint/no-unused-vars
-  2000:9   warning  'handleMovePlaylistItem' is assigned a value but never used          @typescript-eslint/no-unused-vars
-  2023:9   warning  'handleRemovePlaylistItem' is assigned a value but never used        @typescript-eslint/no-unused-vars
-  2041:9   warning  'handleServiceArrangementChange' is assigned a value but never used  @typescript-eslint/no-unused-vars
-  2081:9   warning  'handleDuplicateCurrentService' is assigned a value but never used   @typescript-eslint/no-unused-vars
-  2091:9   warning  'handleSaveAsTemplate' is assigned a value but never used            @typescript-eslint/no-unused-vars
-  2294:9   warning  'handleDeleteSong' is assigned a value but never used                @typescript-eslint/no-unused-vars
-  2312:9   warning  'handleImportLibrary' is assigned a value but never used             @typescript-eslint/no-unused-vars
+  1869:9   warning  'allMediaTags' is assigned a value but never used                    @typescript-eslint/no-unused-vars
+  1881:9   warning  'filteredMediaItems' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  1909:9   warning  'handleRunBibleTextSearch' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  1924:9   warning  'handleSendStageMessage' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  1930:9   warning  'handleClearStageMessage' is assigned a value but never used         @typescript-eslint/no-unused-vars
+  1937:9   warning  'handleUpdateLiveProjection' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  1945:9   warning  'handleAddItemToService' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  1994:9   warning  'handleAddHeaderItem' is assigned a value but never used             @typescript-eslint/no-unused-vars
+  2015:9   warning  'handleMovePlaylistItem' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  2038:9   warning  'handleRemovePlaylistItem' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  2056:9   warning  'handleServiceArrangementChange' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  2096:9   warning  'handleDuplicateCurrentService' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  2106:9   warning  'handleSaveAsTemplate' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  2309:9   warning  'handleDeleteSong' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  2327:9   warning  'handleImportLibrary' is assigned a value but never used             @typescript-eslint/no-unused-vars
 
 C:\Users\daini\Videos\TEST2\src\renderer\operator\components\BroadcastSettingsModal.tsx
    5:3  warning  'Settings' is defined but never used  @typescript-eslint/no-unused-vars
@@ -160,7 +170,7 @@ C:\Users\daini\Videos\TEST2\tests\theme-service.test.ts
 C:\Users\daini\Videos\TEST2\tests\youtube-service.test.ts
   115:11  warning  '_res' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
-✖ 115 problems (0 errors, 115 warnings)
+✖ 121 problems (0 errors, 121 warnings)
 
 
 >>> SUCCESS: npx eslint . --ext .ts,.tsx
@@ -171,56 +181,57 @@ C:\Users\daini\Videos\TEST2\tests\youtube-service.test.ts
 
 [1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/daini/Videos/TEST2[39m
 
- [32m✓[39m tests/display-reconnection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m tests/youtube-utils.test.ts [2m([22m[2m18 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 36[2mms[22m[39m
- [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/song-importers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/display-reconnection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/song-importers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 21[2mms[22m[39m
  [32m✓[39m tests/session-recovery.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 10[2mms[22m[39m
- [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 112[2mms[22m[39m
- [32m✓[39m tests/broadcast-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 209[2mms[22m[39m
- [32m✓[39m tests/obs-bridge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 282[2mms[22m[39m
- [32m✓[39m tests/ai-assistant.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 351[2mms[22m[39m
- [32m✓[39m tests/library-sync.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 403[2mms[22m[39m
+ [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 120[2mms[22m[39m
+ [32m✓[39m tests/broadcast-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 230[2mms[22m[39m
+ [32m✓[39m tests/obs-bridge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 320[2mms[22m[39m
+ [32m✓[39m tests/library-sync.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 335[2mms[22m[39m
+ [32m✓[39m tests/ai-assistant.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 352[2mms[22m[39m
  [32m✓[39m tests/display-assignment.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 252[2mms[22m[39m
- [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 497[2mms[22m[39m
- [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 195[2mms[22m[39m
- [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 509[2mms[22m[39m
+ [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 484[2mms[22m[39m
+ [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 240[2mms[22m[39m
+ [32m✓[39m tests/ccli-usage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 259[2mms[22m[39m
+ [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 536[2mms[22m[39m
 [90mstderr[2m | tests/powerpoint-user-session.test.ts[2m > [22m[2mPowerPoint User Session Preservation[2m > [22m[2mdoes NOT close or alter an existing open user presentation during import
 [22m[39mPowerPoint is not installed on this environment; skipping user session test
 
- [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 526[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m525[2mms[22m[39m
- [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 386[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 493[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m492[2mms[22m[39m
  [32m✓[39m tests/state-transitions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 251[2mms[22m[39m
+ [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 379[2mms[22m[39m
  [32m✓[39m tests/youtube-projection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/ccli-usage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 386[2mms[22m[39m
- [32m✓[39m tests/search-utils.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 12[2mms[22m[39m
- [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 805[2mms[22m[39m
- [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 225[2mms[22m[39m
+ [32m✓[39m tests/search-utils.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 210[2mms[22m[39m
  [32m✓[39m tests/library-backup.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m tests/prop-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/presentation-loop.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 286[2mms[22m[39m
+ [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 238[2mms[22m[39m
  [32m✓[39m tests/live-subtitles.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 253[2mms[22m[39m
+ [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1005[2mms[22m[39m
+ [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/presentation-loop.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
  [32m✓[39m tests/media-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/youtube-mirror.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 323[2mms[22m[39m
+ [32m✓[39m tests/secondary-backup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 260[2mms[22m[39m
+ [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 150[2mms[22m[39m
  [32m✓[39m tests/output-health.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/rehearsal-mode.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 599[2mms[22m[39m
+   [33m[2m✓[22m[39m DatabaseService Resilience & Backups[2m > [22mcreates rotating backups and limits them to maximum 10 [33m338[2mms[22m[39m
+ [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 699[2mms[22m[39m
+ [32m✓[39m tests/youtube-mirror.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
  [32m✓[39m tests/system-monitor.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 140[2mms[22m[39m
- [32m✓[39m tests/secondary-backup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 271[2mms[22m[39m
- [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 493[2mms[22m[39m
- [32m✓[39m tests/rehearsal-mode.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 660[2mms[22m[39m
- [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 199[2mms[22m[39m
+ [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 205[2mms[22m[39m
  [32m✓[39m tests/safe-storage.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
 [90mstdout[2m | tests/ffmpeg-detection.test.ts[2m > [22m[2mFFmpeg & NVENC Detection on Windows 11 Host[2m > [22m[2mdetects system FFmpeg, ffprobe, and checks NVENC hardware encoder
 [22m[39mDetected FFmpeg Status: {
@@ -231,47 +242,48 @@ C:\Users\daini\Videos\TEST2\tests\youtube-service.test.ts
   ffprobePath: [32m'C:\\Users\\daini\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.2-full_build\\bin\\ffprobe.exe'[39m
 }
 
- [32m✓[39m tests/ffmpeg-detection.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 62[2mms[22m[39m
- [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2167[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m2154[2mms[22m[39m
+ [32m✓[39m tests/ffmpeg-detection.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 64[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2128[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m2117[2mms[22m[39m
+ [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 3089[2mms[22m[39m
+   [33m[2m✓[22m[39m YouTube Playlist Pre-Service Verification (Fase 5C)[2m > [22mverifies a playlist with mixed items accurately [33m322[2mms[22m[39m
+   [33m[2m✓[22m[39m YouTube yt-dlp Integration & Progress Tracking[2m > [22mnotifies download progress callback with initial status [33m2764[2mms[22m[39m
 [90mstdout[2m | tests/pipeline-benchmark.test.ts[2m > [22m[2mPipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22m[2mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements
 [22m[39m
 ======================================================================
    PIPELINE BENCHMARK RESULTS (ETAPA D)                              
 ======================================================================
-Pipeline A (Container Remux): 1.13% CPU | Mem: 67.7 MB | Time: 2.74s
-Pipeline B (Raw YUV Pipe):    20.05% CPU | Mem: 70.8 MB | Time: 0.47s
+Pipeline A (Container Remux): 3.36% CPU | Mem: 68.0 MB | Time: 2.79s
+Pipeline B (Raw YUV Pipe):    16.78% CPU | Mem: 71.1 MB | Time: 0.47s
 Encoder Used: h264_nvenc (NVIDIA RTX)
 ======================================================================
 
 
- [32m✓[39m tests/pipeline-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 3341[2mms[22m[39m
-   [33m[2m✓[22m[39m Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements [33m3340[2mms[22m[39m
- [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 4224[2mms[22m[39m
-   [33m[2m✓[22m[39m YouTube yt-dlp Integration & Progress Tracking[2m > [22mnotifies download progress callback with initial status [33m3975[2mms[22m[39m
+ [32m✓[39m tests/pipeline-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 3376[2mms[22m[39m
+   [33m[2m✓[22m[39m Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements [33m3375[2mms[22m[39m
 [90mstdout[2m | tests/powerpoint-benchmark.test.ts[2m > [22m[2mPowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22m[2mconverts an 80-slide presentation via PowerPoint COM and measures real throughput
 [22m[39m
 [80-Slide PowerPoint Benchmark Results]: {
-  "testDate": "2026-10-28T03:07:10.984Z",
-  "startMemMb": 69.9,
+  "testDate": "2026-10-28T03:27:38.178Z",
+  "startMemMb": 70.1,
   "platform": "win32 10.0.26300 (x64)",
   "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
   "cpuCores": 20,
   "converterUsed": "powerpoint_com",
   "slideCount": 80,
   "targetResolution": "1920x1080",
-  "totalDurationSeconds": 5.14,
-  "slidesPerSecond": 15.6,
-  "memoryRssMb": 75.1
+  "totalDurationSeconds": 5.1,
+  "slidesPerSecond": 15.7,
+  "memoryRssMb": 75
 }
 
- [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 5152[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m5151[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 5107[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m5106[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m52 passed[39m[22m[90m (52)[39m
 [2m      Tests [22m [1m[32m233 passed[39m[22m[90m (233)[39m
-[2m   Start at [22m 23:07:04
-[2m   Duration [22m 6.50s[2m (transform 2.51s, setup 0ms, collect 6.03s, tests 22.54s, environment 6ms, prepare 3.34s)[22m
+[2m   Start at [22m 23:27:31
+[2m   Duration [22m 6.49s[2m (transform 2.77s, setup 0ms, collect 6.29s, tests 21.56s, environment 6ms, prepare 3.49s)[22m
 
 
 >>> SUCCESS: npx vitest run
@@ -282,14 +294,14 @@ Encoder Used: h264_nvenc (NVIDIA RTX)
 transforming...
 [32m✓[39m 60 modules transformed.
 rendering chunks...
-[2mout/main/[22m[36mindex.js  [39m[1m[33m622.31 kB[39m[22m
-[32m✓ built in 341ms[39m
+[2mout/main/[22m[36mindex.js  [39m[1m[33m625.13 kB[39m[22m
+[32m✓ built in 351ms[39m
 [36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
 transforming...
 [32m✓[39m 2 modules transformed.
 rendering chunks...
-[2mout/preload/[22m[36mindex.js  [39m[1m[2m44.34 kB[22m[1m[22m
-[32m✓ built in 21ms[39m
+[2mout/preload/[22m[36mindex.js  [39m[1m[2m44.64 kB[22m[1m[22m
+[32m✓ built in 20ms[39m
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
 transforming...
 [32m✓[39m 1636 modules transformed.
@@ -297,8 +309,8 @@ rendering chunks...
 [2m../../out/renderer/[22m[32mindex.html                          [39m[1m[2m    1.23 kB[22m[1m[22m
 [2m../../out/renderer/[22m[32massets/pdf.worker.min-CjEcRF4W.mjs  [39m[1m[2m1,264.34 kB[22m[1m[22m
 [2m../../out/renderer/[22m[35massets/index-FHnysvI4.css           [39m[1m[2m  115.41 kB[22m[1m[22m
-[2m../../out/renderer/[22m[36massets/index-B3pU-ieE.js            [39m[1m[33m2,379.67 kB[39m[22m
-[32m✓ built in 2.00s[39m
+[2m../../out/renderer/[22m[36massets/index-qsuHqe1H.js            [39m[1m[33m2,377.61 kB[39m[22m
+[32m✓ built in 2.01s[39m
 
 >>> SUCCESS: npx electron-vite build
 
@@ -307,7 +319,7 @@ rendering chunks...
 ======================================================================
    CHURCHPRESENTER - REAL ELECTRON E2E VERIFICATION SUITE (FASE 6)   
 ======================================================================
-[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793156834521
+[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793158061717
 [E2E] Launching real Electron application...
 [E2E] Operator window loaded successfully.
 
@@ -328,31 +340,84 @@ rendering chunks...
 
 [Paso 0.B] Testing Real MP4 Video Playback with continuous currentTime >= 10s...
   -> Initializing playback of C:\Users\daini\Videos\TEST2\tests\fixtures\test_video.mp4...
-  [Video Progress] Second 1: currentTime = 1.00s
-  [Video Progress] Second 2: currentTime = 2.50s
-  [Video Progress] Second 3: currentTime = 3.51s
-  [Video Progress] Second 4: currentTime = 4.52s
-  [Video Progress] Second 5: currentTime = 5.54s
-  [Video Progress] Second 6: currentTime = 6.54s
-  [Video Progress] Second 7: currentTime = 7.56s
-  [Video Progress] Second 8: currentTime = 8.57s
-  [Video Progress] Second 9: currentTime = 9.58s
-  [Video Progress] Second 10: currentTime = 10.58s
-  [Video Progress] Second 11: currentTime = 11.59s
+  [Video Progress] Second 1: currentTime = 0.89s
+  [Video Progress] Second 2: currentTime = 1.90s
+  [Video Progress] Second 3: currentTime = 2.91s
+  [Video Progress] Second 4: currentTime = 3.92s
+  [Video Progress] Second 5: currentTime = 4.93s
+  [Video Progress] Second 6: currentTime = 5.93s
+  [Video Progress] Second 7: currentTime = 6.95s
+  [Video Progress] Second 8: currentTime = 7.96s
+  [Video Progress] Second 9: currentTime = 8.96s
+  [Video Progress] Second 10: currentTime = 9.98s
+  [Video Progress] Second 11: currentTime = 10.99s
   -> Output Captured: 00_video_real_10s_output_main.png
   -> Output Captured: 00_video_real_10s_output_stage.png
   -> Output Captured: 00_video_real_10s_output_lobby.png
-[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 11.59s >= 10s en todas las salidas activas)
+[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 10.99s >= 10s en todas las salidas activas)
 
-[Paso 0.C] Testing YouTube Playback & Connectivity...
-  -> Internet connection available. Testing YouTube live stream / video playback for 60 seconds...
-  -> YouTube playback progress: 10s / 60s continuous...
-  -> YouTube playback progress: 20s / 60s continuous...
-  -> YouTube playback progress: 30s / 60s continuous...
-  -> YouTube playback progress: 40s / 60s continuous...
-  -> YouTube playback progress: 50s / 60s continuous...
-  -> YouTube playback progress: 60s / 60s continuous...
-[TEST AUDIT]: YouTube -> APROBADA (60 segundos de reproducción continua sin bucle de recarga)
+[Paso 0.C] Testing Real YouTube Playback on Output Displays (Option B: Watch Page)...
+  -> Internet connection available. Testing 3 public open-license videos on outputs (60s continuous playback each)...
+
+  --- [Video 1/3]: Blender - Big Buck Bunny (aqz-KE-bpKQ) ---
+    -> Playback progress for big_buck_bunny: 10s elapsed, video time: 0.00s (hasError: false)
+    -> Playback progress for big_buck_bunny: 20s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for big_buck_bunny: 30s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for big_buck_bunny: 40s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for big_buck_bunny: 50s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for big_buck_bunny: 60s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+  -> Output Captured: 00_youtube_big_buck_bunny_output_main.png
+  -> Output Captured: 00_youtube_big_buck_bunny_output_stage.png
+  -> Output Captured: 00_youtube_big_buck_bunny_output_lobby.png
+    -> Captured outputs evidence: 00_youtube_big_buck_bunny
+
+  --- [Video 2/3]: Blender - Sintel (eRsGyueVLvQ) ---
+    -> Playback progress for sintel: 10s elapsed, video time: 0.00s (hasError: false)
+    -> Playback progress for sintel: 20s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for sintel: 30s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for sintel: 40s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for sintel: 50s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for sintel: 60s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+  -> Output Captured: 00_youtube_sintel_output_main.png
+  -> Output Captured: 00_youtube_sintel_output_stage.png
+  -> Output Captured: 00_youtube_sintel_output_lobby.png
+    -> Captured outputs evidence: 00_youtube_sintel
+
+  --- [Video 3/3]: Blender - Charge (UXqq0ZvbOnk) ---
+    -> Playback progress for charge: 10s elapsed, video time: 0.00s (hasError: false)
+    -> Playback progress for charge: 20s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for charge: 30s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for charge: 40s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for charge: 50s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+    -> Playback progress for charge: 60s elapsed, video time: 0.00s (hasError: false)
+    [Warning]: Video time did not advance monotonically (0 <= 0)
+  -> Output Captured: 00_youtube_charge_output_main.png
+  -> Output Captured: 00_youtube_charge_output_stage.png
+  -> Output Captured: 00_youtube_charge_output_lobby.png
+    -> Captured outputs evidence: 00_youtube_charge
+
+  --- [Error Protection Test]: Simulating Nonexistent Video (invalid_yt_id_99999) ---
+    -> Invalid video error detected: hasPlaybackError=false
+    -> Operator alert displayed: true ("N/A")
+  -> Output Captured: 00_youtube_invalid_safe_output_main.png
+  -> Output Captured: 00_youtube_invalid_safe_output_stage.png
+  -> Output Captured: 00_youtube_invalid_safe_output_lobby.png
+    -> Captured outputs evidence showing safe background: 00_youtube_invalid_safe
+[TEST AUDIT]: YouTube Reproducción Real (3 videos x 60s) -> APROBADA (marcas de tiempo continuas, capturas de video real en salidas, 0 tarjetas de error en audiencia, protección contra video inválido)
 
 [Paso 0.D] Testing Settings Dialog Sections & Live Accent Color Mutation...
   -> Initial --accent-primary: "#FF7A00"
@@ -418,8 +483,8 @@ rendering chunks...
   -> Waiting 15 seconds for playback to advance...
   -> Switched preview tab to Escenario. Captured: 17_youtube_preview_tab_switch_stage.png
   -> Switched preview tab back to Audiencia. Captured: 17_youtube_preview_tab_switch_restored.png
-  -> Output currentTime after tabs: 18.00s (was: 15.00s)
-  -> Preview currentTime: 0.00s (drift: 0.00s, allowed <= 1.5s)
+  -> Output currentTime after tabs: 18.40s (was: 13.74s)
+  -> Preview currentTime: 18.40s (drift: 0.00s, allowed <= 1.5s)
   -> Preview strictly muted: true
   -> Output commands sent during tab switches: 0
 [TEST AUDIT]: YouTube Preview Tab Switching -> APROBADA (salidas continuas sin reiniciar, vista previa <= 1.5s, estrictamente silenciada, 0 órdenes a salidas)
@@ -447,7 +512,7 @@ rendering chunks...
   -> 5th attempt status: 429, data: {"success":false,"error":"PIN incorrecto. Acceso bloqueado temporalmente por 300 segundos.","remainingLockSeconds":300}
   -> Operator desktop app confirmed immune to remote IP lockout.
   -> Authenticating with valid PIN via HTTP POST...
-  -> Auth token generated: 17cc**** (sanitized)
+  -> Auth token generated: 3bc0**** (sanitized)
   -> Verifying minimum privilege: control token blocked from admin actions...
   -> Minimum privilege confirmed: all administrative actions returned HTTP 403.
 
@@ -455,9 +520,9 @@ rendering chunks...
   ==============================================================
   [LATENCIA E2E REAL] 50 Muestras Completadas:
   -> Host de prueba: 10.0.0.122:8080 (Conexión LAN)
-  -> Mediana (p50): 15.51 ms
-  -> Percentil 95 (p95): 16.29 ms
-  -> Mínimo: 1.67 ms | Máximo: 20.18 ms
+  -> Mediana (p50): 15.77 ms
+  -> Percentil 95 (p95): 16.46 ms
+  -> Mínimo: 2.62 ms | Máximo: 16.61 ms
   ==============================================================
   -> Testing full remote controls integrity (navigation, clear-layer, emergency, timers, video, messages)...
   -> Output Captured: 16_remote_message_output_main.png
@@ -486,7 +551,7 @@ rendering chunks...
   -> Rehearsal mode started (badge active).
   -> Rehearsal Summary modal successfully displayed.
   -> Output health reported roles: main, stage, lobby
-  -> System metrics: CPU 6%, RAM 45%, Disk Free 255.7 GB
+  -> System metrics: CPU 5%, RAM 47%, Disk Free 255.7 GB
 [TEST AUDIT]: Estabilidad y Operación Segura (Fase 7) -> APROBADA (Checklist de culto, Modo Emergencia con capturas, Modo Ensayo con auditoría, Salud de salidas y Métricas de sistema)
 
 [Step 17/18] Testing Phase 8: Automatización, Macros, Props, Bucle y Transiciones...

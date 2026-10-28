@@ -110,65 +110,13 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const [isCreatingTimer, setIsCreatingTimer] = useState(false)
   const [clockTime, setClockTime] = useState('')
 
-  // YouTube Mirror Sync State & Control
+  // YouTube Mirror Sync State (Visual Replica, No Secondary Player)
   const [mirrorSync, setMirrorSync] = useState<YouTubeSyncTick | null>(null)
-  const ytIframeRef = React.useRef<HTMLIFrameElement | null>(null)
   const previewVideoRef = React.useRef<HTMLVideoElement | null>(null)
-  const lastSyncTimeRef = React.useRef<number>(0)
-  const lastPlayStateRef = React.useRef<boolean | null>(null)
 
   useEffect(() => {
     const unsub = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
       setMirrorSync(tick)
-
-      const iframe = ytIframeRef.current
-      if (!iframe || !iframe.contentWindow) return
-
-      // Strict Mute Guarantee: preview NEVER emits audio
-      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*')
-      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [0] }), '*')
-
-      // Mirror Play / Pause
-      if (lastPlayStateRef.current !== tick.isPlaying) {
-        lastPlayStateRef.current = tick.isPlaying
-        if (tick.isPlaying) {
-          if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 1.0) {
-            lastSyncTimeRef.current = tick.currentTime
-            iframe.contentWindow.postMessage(
-              JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-              '*'
-            )
-          }
-          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
-        } else {
-          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        }
-      } else if (!tick.isPlaying) {
-        // Paused state scrubbing
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.4) {
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        }
-      } else {
-        // Playing state: smooth drift correction if deviation exceeds 1.2s (< 1.5s requirement)
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 1.2) {
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        } else {
-          lastSyncTimeRef.current = tick.currentTime
-        }
-      }
     })
     return () => unsub?.()
   }, [])
@@ -294,24 +242,6 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
     }
   }, [isContentHidden, isVideo, activeOutputTab])
 
-  // Whenever activeOutputTab changes or un-hiding from clear/logo, immediately synchronize YouTube preview with master clock
-  useEffect(() => {
-    if (!isContentHidden && activeOutputTab !== 'stage' && isYouTube && ytIframeRef.current?.contentWindow && mirrorSync) {
-      const iframe = ytIframeRef.current.contentWindow
-      iframe.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*')
-      iframe.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [0] }), '*')
-      iframe.postMessage(
-        JSON.stringify({ event: 'command', func: 'seekTo', args: [mirrorSync.currentTime, true] }),
-        '*'
-      )
-      lastSyncTimeRef.current = mirrorSync.currentTime
-      if (mirrorSync.isPlaying) {
-        iframe.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
-      } else {
-        iframe.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
-      }
-    }
-  }, [activeOutputTab, isYouTube, isContentHidden, mirrorSync?.isPlaying])
 
   const hasBackground = Boolean(roleBackground?.value)
   const hasSlide = Boolean(roleContent?.body || roleContent?.title)
@@ -592,9 +522,10 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 />
               )}
 
-              {/* 1. YouTube Live Video Player Layer: Persistently mounted, toggled via display */}
+              {/* 1. YouTube Output Replica Layer: Clean, silent mirror of output with master clock progress */}
               {isYouTube && activeYoutubeId && (
                 <div
+                  data-testid="youtube-preview-replica"
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -603,52 +534,111 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                     display: !isContentHidden && activeOutputTab !== 'stage' ? 'block' : 'none'
                   }}
                 >
-                  <iframe
-                    ref={ytIframeRef}
-                    key={activeYoutubeId}
-                    data-testid="youtube-preview-iframe"
-                    src={`https://www.youtube.com/embed/${activeYoutubeId}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
-                    title="YouTube Live Preview"
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    referrerPolicy="strict-origin-when-cross-origin"
+                  <img
+                    src={`https://i.ytimg.com/vi/${activeYoutubeId}/hqdefault.jpg`}
+                    alt="YouTube Output Replica"
                     style={{
                       position: 'absolute',
                       inset: 0,
                       width: '100%',
                       height: '100%',
-                      border: 'none',
-                      pointerEvents: 'none'
+                      objectFit: 'contain',
+                      backgroundColor: '#000000'
                     }}
                   />
                   <div
                     style={{
                       position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.4) 100%)',
+                      pointerEvents: 'none'
+                    }}
+                  />
+
+                  {/* Top Badges: Status + Silent Replica */}
+                  <div
+                    style={{
+                      position: 'absolute',
                       top: 6,
                       left: 6,
-                      backgroundColor: mirrorSync && !mirrorSync.isPlaying ? 'rgba(100, 116, 139, 0.95)' : 'rgba(220, 38, 38, 0.95)',
-                      color: '#ffffff',
-                      fontSize: 9,
-                      fontWeight: 800,
-                      padding: '2px 6px',
-                      borderRadius: 3,
-                      letterSpacing: 0.5,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 5,
-                      zIndex: 10,
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.5)'
+                      gap: 6,
+                      zIndex: 10
                     }}
                   >
-                    <span
+                    <div
                       style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        backgroundColor: mirrorSync && !mirrorSync.isPlaying ? '#cbd5e1' : '#ffffff',
-                        display: 'inline-block'
+                        backgroundColor: mirrorSync && !mirrorSync.isPlaying ? 'rgba(255, 122, 0, 0.95)' : 'rgba(34, 197, 94, 0.95)',
+                        color: '#ffffff',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: '2px 6px',
+                        borderRadius: 3,
+                        letterSpacing: 0.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.5)'
                       }}
-                    />
-                    {mirrorSync && !mirrorSync.isPlaying ? 'YOUTUBE EN PAUSA' : 'YOUTUBE EN VIVO'}
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          backgroundColor: '#ffffff',
+                          display: 'inline-block'
+                        }}
+                      />
+                      {mirrorSync && !mirrorSync.isPlaying ? 'YOUTUBE EN PAUSA' : 'YOUTUBE EN VIVO'}
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                        border: '1px solid #38bdf8',
+                        color: '#38bdf8',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        padding: '2px 6px',
+                        borderRadius: 3
+                      }}
+                    >
+                      RÉPLICA SILENCIOSA
+                    </div>
+                  </div>
+
+                  {/* Bottom: Progress Bar & Master Timers */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 8,
+                      left: 10,
+                      right: 10,
+                      zIndex: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                      <span style={{ fontWeight: 600, color: '#ff7a00' }}>
+                        {formatTimerDigits(mirrorSync?.currentTime || 0)}
+                      </span>
+                      <span style={{ color: '#94a3b8' }}>
+                        {formatTimerDigits(mirrorSync?.duration || 0)}
+                      </span>
+                    </div>
+                    <div style={{ width: '100%', height: 4, backgroundColor: '#27272a', borderRadius: 2, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${mirrorSync && mirrorSync.duration > 0 ? Math.min(100, (mirrorSync.currentTime / mirrorSync.duration) * 100) : 0}%`,
+                          background: 'linear-gradient(90deg, #ff7a00, #22c55e)',
+                          transition: 'width 0.25s linear'
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}

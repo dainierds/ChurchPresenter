@@ -75,23 +75,6 @@ async function initializeApp() {
     const gpuStatus = app.getGPUFeatureStatus()
     logger.info(`Hardware acceleration GPU status: ${JSON.stringify(gpuStatus)}`)
 
-    // Configure YouTube headers (Referer & Origin) to prevent Error 153 "Video Player configuration error"
-    session.defaultSession.webRequest.onBeforeSendHeaders(
-      {
-        urls: [
-          '*://*.youtube.com/*',
-          '*://*.youtube-nocookie.com/*',
-          '*://*.googlevideo.com/*'
-        ]
-      },
-      (details, callback) => {
-        const requestHeaders = { ...details.requestHeaders }
-        requestHeaders['Referer'] = 'https://www.youtube.com/'
-        requestHeaders['Origin'] = 'https://www.youtube.com'
-        callback({ requestHeaders })
-      }
-    )
-
     // Allow YouTube embed preview frames in operator UI & output windows
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const responseHeaders = { ...details.responseHeaders }

@@ -850,6 +850,20 @@ export const OperatorApp: React.FC = () => {
       }, 4500)
     })
 
+    const unsubYtErr = window.churchPresenterApi.onYouTubeError?.((err) => {
+      const errNotif = {
+        id: `yt_err_${Date.now()}`,
+        type: 'error' as const,
+        title: `YouTube [Error ${err.code}]`,
+        message: `${err.message}. La salida de proyección mantiene el fondo seguro.`,
+        timestamp: Date.now()
+      }
+      setToasts((prev) => [...prev, errNotif])
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== errNotif.id))
+      }, 7000)
+    })
+
     const onDeviceChange = async () => {
       if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
         try {
@@ -977,6 +991,7 @@ export const OperatorApp: React.FC = () => {
       unsubDisplays()
       unsubState()
       unsubNotif()
+      unsubYtErr?.()
       unsubTimers()
       unsubFileWatcher()
       unsubRehearsal()

@@ -59,58 +59,10 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
 
   // YouTube Mirror Sync State & Control
   const [liveYtSync, setLiveYtSync] = useState<YouTubeSyncTick | null>(null)
-  const ytIframeRef = useRef<HTMLIFrameElement | null>(null)
-  const lastSyncTimeRef = useRef<number>(0)
-  const lastPlayStateRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     const unsub = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
       setLiveYtSync(tick)
-
-      const iframe = ytIframeRef.current
-      if (!iframe || !iframe.contentWindow) return
-
-      // Mirror Play / Pause
-      if (lastPlayStateRef.current !== tick.isPlaying) {
-        lastPlayStateRef.current = tick.isPlaying
-        if (tick.isPlaying) {
-          if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 1.0) {
-            lastSyncTimeRef.current = tick.currentTime
-            iframe.contentWindow.postMessage(
-              JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-              '*'
-            )
-          }
-          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*')
-        } else {
-          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*')
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        }
-      } else if (!tick.isPlaying) {
-        // Paused state scrubbing
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 0.5) {
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        }
-      } else {
-        // Playing state: ONLY seek on major jump / manual scrub (> 2.5s) to avoid buffer stutter
-        if (Math.abs(tick.currentTime - lastSyncTimeRef.current) > 2.5) {
-          lastSyncTimeRef.current = tick.currentTime
-          iframe.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [tick.currentTime, true] }),
-            '*'
-          )
-        } else {
-          lastSyncTimeRef.current = tick.currentTime
-        }
-      }
     })
     return () => unsub?.()
   }, [])
@@ -889,7 +841,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                     </div>
                   )}
 
-                  {/* YouTube Live Player Layer: persistently mounted, visibility toggled via display */}
+                  {/* YouTube Live Player Layer: Dedicated native WebContentsView is attached directly by YouTubeOutputManager */}
                   {isMediaYouTube && (
                     <div
                       style={{
@@ -902,38 +854,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                         overflow: 'hidden',
                         display: visibility.showContent ? 'block' : 'none'
                       }}
-                    >
-                      {(() => {
-                        const ytId =
-                          liveYtSync?.videoId ||
-                          content?.youtubeId ||
-                          (content?.mediaUrl ? parseYouTubeUrl(content.mediaUrl).videoId : null)
-                        if (!ytId) return null
-                        const isMuted =
-                          liveYtSync?.isBrowserSource ||
-                          role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')
-                        return (
-                          <iframe
-                            ref={ytIframeRef}
-                            key={ytId}
-                            src={`https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&mute=${
-                              isMuted ? '1' : '0'
-                            }&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
-                            title="YouTube Output"
-                            allow="autoplay; encrypted-media; picture-in-picture"
-                            referrerPolicy="strict-origin-when-cross-origin"
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              width: '100%',
-                              height: '100%',
-                              border: 'none',
-                              pointerEvents: 'none'
-                            }}
-                          />
-                        )
-                      })()}
-                    </div>
+                    />
                   )}
 
                   {visibility.showContent && !isMediaVideo && !isMediaYouTube && (

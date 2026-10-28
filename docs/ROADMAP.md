@@ -112,6 +112,11 @@ Este documento define la planificación oficial de las 10 fases de desarrollo de
 - Modal de advertencia legal y de conectividad en el primer uso.
 - Soporte opcional para descarga y extracción local a la biblioteca de medios mediante `yt-dlp` desacoplado.
 - Suite de pruebas unitarias (`tests/youtube-utils.test.ts`, `tests/youtube-service.test.ts`) y prueba automatizada E2E con Playwright/Electron y capturas de evidencia en `docs/evidence/`.
+- **Resolución de Regresión de Proyección de YouTube (Error 152-4)**:
+  - Eliminación completa de cabeceras falsificadas `Referer` y `Origin` en peticiones de red y parámetros de URL que activaban el bloqueo anti-spoofing de YouTube.
+  - Adopción definitiva de la **Opción B**: vistas nativas `WebContentsView` cargando la página oficial `youtube.com/watch` con la sesión compartida del usuario (`persist:youtube`) y presentación en viewport completo.
+  - Eliminación de segundo reproductor/iframe en la previsualización del operador, sustituido por réplica visual silenciosa de alto rendimiento (miniatura, badge en vivo/en pausa, reloj y progreso).
+  - Protección del público en proyector: supresión visual automática (`setVisible(false)`) ante errores para que nunca se muestren tarjetas de error o botones de YouTube a la congregación, con notificación de alerta inmediata al operador en español.
 - **Correcciones de Maquetación y Rediseño Visual de la Ventana del Operador (v1.1)**:
   - Reconstrucción del contenedor de tres columnas con Flexbox (`min-width: 0`, `overflow: hidden`, sin anchos fijos que desborden ni colisiones visuales).
   - Títulos largos truncados con elipsis al final y texto completo en tooltip accesible nativo.
