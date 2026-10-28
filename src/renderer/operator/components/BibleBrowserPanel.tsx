@@ -9,7 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Sliders,
-  Check
+  Check,
+  Grid
 } from 'lucide-react'
 import {
   BibleSearchResult,
@@ -17,6 +18,7 @@ import {
   ServiceItem,
   SlideItem
 } from '../../../shared/types'
+import { BIBLE_BOOKS } from '../../../shared/bible-reference-parser'
 
 interface BibleBrowserPanelProps {
   translations: BibleTranslationMeta[]
@@ -61,7 +63,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   onAddToService,
   onToggleFavorite
 }) => {
-  const [searchMode, setSearchMode] = useState<'reference' | 'text'>('reference')
+  const [searchMode, setSearchMode] = useState<'reference' | 'text' | 'picker'>('reference')
   const [refInput, setRefInput] = useState<string>(currentReference || 'Juan 3:16')
   const [textQuery, setTextQuery] = useState<string>('')
   const [testamentFilter, setTestamentFilter] = useState<'ALL' | 'OT' | 'NT'>('ALL')
@@ -69,6 +71,34 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   const [textResults, setTextResults] = useState<BibleSearchResult[]>([])
   const [selectedSlideIndex, setSelectedSlideIndex] = useState<number>(0)
   const [addedToast, setAddedToast] = useState<boolean>(false)
+
+  // Book & Chapter Picker states
+  const [pickerTestament, setPickerTestament] = useState<'OT' | 'NT'>('NT')
+  const [selectedBookNumber, setSelectedBookNumber] = useState<number>(40) // Default to Mateo
+  const [selectedChapter, setSelectedChapter] = useState<number>(5)
+  const [chapterVerseCount, setChapterVerseCount] = useState<number>(48)
+
+  const currentBook = useMemo(() => {
+    return BIBLE_BOOKS.find((b) => b.number === selectedBookNumber) || BIBLE_BOOKS[39]
+  }, [selectedBookNumber])
+
+  // Sync verse count for selected chapter in picker
+  useEffect(() => {
+    if (searchMode === 'picker' && currentBook && window.churchPresenterApi?.getVersesByReference) {
+      window.churchPresenterApi
+        .getVersesByReference(`${currentBook.name} ${selectedChapter}`, primaryAbbrev)
+        .then((res: any) => {
+          if (res?.verses && res.verses.length > 0) {
+            setChapterVerseCount(res.verses.length)
+          } else {
+            setChapterVerseCount(35)
+          }
+        })
+        .catch(() => {
+          setChapterVerseCount(35)
+        })
+    }
+  }, [searchMode, selectedBookNumber, selectedChapter, primaryAbbrev, currentBook])
 
   // Keep refInput in sync with active reference
   useEffect(() => {
@@ -225,6 +255,28 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             >
               <Search size={12} />
               <span>Búsqueda de Texto</span>
+            </button>
+            <button
+              type="button"
+              className="bible-mode-picker-btn"
+              onClick={() => setSearchMode('picker')}
+              style={{
+                background: searchMode === 'picker' ? '#2A2A2A' : 'transparent',
+                color: searchMode === 'picker' ? '#38BDF8' : '#888888',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Seleccionar visualmente Libro, Capítulo y Versículo"
+            >
+              <Grid size={12} />
+              <span>Selector de Libros</span>
             </button>
           </div>
         </div>
@@ -457,6 +509,29 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               Ir a Pasaje
             </button>
 
+            <button
+              type="button"
+              className="bible-open-picker-quick-btn"
+              onClick={() => setSearchMode('picker')}
+              style={{
+                backgroundColor: '#262626',
+                border: '1px solid #38BDF8',
+                color: '#38BDF8',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+              title="Abrir selector visual de libros, capítulos y versículos"
+            >
+              <Grid size={13} />
+              <span>Explorar Libros...</span>
+            </button>
+
             {onToggleFavorite && (
               <button
                 type="button"
@@ -477,7 +552,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               </button>
             )}
           </form>
-        ) : (
+        ) : searchMode === 'text' ? (
           <form
             onSubmit={handleRunTextSearch}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}
@@ -578,6 +653,53 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               {isSearchingText ? 'Buscando...' : 'Buscar'}
             </button>
           </form>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1, gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+              <span style={{ color: '#9CA3AF' }}>Navegador de Libros:</span>
+              <strong style={{ color: '#FF7A00', fontSize: '14px' }}>{currentBook?.name}</strong>
+              <span style={{ color: '#6B7280' }}>/</span>
+              <strong style={{ color: '#38BDF8', fontSize: '14px' }}>Capítulo {selectedChapter}</strong>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const ref = `${currentBook?.name || 'Mateo'} ${selectedChapter}`
+                  setRefInput(ref)
+                  onLoadPassage(ref, false)
+                  setSearchMode('reference')
+                }}
+                style={{
+                  backgroundColor: '#FF7A00',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cargar Capítulo Completo ({currentBook?.name} {selectedChapter})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSearchMode('reference')}
+                style={{
+                  backgroundColor: '#262626',
+                  color: '#D1D5DB',
+                  border: '1px solid #3A3A3A',
+                  borderRadius: '4px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Ver Diapositivas
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Quick Action Buttons for the Loaded Passage */}
@@ -706,7 +828,249 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
         )}
       </div>
 
-      {/* 4. Main Body: Split or Results list + Slides Grid */}
+      {/* 4. Main Body: Split or Results list + Slides Grid OR Book Picker */}
+      {searchMode === 'picker' ? (
+        <div
+          className="bible-book-picker-container"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '320px 240px 1fr',
+            flex: 1,
+            overflow: 'hidden',
+            backgroundColor: '#121212'
+          }}
+        >
+          {/* Column 1: Books */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid #262626',
+              backgroundColor: '#161616',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Testament Switcher */}
+            <div
+              style={{
+                display: 'flex',
+                padding: '8px',
+                gap: '6px',
+                borderBottom: '1px solid #262626',
+                backgroundColor: '#1A1A1A'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPickerTestament('OT')}
+                style={{
+                  flex: 1,
+                  padding: '7px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  backgroundColor: pickerTestament === 'OT' ? '#FF7A00' : '#222222',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Antiguo Testamento (39)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPickerTestament('NT')}
+                style={{
+                  flex: 1,
+                  padding: '7px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  backgroundColor: pickerTestament === 'NT' ? '#38BDF8' : '#222222',
+                  color: pickerTestament === 'NT' ? '#0A0A0A' : '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Nuevo Testamento (27)
+              </button>
+            </div>
+
+            {/* List of Books */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
+              {BIBLE_BOOKS.filter((b) => b.testament === pickerTestament).map((b) => {
+                const isSelected = selectedBookNumber === b.number
+                return (
+                  <button
+                    key={b.number}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBookNumber(b.number)
+                      setSelectedChapter(1)
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '8px 12px',
+                      marginBottom: '3px',
+                      borderRadius: '5px',
+                      border: isSelected ? '1px solid #38BDF8' : '1px solid transparent',
+                      textAlign: 'left',
+                      backgroundColor: isSelected ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                      color: isSelected ? '#38BDF8' : '#D1D5DB',
+                      fontWeight: isSelected ? 700 : 400,
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <span>{b.name}</span>
+                    <span style={{ fontSize: '11px', color: '#6B7280' }}>{b.chapterCount} caps</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Column 2: Chapters */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid #262626',
+              backgroundColor: '#181818',
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 14px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#9CA3AF',
+                borderBottom: '1px solid #262626',
+                backgroundColor: '#1A1A1A'
+              }}
+            >
+              Capítulos de <strong style={{ color: '#FFFFFF' }}>{currentBook?.name}</strong>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '12px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '8px',
+                alignContent: 'start'
+              }}
+            >
+              {Array.from({ length: currentBook?.chapterCount || 1 }, (_, i) => i + 1).map((cap) => {
+                const isSelected = selectedChapter === cap
+                return (
+                  <button
+                    key={cap}
+                    type="button"
+                    onClick={() => setSelectedChapter(cap)}
+                    style={{
+                      padding: '10px 0',
+                      borderRadius: '5px',
+                      border: isSelected ? '1px solid #38BDF8' : '1px solid #2D2D2D',
+                      backgroundColor: isSelected ? 'rgba(56, 189, 248, 0.2)' : '#222222',
+                      color: isSelected ? '#38BDF8' : '#FFFFFF',
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {cap}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Column 3: Verses */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: '#141414',
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#9CA3AF',
+                borderBottom: '1px solid #262626',
+                backgroundColor: '#1A1A1A',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <div>
+                Versículos de <strong style={{ color: '#FF7A00' }}>{currentBook?.name} {selectedChapter}</strong>
+              </div>
+              <span style={{ fontSize: '11px', color: '#6B7280' }}>
+                Selecciona un versículo para cargarlo y proyectarlo
+              </span>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(58px, 1fr))',
+                gap: '8px',
+                alignContent: 'start'
+              }}
+            >
+              {Array.from({ length: chapterVerseCount > 0 ? chapterVerseCount : 35 }, (_, i) => i + 1).map((vNum) => (
+                <button
+                  key={vNum}
+                  type="button"
+                  onClick={() => {
+                    const ref = `${currentBook?.name || 'Mateo'} ${selectedChapter}:${vNum}`
+                    setRefInput(ref)
+                    onLoadPassage(ref, false)
+                    setSearchMode('reference')
+                  }}
+                  style={{
+                    padding: '12px 0',
+                    borderRadius: '5px',
+                    border: '1px solid #2D2D2D',
+                    backgroundColor: '#1E1E1E',
+                    color: '#E5E7EB',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FF7A00'
+                    e.currentTarget.style.color = '#FFFFFF'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#1E1E1E'
+                    e.currentTarget.style.color = '#E5E7EB'
+                  }}
+                  title={`Cargar ${currentBook?.name} ${selectedChapter}:${vNum}`}
+                >
+                  {vNum}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div
         style={{
           display: 'flex',
@@ -950,6 +1314,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

@@ -603,7 +603,7 @@ export function parseZefaniaXml(xmlContent: string): ParsedBibleImport {
     while ((bookMatch = bookRegex.exec(xmlContent)) !== null) {
       const rawBookId = bookMatch[1].trim()
       let bookNumber = parseInt(rawBookId, 10)
-      let bookObj = !isNaN(bookNumber) && bookNumber >= 1 && bookNumber <= 66
+      let bookObj: BibleBook | null | undefined = !isNaN(bookNumber) && bookNumber >= 1 && bookNumber <= 66
         ? BIBLE_BOOKS.find((b) => b.number === bookNumber)
         : null
 
