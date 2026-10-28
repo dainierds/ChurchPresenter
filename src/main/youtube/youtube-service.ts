@@ -67,52 +67,57 @@ export class YouTubeService {
   public initializeSession(): void {
     if (this.initialized) return
 
-    const ses = session.fromPartition(YouTubeService.SESSION_PARTITION)
+    const sessions = [
+      session.fromPartition(YouTubeService.SESSION_PARTITION),
+      session.defaultSession
+    ]
 
-    // 1. Deny dangerous hardware permissions (camera, microphone, geolocation, notifications)
-    ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-      logger.info(`YouTube session: denied permission request for '${permission}'`)
-      callback(false)
-    })
+    for (const ses of sessions) {
+      // 1. Deny dangerous hardware permissions (camera, microphone, geolocation, notifications)
+      ses.setPermissionRequestHandler((_webContents, permission, callback) => {
+        logger.info(`YouTube session: denied permission request for '${permission}'`)
+        callback(false)
+      })
 
-    // 2. Deny device permission requests
-    if (typeof (ses as any).setDevicePermissionHandler === 'function') {
-      (ses as any).setDevicePermissionHandler(() => false)
-    }
+      // 2. Deny device permission requests
+      if (typeof (ses as any).setDevicePermissionHandler === 'function') {
+        (ses as any).setDevicePermissionHandler(() => false)
+      }
 
-    // 3. Inject Referer and Origin headers to prevent Error 153 "Video Player configuration error"
-    try {
-      ses.webRequest.onBeforeSendHeaders(
-        {
-          urls: [
-            '*://*.youtube.com/*',
-            '*://*.youtube-nocookie.com/*',
-            '*://*.googlevideo.com/*'
-          ]
-        },
-        (details, callback) => {
-          const requestHeaders = { ...details.requestHeaders }
-          requestHeaders['Referer'] = 'https://www.youtube.com/'
-          requestHeaders['Origin'] = 'https://www.youtube.com'
-          callback({ requestHeaders })
-        }
-      )
-    } catch (err) {
-      logger.warn('Failed to configure YouTube header injection:', err)
-    }
+      // 3. Inject Referer and Origin headers to prevent Error 152 / 153 "Video Player configuration error"
+      try {
+        ses.webRequest.onBeforeSendHeaders(
+          {
+            urls: [
+              '*://*.youtube.com/*',
+              '*://*.youtube-nocookie.com/*',
+              '*://*.googlevideo.com/*'
+            ]
+          },
+          (details, callback) => {
+            const requestHeaders = { ...details.requestHeaders }
+            requestHeaders['Referer'] = 'https://www.youtube.com/'
+            requestHeaders['Origin'] = 'https://www.youtube.com'
+            callback({ requestHeaders })
+          }
+        )
+      } catch (err) {
+        logger.warn('Failed to configure YouTube header injection:', err)
+      }
 
-    // 4. Implement ad-blocking via WebRequest API
-    try {
-      ses.webRequest.onBeforeRequest(
-        { urls: YouTubeService.AD_BLOCK_PATTERNS },
-        (details, callback) => {
-          logger.debug(`[AdBlocker] Blocked ad request: ${details.url.substring(0, 80)}`)
-          callback({ cancel: true })
-        }
-      )
-      logger.info('YouTube session: Ad-blocking webRequest filters initialized.')
-    } catch (err) {
-      logger.warn('Failed to configure ad-blocking webRequest:', err)
+      // 4. Implement ad-blocking via WebRequest API
+      try {
+        ses.webRequest.onBeforeRequest(
+          { urls: YouTubeService.AD_BLOCK_PATTERNS },
+          (details, callback) => {
+            logger.debug(`[AdBlocker] Blocked ad request: ${details.url.substring(0, 80)}`)
+            callback({ cancel: true })
+          }
+        )
+        logger.info('YouTube session: Ad-blocking webRequest filters initialized.')
+      } catch (err) {
+        logger.warn('Failed to configure ad-blocking webRequest:', err)
+      }
     }
 
     this.initialized = true
