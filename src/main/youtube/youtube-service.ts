@@ -1,4 +1,5 @@
 import { session, net } from 'electron'
+import fs from 'fs'
 import { logger } from '../logger'
 import {
   YouTubeAvailabilityStatus,
@@ -264,6 +265,56 @@ export class YouTubeService {
     }
   }
 
+  public static findYtDlpPath(): string | null {
+    // 1. Check WinGet Packages
+    const wingetDir = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages')
+    if (fs.existsSync(wingetDir)) {
+      try {
+        const dirs = fs.readdirSync(wingetDir)
+        for (const d of dirs) {
+          if (d.toLowerCase().includes('yt-dlp')) {
+            const exePath = path.join(wingetDir, d, 'yt-dlp.exe')
+            if (fs.existsSync(exePath)) return exePath
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Check WinGet Links
+    const wingetLinks = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'yt-dlp.exe')
+    if (fs.existsSync(wingetLinks)) return wingetLinks
+
+    return 'yt-dlp'
+  }
+
+  public static findFfmpegPath(): string | null {
+    const wingetDir = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Packages')
+    if (fs.existsSync(wingetDir)) {
+      try {
+        const dirs = fs.readdirSync(wingetDir)
+        for (const d of dirs) {
+          if (d.toLowerCase().includes('ffmpeg')) {
+            const checkPaths = [
+              path.join(wingetDir, d, 'ffmpeg.exe'),
+              path.join(wingetDir, d, 'bin', 'ffmpeg.exe')
+            ]
+            for (const p of checkPaths) {
+              if (fs.existsSync(p)) return p
+            }
+            try {
+              const sub = fs.readdirSync(path.join(wingetDir, d))
+              for (const s of sub) {
+                const p = path.join(wingetDir, d, s, 'bin', 'ffmpeg.exe')
+                if (fs.existsSync(p)) return p
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+    return null
+  }
+
   /**
    * Attempts to download/extract a YouTube video to userData/media using yt-dlp if available on system.
    */
@@ -272,13 +323,23 @@ export class YouTubeService {
     outputDirectory: string
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     return new Promise((resolve) => {
-      // Check if yt-dlp is available in PATH
-      const proc = spawn('yt-dlp', [
-        '--format', 'mp4',
+      const ytDlpPath = YouTubeService.findYtDlpPath() || 'yt-dlp'
+      const ffmpegPath = YouTubeService.findFfmpegPath()
+
+      const args = [
+        '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--output', path.join(outputDirectory, 'yt_%(id)s.%(ext)s'),
-        '--no-playlist',
-        youtubeUrl
-      ], { shell: true })
+        '--no-playlist'
+      ]
+
+      if (ffmpegPath) {
+        args.push('--ffmpeg-location', path.dirname(ffmpegPath))
+      }
+      args.push(youtubeUrl)
+
+      logger.info(`Starting YouTube download with: ${ytDlpPath} ${args.join(' ')}`)
+
+      const proc = spawn(ytDlpPath, args, { shell: true })
 
       let stderr = ''
       let stdout = ''
@@ -287,6 +348,7 @@ export class YouTubeService {
       proc.stderr.on('data', (d) => { stderr += d.toString() })
 
       proc.on('error', (err) => {
+        logger.error('Failed to spawn yt-dlp process:', err)
         resolve({
           success: false,
           error: `yt-dlp no está instalado o no se encuentra en el PATH del sistema: ${err.message}`
@@ -296,10 +358,30 @@ export class YouTubeService {
       proc.on('close', (code) => {
         if (code === 0) {
           // Find created mp4 file
+          let target: string | undefined
           const match = stdout.match(/Destination:\s*(.+mp4)/i) || stdout.match(/\[download\]\s*(.+mp4)\s*has already been downloaded/i)
-          const target = match ? match[1].trim() : undefined
+          if (match && fs.existsSync(match[1].trim())) {
+            target = match[1].trim()
+          } else {
+            try {
+              const parsed = parseYouTubeUrl(youtubeUrl)
+              if (parsed.videoId) {
+                const expected = path.join(outputDirectory, `yt_${parsed.videoId}.mp4`)
+                if (fs.existsSync(expected)) target = expected
+              }
+              if (!target) {
+                const files = fs.readdirSync(outputDirectory)
+                  .filter((f) => f.startsWith('yt_') && f.endsWith('.mp4'))
+                  .map((f) => ({ file: path.join(outputDirectory, f), mtime: fs.statSync(path.join(outputDirectory, f)).mtimeMs }))
+                  .sort((a, b) => b.mtime - a.mtime)
+                if (files.length > 0) target = files[0].file
+              }
+            } catch {}
+          }
+          logger.info(`YouTube download completed successfully: ${target}`)
           resolve({ success: true, filePath: target })
         } else {
+          logger.warn(`yt-dlp exited with non-zero code ${code}: ${stderr}`)
           resolve({
             success: false,
             error: stderr || `Proceso finalizado con código de salida ${code}`
