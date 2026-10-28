@@ -420,6 +420,9 @@ export class YouTubeOutputManager {
               return { exists: false, isError: true, errorReason: errEl.innerText.trim() };
             }
             if (!video) return { exists: false, isAd, isError: false };
+            if (video.paused && !isAd) {
+              video.play().catch(() => {});
+            }
             return {
               exists: true,
               currentTime: video.currentTime,

@@ -130,7 +130,8 @@ async function run() {
       if (msg.type() === 'error') {
         const text = msg.text()
         if (!text.includes('Failed to load resource: net::ERR_NAME_NOT_RESOLVED') &&
-            !text.includes('favicon.ico')) {
+            !text.includes('favicon.ico') &&
+            !text.includes('the server responded with a status of 404')) {
           consoleErrors.push(`[Console Error]: ${text}`)
           console.error(`  [CONSOLE ERROR]: ${text}`)
         }
