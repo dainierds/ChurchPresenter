@@ -40,6 +40,7 @@ interface LibraryPanelProps {
   youtubeItems?: YouTubeItem[]
   onItemSelect: (itemType: string, itemId: string) => void
   onAddItemToPlaylist: (itemType: string, itemId: string, name: string) => void
+  onDeleteItem?: (itemType: string, itemId: string, name: string) => void
   panelLabels?: {
     library: string
     playlist: string
@@ -65,6 +66,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
   youtubeItems,
   onItemSelect,
   onAddItemToPlaylist,
+  onDeleteItem,
   panelLabels,
   height
 }) => {
@@ -149,7 +151,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
       type: m.mediaType,
       title: m.originalName,
       subtitle: `${m.mediaType.toUpperCase()} • ${m.container || ''}`,
-      libraryId: 'lib_videos'
+      libraryId: m.mediaType === 'video' ? 'lib_videos' : 'lib_media'
     }))
     const ytList: DisplayItem[] = (youtubeItems || []).map((y) => ({
       id: y.id,
@@ -180,7 +182,7 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         .filter((m) => m.mediaType === 'video')
         .map((m) => ({
           id: m.id,
-          type: 'media',
+          type: 'video',
           title: m.originalName,
           subtitle: `${Math.round(m.duration || 0)}s • ${m.container}`
         }))
@@ -529,6 +531,18 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
                 >
                   +
                 </button>
+                {onDeleteItem && (
+                  <button
+                    className="pro-lib-item-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteItem(item.type, item.id, item.title)
+                    }}
+                    title="Eliminar este elemento de la biblioteca"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

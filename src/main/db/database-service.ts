@@ -21,7 +21,9 @@ import {
   SongUsageRecord,
   LiveSubtitlesConfig,
   AiAssistantConfig,
-  SecondaryBackupConfig
+  SecondaryBackupConfig,
+  ChurchBrandingConfig,
+  DEFAULT_CHURCH_BRANDING
 } from '../../shared/types'
 
 export interface Migration {
@@ -933,6 +935,9 @@ export class DatabaseService {
 
       // Locate sql-wasm.wasm
       let wasmPath = path.resolve(__dirname, 'sql-wasm.wasm')
+      if (!fs.existsSync(wasmPath) && process.resourcesPath) {
+        wasmPath = path.join(process.resourcesPath, 'sql-wasm.wasm')
+      }
       if (!fs.existsSync(wasmPath)) {
         wasmPath = path.resolve(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm')
       }
@@ -2398,6 +2403,35 @@ export class DatabaseService {
     if (config.syncFolder !== undefined) this.setConfig('sync_folder_path', config.syncFolder)
     if (config.lastSyncAt !== undefined) this.setConfig('last_sync_at', config.lastSyncAt)
     return { success: true }
+  }
+
+  // Church Branding (Logo & Background)
+  public getChurchBranding(): ChurchBrandingConfig {
+    const json = this.getConfig('church_branding_json')
+    if (json) {
+      try {
+        const parsed = JSON.parse(json)
+        return {
+          ...DEFAULT_CHURCH_BRANDING,
+          ...parsed,
+          defaultBackground: parsed.defaultBackground || DEFAULT_CHURCH_BRANDING.defaultBackground
+        }
+      } catch (err) {
+        logger.warn('Failed to parse church_branding_json, using defaults:', err)
+      }
+    }
+    return { ...DEFAULT_CHURCH_BRANDING }
+  }
+
+  public saveChurchBranding(branding: Partial<ChurchBrandingConfig>): ChurchBrandingConfig {
+    const cur = this.getChurchBranding()
+    const merged: ChurchBrandingConfig = {
+      ...cur,
+      ...branding,
+      defaultBackground: branding.defaultBackground || cur.defaultBackground
+    }
+    this.setConfig('church_branding_json', JSON.stringify(merged))
+    return merged
   }
 
   public recordSyncHistory(entry: {

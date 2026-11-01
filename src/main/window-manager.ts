@@ -37,13 +37,49 @@ export class WindowManager {
     }
 
     const primaryDisplay = screen.getPrimaryDisplay()
-    const width = Math.min(1440, Math.floor(primaryDisplay.workArea.width * 0.9))
-    const height = Math.min(900, Math.floor(primaryDisplay.workArea.height * 0.9))
+    let width = Math.min(1440, Math.floor(primaryDisplay.workArea.width * 0.9))
+    let height = Math.min(900, Math.floor(primaryDisplay.workArea.height * 0.9))
+    let x: number | undefined = undefined
+    let y: number | undefined = undefined
+    let isMaximized = false
+
+    const savedBoundsRaw = databaseService.getConfig('operator_window_bounds')
+    if (savedBoundsRaw) {
+      try {
+        const saved = JSON.parse(savedBoundsRaw)
+        if (typeof saved.width === 'number' && typeof saved.height === 'number') {
+          const displays = screen.getAllDisplays()
+          const overlapsAny = displays.some((d) => {
+            const b = d.bounds
+            return (
+              typeof saved.x === 'number' &&
+              typeof saved.y === 'number' &&
+              saved.x < b.x + b.width &&
+              saved.x + saved.width > b.x &&
+              saved.y < b.y + b.height &&
+              saved.y + saved.height > b.y
+            )
+          })
+
+          if (overlapsAny) {
+            x = saved.x
+            y = saved.y
+            width = Math.max(1024, saved.width)
+            height = Math.max(700, saved.height)
+            isMaximized = Boolean(saved.isMaximized)
+          }
+        }
+      } catch {
+        // Fallback to default calculated bounds
+      }
+    }
 
     this.operatorWindow = new BrowserWindow({
       title: 'ChurchPresenter - Panel del Operador',
       width,
       height,
+      x,
+      y,
       minWidth: 1024,
       minHeight: 700,
       backgroundColor: '#18191c',
@@ -56,6 +92,35 @@ export class WindowManager {
         backgroundThrottling: false
       }
     })
+
+    if (isMaximized) {
+      this.operatorWindow.maximize()
+    }
+
+    let saveTimeout: NodeJS.Timeout | null = null
+    const saveWindowBounds = () => {
+      if (saveTimeout) clearTimeout(saveTimeout)
+      saveTimeout = setTimeout(() => {
+        if (!this.operatorWindow || this.operatorWindow.isDestroyed()) return
+        const isMax = this.operatorWindow.isMaximized()
+        const normalBounds = this.operatorWindow.getNormalBounds()
+        databaseService.setConfig(
+          'operator_window_bounds',
+          JSON.stringify({
+            x: normalBounds.x,
+            y: normalBounds.y,
+            width: normalBounds.width,
+            height: normalBounds.height,
+            isMaximized: isMax
+          })
+        )
+      }, 300)
+    }
+
+    this.operatorWindow.on('resize', saveWindowBounds)
+    this.operatorWindow.on('move', saveWindowBounds)
+    this.operatorWindow.on('maximize', saveWindowBounds)
+    this.operatorWindow.on('unmaximize', saveWindowBounds)
 
     const url = this.getRendererUrl('/operator')
     logger.info(`Loading Operator Window from: ${url}`)
@@ -427,10 +492,46 @@ export class WindowManager {
       return this.floatingPreviewWindow
     }
 
+    let width = 760
+    let height = 480
+    let x: number | undefined = undefined
+    let y: number | undefined = undefined
+
+    const savedBoundsRaw = databaseService.getConfig('floating_preview_bounds')
+    if (savedBoundsRaw) {
+      try {
+        const saved = JSON.parse(savedBoundsRaw)
+        if (typeof saved.width === 'number' && typeof saved.height === 'number') {
+          const displays = screen.getAllDisplays()
+          const overlapsAny = displays.some((d) => {
+            const b = d.bounds
+            return (
+              typeof saved.x === 'number' &&
+              typeof saved.y === 'number' &&
+              saved.x < b.x + b.width &&
+              saved.x + saved.width > b.x &&
+              saved.y < b.y + b.height &&
+              saved.y + saved.height > b.y
+            )
+          })
+          if (overlapsAny) {
+            x = saved.x
+            y = saved.y
+            width = Math.max(400, saved.width)
+            height = Math.max(260, saved.height)
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
     this.floatingPreviewWindow = new BrowserWindow({
       title: 'ChurchPresenter - Vista Previa Flotante',
-      width: 760,
-      height: 480,
+      width,
+      height,
+      x,
+      y,
       minWidth: 400,
       minHeight: 260,
       backgroundColor: '#0a0a0a',
@@ -443,6 +544,27 @@ export class WindowManager {
         backgroundThrottling: false
       }
     })
+
+    let floatTimeout: NodeJS.Timeout | null = null
+    const saveFloatBounds = () => {
+      if (floatTimeout) clearTimeout(floatTimeout)
+      floatTimeout = setTimeout(() => {
+        if (!this.floatingPreviewWindow || this.floatingPreviewWindow.isDestroyed()) return
+        const bounds = this.floatingPreviewWindow.getBounds()
+        databaseService.setConfig(
+          'floating_preview_bounds',
+          JSON.stringify({
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height
+          })
+        )
+      }, 300)
+    }
+
+    this.floatingPreviewWindow.on('resize', saveFloatBounds)
+    this.floatingPreviewWindow.on('move', saveFloatBounds)
 
     const url = this.getRendererUrl(`/floating-preview?role=${encodeURIComponent(initialRole)}`)
     logger.info(`Opening floating preview window from: ${url}`)

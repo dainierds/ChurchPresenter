@@ -24,24 +24,12 @@ import {
   SlideItem,
   TimerType,
   YouTubeSyncTick,
+  MediaSyncTick,
   MacroItem,
   PropItem
 } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
-
-function toMediaUrl(raw?: string): string {
-  if (!raw) return ''
-  if (
-    raw.startsWith('file://') ||
-    raw.startsWith('data:') ||
-    raw.startsWith('blob:') ||
-    raw.startsWith('http://') ||
-    raw.startsWith('https://')
-  ) {
-    return raw
-  }
-  return `file:///${raw.replace(/\\/g, '/')}`
-}
+import { toMediaUrl } from '../../../shared/media-url'
 
 interface RightSidePanelProps {
   state: PresenterState | null
@@ -135,7 +123,29 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   }, [])
 
   // Media playback states
-  const isPlayingMedia = Boolean(state?.mediaSyncTick?.isPlaying)
+  const [liveMediaTick, setLiveMediaTick] = useState<MediaSyncTick | null>(null)
+
+  useEffect(() => {
+    const unsub = window.churchPresenterApi?.onMediaSyncTick?.((tick) => {
+      setLiveMediaTick(tick)
+      const video = previewVideoRef.current
+      if (video) {
+        if (tick.isPlaying && video.paused) {
+          video.play().catch(() => {})
+        } else if (!tick.isPlaying && !video.paused) {
+          video.pause()
+        }
+        const drift = Math.abs(video.currentTime - tick.currentTime)
+        if (drift > 0.25) {
+          video.currentTime = tick.currentTime
+        }
+      }
+    })
+    return () => unsub?.()
+  }, [])
+
+  const effectiveMediaTick = liveMediaTick || state?.mediaSyncTick || null
+  const isPlayingMedia = Boolean(effectiveMediaTick?.isPlaying)
   const isPlayingAudio = Boolean(state?.independentAudio?.isPlaying)
   const hasAudioActive = isPlayingMedia || isPlayingAudio
 
@@ -178,7 +188,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
 
   // Active layers state for the selected role
   const roleLayers = state?.activeLayers?.[activeOutputTab] || state?.activeLayers?.main
-  const roleBackground = roleLayers?.background || state?.currentTheme?.background
+  const roleBackground =
+    roleLayers?.background || state?.currentTheme?.background || state?.churchBranding?.defaultBackground
   const liveSlide = state?.currentSlide
   const roleContent = roleLayers?.content || liveSlide
   const roleMessage = roleLayers?.message
@@ -248,8 +259,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const hasMedia = Boolean(activeMediaUrl || state?.mediaSyncTick?.filePath || isYouTube)
   const hasMessage = Boolean(roleMessage?.visible && roleMessage?.text)
 
-  const mediaTime = state?.mediaSyncTick?.currentTime || 0
-  const mediaDuration = state?.mediaSyncTick?.duration || 0
+  const mediaTime = effectiveMediaTick?.currentTime || 0
+  const mediaDuration = effectiveMediaTick?.duration || 0
 
   const activeRunningTimer = timers.find((t) => t.isRunning)
 
@@ -513,11 +524,20 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 zIndex: 10
               }}
             >
-              {/* Background Image / Video thumbnail */}
+              {/* Background Image / Video preview */}
               {roleBackground?.type === 'image' && roleBackground.value && (
                 <img
-                  src={roleBackground.value}
+                  src={toMediaUrl(roleBackground.value)}
                   alt=""
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              )}
+              {roleBackground?.type === 'video' && roleBackground.value && (
+                <video
+                  src={toMediaUrl(roleBackground.value)}
+                  autoPlay
+                  loop
+                  muted
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               )}
@@ -668,6 +688,12 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                       height: '100%',
                       objectFit: (roleContent?.fitMode || currentSlide?.fitMode || 'contain') as any
                     }}
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget
+                      if (v.duration && isFinite(v.duration)) {
+                        window.churchPresenterApi.updateVideoDuration?.(v.duration)
+                      }
+                    }}
                   />
                 </div>
               )}
@@ -723,39 +749,63 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                     inset: 0,
                     backgroundColor: '#0a0a0c',
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection:
+                      state?.churchBranding?.logoTextPosition === 'right' ? 'row' : 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
-                    zIndex: 30
+                    zIndex: 30,
+                    padding: 8
                   }}
                 >
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      border: '2px solid rgba(255,255,255,0.7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      fontWeight: 900,
-                      fontSize: 14
-                    }}
-                  >
-                    ✝
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 800,
-                      color: 'rgba(255,255,255,0.75)',
-                      letterSpacing: 1.2
-                    }}
-                  >
-                    CHURCH PRESENTER
-                  </div>
+                  {state?.churchBranding?.logoUrl ? (
+                    <img
+                      src={toMediaUrl(state.churchBranding.logoUrl)}
+                      alt=""
+                      style={{
+                        maxHeight: '44px',
+                        maxWidth: '90px',
+                        objectFit: 'contain',
+                        opacity: state.churchBranding.logoOpacity ?? 1,
+                        filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))'
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        border: '2px solid rgba(255,255,255,0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontWeight: 900,
+                        fontSize: 14
+                      }}
+                    >
+                      ✝
+                    </div>
+                  )}
+                  {state?.churchBranding?.logoTextPosition !== 'none' && (
+                    <div
+                      style={{
+                        fontSize: 8,
+                        fontWeight: 800,
+                        color: 'rgba(255,255,255,0.85)',
+                        letterSpacing: 1.2,
+                        textTransform: 'uppercase',
+                        textAlign: 'center',
+                        maxWidth: '90%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {state?.churchBranding?.churchName || 'CHURCH PRESENTER'}
+                    </div>
+                  )}
                 </div>
               )}
 

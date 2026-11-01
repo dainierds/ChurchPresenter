@@ -45,6 +45,7 @@ async function main() {
   const steps = [
     { cmd: 'npx', args: ['tsc', '--noEmit', '-p', 'tsconfig.json'] },
     { cmd: 'npx', args: ['eslint', '.', '--ext', '.ts,.tsx'] },
+    { cmd: 'node', args: ['scripts/verify-test-assertions.js'] },
     { cmd: 'npx', args: ['vitest', 'run'] },
     { cmd: 'npx', args: ['electron-vite', 'build'] },
     { cmd: 'node', args: ['scripts/run-e2e.js'] }

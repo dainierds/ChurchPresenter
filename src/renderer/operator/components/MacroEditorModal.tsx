@@ -49,7 +49,7 @@ export const MacroEditorModal: React.FC<MacroEditorModalProps> = ({
   const [name, setName] = useState(macro?.name || 'Nueva Macro')
   const [color, setColor] = useState(macro?.color || '#FF7A00')
   const [icon, setIcon] = useState(macro?.icon || 'Zap')
-  const [description, setDescription] = useState(macro?.description || '')
+  const [description] = useState(macro?.description || '')
   const [shortcut, setShortcut] = useState(macro?.shortcut || '')
   const [actions, setActions] = useState<MacroAction[]>(macro?.actions ? [...macro.actions] : [])
 
@@ -76,7 +76,7 @@ export const MacroEditorModal: React.FC<MacroEditorModalProps> = ({
       if (e.data && e.data.length >= 2) {
         const status = e.data[0]
         const num = e.data[1]
-        const val = e.data[2] || 0
+        // MIDI velocity / value
         const isNote = (status & 0xf0) === 0x90
         const isCC = (status & 0xf0) === 0xb0
 

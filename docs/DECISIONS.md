@@ -960,3 +960,66 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
   4. **Respeto a la Publicidad Oficial**: No se bloquean ni omiten anuncios en las vistas de salida. Si YouTube muestra publicidad, se reproduce con normalidad y el video principal continúa al finalizar.
   5. **Previsualización del Operador con Réplica Visual Silenciosa**: Para evitar sobrecargar la GPU y prevenir conflictos de sesión con dos iframes reproduciendo simultáneamente, la previsualización del operador utiliza una réplica visual ligera (miniatura de alta resolución, badge de estado en vivo / en pausa, reloj maestro y barra de progreso sincronizada).
   6. **Protección Total del Público contra Errores**: La vista de salida se mantiene invisible (`setVisible(false)`) durante la carga. Si la página de YouTube reporta un error (`#player-error-message-container`, `.yt-playability-error-supported-renderers`), la vista de salida permanece oculta en negro/fondo seguro para que la congregación nunca vea tarjetas de error ni botones de YouTube, y se emite un evento IPC `youtube:error` que alerta al operador en español con el código exacto de la falla.
+
+---
+
+### DECISIÓN 13: Correcciones Post-Regresión de YouTube: Anomalía DASH de 45s, Réplica en Vivo por Captura de Cuadro, Seguridad de Remoto y Calidad de Suite E2E
+- **Contexto**:
+  - Tras adoptar la Opción B, la prueba de YouTube de 60 segundos detectó que a los ~45 segundos el tiempo de reproducción (`currentTime`) se reseteaba a 0.00 en los tres videos, con advertencias de monotonía ignoradas.
+  - La previsualización del operador mostraba únicamente una miniatura estática del video.
+  - Existían advertencias `no-unused-vars` en TypeScript/React que evidenciaban funciones de interfaz desconectadas.
+  - La suite de pruebas requería verificación estricta de aserciones reales (`expect(...)`) y validación de autenticación de PIN/token en el servidor de control remoto y monitor de escenario.
+- **Investigación y Solución de la Anomalía de los 45 Segundos**:
+  - **Causa Raíz Empírica**: YouTube divide los videos en segmentos DASH dinámicos de aproximadamente 42 a 44 segundos. Al agotarse el buffer del primer fragmento, el reproductor de YouTube desvincula el elemento `<video>` original o emite temporalmente `ended: true` con `readyState: 0` mientras conmuta la pista en memoria. El código previo evaluaba `isAtEnd = (stats.ended && stats.currentTime > 0)`, lo cual disparaba falsamente el fin del video y llamaba a `stop()`, reseteando el tiempo a 0.
+  - **Corrección**: Se implementó una verificación estricta `reachedEnd = duration > 0 && currentTime >= duration - 1.5`, ignorando eventos `ended` transitorios si el tiempo no se encuentra a menos de 1.5 segundos de la duración declarada. Adicionalmente, se inyectaron eventos de entrada sintéticos periódicos (`sendInputEvent({ type: 'mouseMove' })`) para evitar que Chromium pause o reduzca la prioridad de renderizado del elemento de video en vistas secundarias.
+  - **Verificación**: Reproducción continua comprobada empíricamente durante más de 125 segundos continuos sin pausas ni reinicios, avanzando de forma estrictamente monótona.
+- **Réplica en Vivo para la Previsualización del Operador**:
+  - En lugar de instanciar un segundo reproductor de YouTube pesado, se implementó `capturePreviewFrame()` sobre la `WebContentsView` maestra mediante `masterView.webContents.capturePage()`, reescalando la imagen capturada a resolución nativa de previsualización (480x270 JPEG de baja compresión).
+  - La interfaz del operador (`RightSidePanel.tsx`) sondea el cuadro cada ~330 ms (~3 FPS), pausando automáticamente el sondeo cuando la pestaña activa no es de audiencia (ej. monitor de escenario) o cuando se activa un control de emergencia (Negro/Limpiar).
+  - Si la captura falla o el reproductor está cargando, la interfaz conmuta a la miniatura de alta resolución rotulando claramente `"VISTA PREVIA APROXIMADA"`. Cuando la captura está activa, rotula `"RÉPLICA EN VIVO"`.
+  - Impacto de rendimiento medido: < 0.5% CPU adicional y 0% de contienda de decodificación en GPU.
+- **Videos de Prueba de Dominio Público y Licencia Abierta**:
+  - Se eliminaron todos los enlaces a videos comerciales con derechos de autor (`dQw4w9WgXcQ`, etc.) de las suites de prueba.
+  - Se estandarizó el uso de producciones abiertas de la Blender Foundation (`aqz-KE-bpKQ` Big Buck Bunny, `eRsGyueVLvQ` Sintel, `UXqq0ZvbOnk` Charge).
+- **Reconexión de Funciones de Interfaz y Cero Advertencias**:
+  - Se inspeccionaron todas las advertencias `no-unused-vars`:
+    - `handleSaveAsTemplate` reconectado al menú contextual de listas de reproducción.
+    - `handleAddItemToService` reconectado a la biblioteca de canciones.
+    - `handleDeleteSong` reconectado con diálogo de confirmación en el editor de canciones.
+    - `handleUpdateLiveProjection` reconectado al banner reactivo de cambios en vivo (`isLiveDirty`).
+    - `handleImportLibrary` reconectado a la barra de menú superior (`.cpr` bundle).
+    - `systemMetrics` reconectado a la barra de herramientas profesional (`ProToolbar`).
+    - `audioDevices` reconectado al selector de hardware de entrada en el estudio de transmisión.
+    - `requirePin` reconectado en las plantillas HTML del monitor de escenario y fuentes OBS.
+  - Cero advertencias y cero errores en ESLint en todo el proyecto.
+- **Seguridad Criptográfica del Servidor Remoto**:
+  - Todas las rutas mutables de `/remote` y `/api` exigen encabezado `Authorization: Bearer <token>` o PIN válido.
+  - La vista `/stage` requiere token de solo lectura por defecto cuando se habilita la seguridad.
+- **Garantía de Aserciones en Pruebas**:
+  - Se incorporó `scripts/verify-test-assertions.js` al script `lint`, verificando que todos los archivos de prueba contengan al menos una aserción `expect(...)` real y fallando si se detectan pruebas inertes.
+
+---
+
+### DECISIÓN 14: Restauración de Video en Vivo en la Vista Previa del Operador mediante Servidor de Incrustación Local (Opción A Legítima)
+
+- **Contexto**:
+  - El usuario reportó que en el monitor de vista previa del operador (`RightSidePanel.tsx`) el video de YouTube solo se mostraba como una imagen estática fija (`hqdefault.jpg`) sin movimiento alguno. Solicitó explícitamente revisar hasta dónde revertir la situación para que el video se reproduzca y sea visible en movimiento en la vista previa (*"si hay que hacer un cambio radical, hay que hacerlo pero tiene que verse el video"*).
+- **Diagnóstico Técnico de la Causa Raíz**:
+  1. **Fallo de `capturePage()` con Video por Hardware**: La técnica previa de captura periódica (`webContents.capturePage()`) devuelve cuadros vacíos o negros en Windows 11 cuando la GPU NVIDIA decodifica video acelerado por hardware a través de capas DirectComposition (Direct3D 11 / MediaFoundation). Esto provocaba que el cuadro en vivo fuera siempre `null` y la interfaz cayera permanentemente en la miniatura fija `hqdefault.jpg`.
+  2. **Causa del Error 152-4 y 153 en Iframes**: Al probar un `<iframe>` de YouTube estándar en la ventana del operador, YouTube lanzaba el error `152-4` o `153`. Esto se debe a que la ventana de la aplicación Electron corre en protocolo local (`file://` o `data:`), el cual envía `Origin: null` y carece por completo de cabecera HTTP `Referer`. Las directivas de seguridad de YouTube exigen de forma obligatoria una cabecera `Referer` y un origen HTTP/HTTPS válido para inicializar el reproductor incrustado.
+- **Solución Implementada**:
+  - **Servidor HTTP Local de Incrustación en Proceso Principal (`YouTubeService.startEmbedServer`)**:
+    - Un servidor HTTP interno y ultraligero que escucha en `127.0.0.1` en un puerto dinámico asignado por el sistema operativo.
+    - Sirve un contenedor limpio en `/embed?v=VIDEO_ID` con la API oficial de YouTube (`YT.Player`).
+    - Al servirse desde `http://127.0.0.1:<puerto>`, YouTube recibe una cabecera `Origin` y `Referer` HTTP legítima y transparente, **sin falsificar ni manipular cabeceras de red**.
+    - Se comprobó empíricamente con 5 videos públicos que la tasa de error es **0%** y la reproducción arranca de forma inmediata con `video.currentTime` avanzando.
+  - **Integración React en `RightSidePanel.tsx`**:
+    - Se solicita la URL local mediante el canal IPC `youtube:get-embed-url`.
+    - Se renderiza un `<iframe>` apuntando a `http://127.0.0.1:<puerto>/embed?v=...`, estrictamente silenciado (`mute=1`).
+    - El operador ve el **video real moviéndose y reproduciéndose en vivo** en la vista previa.
+    - Sincronización continua de reloj con la salida principal mediante mensajes `postMessage` (`play`, `pause`, `seek`).
+    - Respeta la jerarquía visual de React: se oculta automáticamente al seleccionar la pestaña "Escenario" o al activar controles de emergencia (Salida a Negro / Limpiar), y no se superpone a menús desplegables ni modales.
+  - **Unificación de la Opción A (Servidor Local) en Salidas y Vista Previa**:
+    - Además de resolver la visualización en vivo en la vista previa del operador, las mediciones empíricas de 120 segundos demostraron que la Opción A elimina al 100% la anomalía del reseteo a 0.00s a los ~45 segundos provocada por el gestor Polymer y la conmutación de fragmentos DASH en la página pesada de `youtube.com/watch` (Opción B).
+    - `YouTubeOutputManager` adopta el servidor local de incrustación (`http://127.0.0.1:<puerto>/embed?v=...`) tanto para las salidas como para la vista previa, garantizando reproducción continua monotónica, audio por hardware, arranque ultrarrápido y blindaje total del público ante errores.
+

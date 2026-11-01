@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, RefreshCw, XCircle, CheckCircle, Clock } from 'lucide-react'
+import { AlertTriangle, RefreshCw, CheckCircle, Clock } from 'lucide-react'
 import { SessionSnapshot } from '../../../shared/types'
 
 interface SessionRecoveryModalProps {

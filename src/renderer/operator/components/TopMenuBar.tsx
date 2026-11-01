@@ -5,6 +5,7 @@ interface TopMenuBarProps {
   onImportPpt: () => void
   onImportMedia: () => void
   onImportFolder: () => void
+  onImportLibrary?: () => void
   onExportService: () => void
   onOpenSettings: () => void
   onLoadDemoData: () => void
@@ -39,6 +40,7 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onImportPpt,
   onImportMedia,
   onImportFolder,
+  onImportLibrary,
   onExportService,
   onOpenSettings,
   onLoadDemoData,
@@ -155,6 +157,47 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 }}
               >
                 <span>Importar Canciones (Texto, ChordPro, CSV, OpenLyrics, Pro6)...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onImportLibrary?.()
+                }}
+              >
+                <span>Importar Paquete de Biblioteca (.cpr)...</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  window.churchPresenterApi?.openWorkspaceFolder?.()
+                }}
+              >
+                <span>Abrir Carpeta de Medios y Biblioteca en el Explorador...</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={async () => {
+                  closeMenu()
+                  const res = await window.churchPresenterApi?.chooseWorkspaceFolder?.()
+                  if (res) {
+                    alert(`Carpeta principal actualizada a:\n${res.rootPath}\n\nSe han creado las carpetas de las secciones automáticamente.`)
+                  }
+                }}
+              >
+                <span>Cambiar Ubicación de Carpeta de Biblioteca...</span>
+              </button>
+              <div className="pro-dropdown-divider" />
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSettings()
+                }}
+              >
+                <span>Identidad de la Iglesia (Logo y Fondo)...</span>
               </button>
               <div className="pro-dropdown-divider" />
               <button
@@ -299,6 +342,15 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
               >
                 <span>Logo de Iglesia</span>
                 <span className="pro-dropdown-shortcut">F3</span>
+              </button>
+              <button
+                className="pro-dropdown-item"
+                onClick={() => {
+                  closeMenu()
+                  onOpenSettings()
+                }}
+              >
+                <span>Configurar Logo y Fondo de la Iglesia...</span>
               </button>
               <button
                 className="pro-dropdown-item"

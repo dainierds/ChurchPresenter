@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   Calendar,
   Plus,
@@ -39,6 +39,7 @@ interface PlaylistPanelProps {
   onNewService: () => void
   onRenameService?: (serviceId: string, newName: string) => void
   onDuplicateService?: (serviceId: string) => void
+  onSaveAsTemplate?: () => void
   onDeleteService?: (serviceId: string) => void
   selectedItemIndex: number
   onSelectItemIndex: (index: number) => void
@@ -48,6 +49,9 @@ interface PlaylistPanelProps {
   onDuplicateItem: (index: number) => void
   onAddHeader: (title: string, color?: string) => void
   onRenameHeader?: (index: number, newTitle: string, newColor?: string) => void
+  onMoveSection?: (headerIndex: number, direction: 'up' | 'down') => void
+  onDropItemToPlaylist?: (data: any, targetIndex: number) => void
+  onReorderSectionByDrag?: (fromHeaderIndex: number, toHeaderIndex: number) => void
   onAddBlankItem: () => void
   onVerifyPlaylist?: () => void
   allThemes?: ThemeConfig[]
@@ -69,6 +73,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onNewService,
   onRenameService,
   onDuplicateService,
+  onSaveAsTemplate,
   onDeleteService,
   selectedItemIndex,
   onSelectItemIndex,
@@ -78,6 +83,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onDuplicateItem,
   onAddHeader,
   onRenameHeader,
+  onMoveSection,
+  onDropItemToPlaylist,
+  onReorderSectionByDrag,
   onAddBlankItem,
   onVerifyPlaylist,
   allThemes,
@@ -94,6 +102,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   const [collapsedHeaders, setCollapsedHeaders] = useState<Record<string, boolean>>({})
   const [filterQuery, setFilterQuery] = useState('')
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [draggedHeaderIndex, setDraggedHeaderIndex] = useState<number | null>(null)
+  const [dragOverHeaderIndex, setDragOverHeaderIndex] = useState<number | null>(null)
   const [isEditingServiceName, setIsEditingServiceName] = useState(false)
   const [serviceNameInput, setServiceNameInput] = useState('')
   const [contextMenu, setContextMenu] = useState<{
@@ -105,6 +115,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   } | null>(null)
 
   const items = currentService?.items || []
+
+  const headerIndices = useMemo(() => {
+    const list: number[] = []
+    items.forEach((it, idx) => {
+      if (it.type === 'header') list.push(idx)
+    })
+    return list
+  }, [items])
 
   const toggleHeader = (headerId: string) => {
     setCollapsedHeaders((prev) => ({
@@ -250,6 +268,15 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 <Copy size={10} />
               </button>
             )}
+            {currentService && onSaveAsTemplate && (
+              <button
+                className="pro-service-op-btn"
+                onClick={onSaveAsTemplate}
+                title="Guardar como plantilla"
+              >
+                <FileText size={10} />
+              </button>
+            )}
             {currentService && onDeleteService && services.length > 1 && (
               <button
                 className="pro-service-op-btn danger"
@@ -382,6 +409,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
             headerSectionCounter++
             const headerColorTag = (item.notes && item.notes.startsWith('#')) ? item.notes : fallbackColor
             const isEditing = editingHeaderIndex === index
+            const sectionPos = headerIndices.indexOf(index)
+            const isFirstSection = sectionPos === 0
+            const isLastSection = sectionPos === headerIndices.length - 1
+            const isDragTarget = dragOverHeaderIndex === index
 
             return (
               <div
@@ -389,13 +420,61 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 className={`pro-playlist-header-row ${isSelected ? 'selected' : ''}`}
                 style={{
                   borderLeft: `4px solid ${headerColorTag}`,
+                  outline: isDragTarget ? `2px dashed ${headerColorTag}` : undefined,
+                  boxShadow: isDragTarget ? `0 0 10px ${headerColorTag}66` : undefined,
                   background: isSelected
                     ? 'var(--bg-card-selected)'
+                    : isDragTarget
+                    ? `${headerColorTag}25`
                     : `linear-gradient(90deg, ${headerColorTag}18 0%, rgba(23, 24, 29, 0.95) 75%)`
+                }}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', `header:${index}`)
+                  e.dataTransfer.effectAllowed = 'move'
+                  setDraggedHeaderIndex(index)
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                  if (dragOverHeaderIndex !== index) {
+                    setDragOverHeaderIndex(index)
+                  }
+                }}
+                onDragLeave={() => {
+                  if (dragOverHeaderIndex === index) {
+                    setDragOverHeaderIndex(null)
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOverHeaderIndex(null)
+
+                  if (draggedHeaderIndex !== null && draggedHeaderIndex !== index) {
+                    onReorderSectionByDrag?.(draggedHeaderIndex, index)
+                    setDraggedHeaderIndex(null)
+                    return
+                  }
+                  setDraggedHeaderIndex(null)
+
+                  const rawData = e.dataTransfer.getData('application/json')
+                  if (rawData) {
+                    try {
+                      const data = JSON.parse(rawData)
+                      onDropItemToPlaylist?.(data, index + 1)
+                    } catch (err) {
+                      console.warn('Failed to parse dropped item payload:', err)
+                    }
+                  }
                 }}
                 onClick={() => {
                   toggleHeader(item.id)
-                  onSelectItemIndex(index)
+                  const nextItem = items[index + 1]
+                  if (nextItem && nextItem.type !== 'header') {
+                    onSelectItemIndex(index + 1)
+                  } else {
+                    onSelectItemIndex(index)
+                  }
                 }}
               >
                 <div className="pro-header-title-row">
@@ -424,6 +503,34 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 </div>
 
                 <div className="pro-item-actions" onClick={(e) => e.stopPropagation()}>
+                  {onMoveSection && (
+                    <>
+                      <button
+                        className="pro-item-mini-btn"
+                        disabled={isFirstSection}
+                        onClick={() => onMoveSection(index, 'up')}
+                        title={isFirstSection ? 'Primera sección' : 'Mover sección arriba'}
+                        style={{
+                          opacity: isFirstSection ? 0.25 : 0.9,
+                          cursor: isFirstSection ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <ArrowUp size={11} />
+                      </button>
+                      <button
+                        className="pro-item-mini-btn"
+                        disabled={isLastSection}
+                        onClick={() => onMoveSection(index, 'down')}
+                        title={isLastSection ? 'Última sección' : 'Mover sección abajo'}
+                        style={{
+                          opacity: isLastSection ? 0.25 : 0.9,
+                          cursor: isLastSection ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <ArrowDown size={11} />
+                      </button>
+                    </>
+                  )}
                   <button
                     className="pro-item-mini-btn"
                     onClick={() => cycleHeaderColor(index, item)}
@@ -465,12 +572,27 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
               }`}
               draggable
               onDragStart={() => setDraggedIndex(index)}
-              onDragOver={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'copy'
+              }}
               onDrop={(e) => {
                 e.preventDefault()
                 if (draggedIndex !== null && draggedIndex !== index) {
                   onReorderItem(draggedIndex, index)
                   setDraggedIndex(null)
+                  return
+                }
+                setDraggedIndex(null)
+
+                const rawData = e.dataTransfer.getData('application/json')
+                if (rawData) {
+                  try {
+                    const data = JSON.parse(rawData)
+                    onDropItemToPlaylist?.(data, index + 1)
+                  } catch (err) {
+                    console.warn('Failed to parse dropped item:', err)
+                  }
                 }
               }}
               onClick={() => onSelectItemIndex(index)}

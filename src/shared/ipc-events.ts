@@ -19,6 +19,10 @@ export const IPC_CHANNELS = {
   SHORTCUTS_GET: 'shortcuts:get',
   SHORTCUTS_SAVE: 'shortcuts:save',
   BACKUPS_OPEN_FOLDER: 'backups:open-folder',
+  WORKSPACE_GET_INFO: 'workspace:get-info',
+  WORKSPACE_SET_PATH: 'workspace:set-path',
+  WORKSPACE_CHOOSE_FOLDER: 'workspace:choose-folder',
+  WORKSPACE_OPEN_FOLDER: 'workspace:open-folder',
   NOTIFICATION_EMIT: 'notification:emit',
 
   // Phase 3: Songs
@@ -95,6 +99,7 @@ export const IPC_CHANNELS = {
   MEDIA_CHECK_INTEGRITY: 'media:check-integrity',
   VIDEO_PLAY: 'video:play',
   VIDEO_CONTROL: 'video:control',
+  VIDEO_SET_DURATION: 'video:set-duration',
   MEDIA_SYNC_TICK: 'media:sync-tick',
   AUDIO_PLAY_INDEPENDENT: 'audio:play-independent',
   AUDIO_CONTROL_INDEPENDENT: 'audio:control-independent',
@@ -131,6 +136,8 @@ export const IPC_CHANNELS = {
   YOUTUBE_AD_STATUS: 'youtube:ad-status',
   YOUTUBE_DOWNLOAD_PROGRESS: 'youtube:download-progress',
   YOUTUBE_ERROR: 'youtube:error',
+  YOUTUBE_GET_PREVIEW_FRAME: 'youtube:get-preview-frame',
+  YOUTUBE_GET_EMBED_URL: 'youtube:get-embed-url',
 
   // Native Dialogs & File Access
   DIALOG_OPEN_FILE: 'dialog:open-file',
@@ -305,5 +312,11 @@ export const IPC_CHANNELS = {
   // 6. Secondary Backup
   BACKUP_GET_SECONDARY_CONFIG: 'backup:get-secondary-config',
   BACKUP_SAVE_SECONDARY_CONFIG: 'backup:save-secondary-config',
-  BACKUP_RUN_SECONDARY: 'backup:run-secondary'
+  BACKUP_RUN_SECONDARY: 'backup:run-secondary',
+
+  // Church Branding (Logo & Background)
+  CHURCH_BRANDING_GET: 'church-branding:get',
+  CHURCH_BRANDING_SAVE: 'church-branding:save',
+  CHURCH_BRANDING_UPLOAD_LOGO: 'church-branding:upload-logo',
+  CHURCH_BRANDING_UPLOAD_BACKGROUND: 'church-branding:upload-background'
 } as const

@@ -17,7 +17,8 @@ import {
   StageLayoutConfig,
   PropItem,
   LoopStatus,
-  MacroExecutionState
+  MacroExecutionState,
+  ChurchBrandingConfig
 } from '../shared/types'
 import {
   createInitialPresenterState,
@@ -25,6 +26,7 @@ import {
 } from '../shared/state-utils'
 import { parseYouTubeUrl } from '../shared/youtube-utils'
 import { themeService, resolveEffectiveTheme } from './theme/theme-service'
+import { databaseService } from './db/database-service'
 import { logger } from './logger'
 
 export class StateManager extends EventEmitter {
@@ -32,9 +34,15 @@ export class StateManager extends EventEmitter {
 
   constructor() {
     super()
+    const branding = databaseService.getChurchBranding()
+    const defaultTheme = {
+      ...DEFAULT_THEME,
+      background: branding.defaultBackground || DEFAULT_THEME.background
+    }
     this.state = {
       ...createInitialPresenterState(),
-      currentTheme: DEFAULT_THEME,
+      currentTheme: defaultTheme,
+      churchBranding: branding,
       roleBibleConfigs: { ...DEFAULT_ROLE_BIBLE_CONFIGS },
       mediaSyncTick: null,
       independentAudio: {
@@ -47,6 +55,12 @@ export class StateManager extends EventEmitter {
         volume: 0.8,
         isFadingOut: false
       }
+    }
+    if (this.state.activeLayers.main) {
+      this.state.activeLayers.main.background = branding.defaultBackground
+    }
+    if (this.state.activeLayers.lobby) {
+      this.state.activeLayers.lobby.background = branding.defaultBackground
     }
   }
 
@@ -326,6 +340,27 @@ export class StateManager extends EventEmitter {
       updatedAt: Date.now()
     }
     logger.info(`Applied theme '${theme.name}' (${theme.id})`)
+    this.emit('state-updated', this.state)
+    return this.state
+  }
+
+  public setChurchBranding(branding: ChurchBrandingConfig): PresenterState {
+    this.state = {
+      ...this.state,
+      churchBranding: { ...branding },
+      currentTheme: {
+        ...this.state.currentTheme,
+        background: branding.defaultBackground || this.state.currentTheme.background
+      },
+      updatedAt: Date.now()
+    }
+    if (this.state.activeLayers.main) {
+      this.state.activeLayers.main.background = branding.defaultBackground
+    }
+    if (this.state.activeLayers.lobby) {
+      this.state.activeLayers.lobby.background = branding.defaultBackground
+    }
+    logger.info(`Church branding updated: "${branding.churchName}", logo: ${branding.logoUrl || 'none'}`)
     this.emit('state-updated', this.state)
     return this.state
   }

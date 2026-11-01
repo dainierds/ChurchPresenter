@@ -5,7 +5,7 @@ import crypto from 'crypto'
 import { getObsBrowserSourceHtml } from '../src/main/remote/client-templates'
 import { ObsWebSocketService } from '../src/main/broadcast/obs-websocket-service'
 import { databaseService } from '../src/main/db/database-service'
-import { safeStorageService } from '../src/main/security/safe-storage-service'
+import {  } from '../src/main/security/safe-storage-service'
 
 describe('Phase 9 - Stage A: OBS Bridge & Browser Source', () => {
   beforeEach(async () => {
@@ -227,7 +227,7 @@ describe('Phase 9 - Stage A: OBS Bridge & Browser Source', () => {
 
       const setSceneSpy = vi.spyOn(obsWebSocketService, 'setCurrentProgramScene').mockResolvedValue({ success: true })
       const startStreamSpy = vi.spyOn(obsWebSocketService, 'startStreaming').mockResolvedValue({ success: true })
-      const stopStreamSpy = vi.spyOn(obsWebSocketService, 'stopStreaming').mockResolvedValue({ success: true })
+      const _stopStreamSpy = vi.spyOn(obsWebSocketService, 'stopStreaming').mockResolvedValue({ success: true })
 
       // Create a test macro with OBS actions
       databaseService.saveMacro({

@@ -2,29 +2,19 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   Radio,
   Video,
-  Mic,
-  MicOff,
   Volume2,
   VolumeX,
   Layers,
   Settings,
-  Sliders,
-  Tv,
-  Monitor,
-  Play,
   Square,
   AlertTriangle,
   Plus,
   Trash2,
   Copy,
-  RefreshCw,
   Clock,
   HardDrive,
-  Cpu,
   ShieldCheck,
-  Check,
-  ArrowRight,
-  ExternalLink
+  ArrowRight
 } from 'lucide-react'
 import {
   BroadcastScene,
@@ -1261,21 +1251,46 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#FFFFFF' }}>{src.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateAudioSource(src.id, { muted: !src.muted })}
-                      style={{
-                        background: src.muted ? '#ef4444' : '#2A2A2A',
-                        border: 'none',
-                        borderRadius: 4,
-                        padding: '2px 6px',
-                        color: '#FFF',
-                        fontSize: 10,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {src.muted ? 'MUTE' : 'ON'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {src.type !== 'presentation' && audioDevices.length > 0 && (
+                        <select
+                          value={src.deviceId || ''}
+                          onChange={(e) => handleUpdateAudioSource(src.id, { deviceId: e.target.value })}
+                          style={{
+                            backgroundColor: '#121212',
+                            border: '1px solid #2E2E2E',
+                            borderRadius: 4,
+                            padding: '2px 4px',
+                            color: '#A1A1AA',
+                            fontSize: 10,
+                            maxWidth: 130
+                          }}
+                          title="Seleccionar micrófono o entrada de línea física"
+                        >
+                          <option value="">(Dispositivo por defecto)</option>
+                          {audioDevices.map((d) => (
+                            <option key={d.deviceId} value={d.deviceId}>
+                              {d.label || `Entrada ${d.deviceId.slice(0, 6)}`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateAudioSource(src.id, { muted: !src.muted })}
+                        style={{
+                          background: src.muted ? '#ef4444' : '#2A2A2A',
+                          border: 'none',
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                          color: '#FFF',
+                          fontSize: 10,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {src.muted ? 'MUTE' : 'ON'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Real AnalyserNode VU Peak Meter */}

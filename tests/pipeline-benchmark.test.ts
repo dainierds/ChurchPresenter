@@ -38,7 +38,7 @@ describe('Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D
     // Benchmark Pipeline A: Container Stream (WebM/Matroska -> FFmpeg NVENC)
     // -----------------------------------------------------------------------
     const startCpuA = process.cpuUsage()
-    const startMemA = process.memoryUsage().rss
+    const _startMemA = process.memoryUsage().rss
     const t0A = performance.now()
 
     // Generate synthetic WebM container stream via FFmpeg test source piping to NVENC
@@ -107,7 +107,7 @@ describe('Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D
     // Benchmark Pipeline B: Raw YUV420p Pipe
     // -----------------------------------------------------------------------
     const startCpuB = process.cpuUsage()
-    const startMemB = process.memoryUsage().rss
+    const _startMemB = process.memoryUsage().rss
     const t0B = performance.now()
 
     await new Promise<void>((resolve, reject) => {

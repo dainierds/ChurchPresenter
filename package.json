@@ -8,10 +8,10 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node -e \"const fs=require('fs'); fs.copyFileSync('node_modules/sql.js/dist/sql-wasm.wasm', 'out/main/sql-wasm.wasm');\"",
     "postinstall": "electron-builder install-app-deps",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint . --ext .ts,.tsx && node scripts/verify-test-assertions.js",
     "test": "vitest run",
     "verify": "tsc --noEmit -p tsconfig.json && eslint . --ext .ts,.tsx && vitest run",
     "verify:full": "node scripts/run-verify-full.js",

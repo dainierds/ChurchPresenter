@@ -2,17 +2,13 @@ import React, { useState, useEffect } from 'react'
 import {
   X,
   Radio,
-  Settings,
   HardDrive,
   Cpu,
-  Key,
   Shield,
   Eye,
   EyeOff,
   Check,
-  AlertTriangle,
-  Folder,
-  Tv
+  AlertTriangle
 } from 'lucide-react'
 import { BroadcastSettings } from '../../../shared/types'
 

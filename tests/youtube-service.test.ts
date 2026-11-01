@@ -5,12 +5,12 @@ import { ServiceItem } from '../src/shared/types'
 describe('YouTube Service & Whitelist Security (Fase 5C)', () => {
   it('allows valid YouTube and Google ecosystem domains', () => {
     expect(youtubeService.isAllowedUrl('https://www.youtube.com')).toBe(true)
-    expect(youtubeService.isAllowedUrl('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true)
-    expect(youtubeService.isAllowedUrl('https://youtu.be/dQw4w9WgXcQ')).toBe(false) // youtu.be redirects to www.youtube.com
+    expect(youtubeService.isAllowedUrl('https://m.youtube.com/watch?v=aqz-KE-bpKQ')).toBe(true)
+    expect(youtubeService.isAllowedUrl('https://youtu.be/aqz-KE-bpKQ')).toBe(false) // youtu.be redirects to www.youtube.com
     expect(youtubeService.isAllowedUrl('https://accounts.google.com/signin')).toBe(true)
     expect(youtubeService.isAllowedUrl('https://myaccount.google.com')).toBe(true)
     expect(youtubeService.isAllowedUrl('https://fonts.gstatic.com/s/roboto')).toBe(true)
-    expect(youtubeService.isAllowedUrl('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg')).toBe(true)
+    expect(youtubeService.isAllowedUrl('https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg')).toBe(true)
     expect(youtubeService.isAllowedUrl('https://play.google.com/log')).toBe(true)
   })
 
@@ -21,19 +21,8 @@ describe('YouTube Service & Whitelist Security (Fase 5C)', () => {
     expect(youtubeService.isAllowedUrl('not-a-url')).toBe(false)
   })
 
-  it('includes proper ad network patterns in blocklist', () => {
-    const patterns = YouTubeService.AD_BLOCK_PATTERNS
-    expect(patterns.some((p) => p.includes('doubleclick.net'))).toBe(true)
-    expect(patterns.some((p) => p.includes('googleadservices'))).toBe(true)
-    expect(patterns.some((p) => p.includes('youtube.com/api/stats/ads'))).toBe(true)
-    expect(patterns.some((p) => p.includes('youtube.com/pagead'))).toBe(true)
-  })
-
-  it('provides automated ad-skipper injection script', () => {
-    const script = YouTubeService.getAdSkipperScript()
-    expect(script).toContain('ytp-ad-skip-button')
-    expect(script).toContain('video.playbackRate = 16.0')
-    expect(script).toContain('ytp-ad-overlay-close-button')
+  it('uses isolated session partition persist:youtube for authentic playback', () => {
+    expect(YouTubeService.SESSION_PARTITION).toBe('persist:youtube')
   })
 })
 
@@ -50,9 +39,9 @@ describe('YouTube Playlist Pre-Service Verification (Fase 5C)', () => {
         type: 'youtube',
         name: 'Video Abierto de Prueba',
         youtubeConfig: {
-          youtubeId: 'dQw4w9WgXcQ',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          title: 'Rick Astley - Never Gonna Give You Up',
+          youtubeId: 'aqz-KE-bpKQ',
+          url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+          title: 'Blender Foundation - Big Buck Bunny',
           duration: 212,
           targetRoles: ['main'],
           audioRole: 'main',
@@ -79,7 +68,7 @@ describe('YouTube Playlist Pre-Service Verification (Fase 5C)', () => {
     expect(report.totalChecked).toBe(2)
     expect(report.results.length).toBe(2)
 
-    const validResult = report.results.find((r) => r.videoId === 'dQw4w9WgXcQ')
+    const validResult = report.results.find((r) => r.videoId === 'aqz-KE-bpKQ')
     const invalidResult = report.results.find((r) => r.videoId === 'invalid_id_9999')
 
     expect(validResult).toBeDefined()
@@ -111,9 +100,8 @@ describe('YouTube yt-dlp Integration & Progress Tracking', () => {
       progressEvents.push(p)
     }
 
-    // Call download with mock or invalid path to test invocation and initial progress notification
-    const _res = await youtubeService.downloadVideoToLocal(
-      'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&index=1',
+    const res = await youtubeService.downloadVideoToLocal(
+      'https://invalid-url-domain.xyz',
       process.env.TEMP || '.',
       onProgress
     )
@@ -121,5 +109,6 @@ describe('YouTube yt-dlp Integration & Progress Tracking', () => {
     expect(progressEvents.length).toBeGreaterThan(0)
     expect(progressEvents[0].percent).toBe(0)
     expect(progressEvents[0].statusText).toContain('yt-dlp')
-  }, 15000)
+    expect(res.success).toBe(false)
+  })
 })

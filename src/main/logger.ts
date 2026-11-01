@@ -2,7 +2,7 @@ import log from 'electron-log'
 import path from 'path'
 import { app } from 'electron'
 
-if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+if ((process.env.VITEST || process.env.NODE_ENV === 'test') && !process.env.DEBUG_YT) {
   log.transports.file.level = false
   log.transports.console.level = false
 }

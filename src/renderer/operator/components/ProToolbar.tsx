@@ -411,16 +411,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           <span>{isRehearsalActive ? 'ENSAYO' : 'Ensayo'}</span>
         </button>
 
-        {/* Phase 7: Output Health Button */}
+        {/* Phase 7: Output Health Button & Real-time System Metrics */}
         <button
           type="button"
           className="pro-status-pill-btn"
           onClick={onOpenOutputHealthModal}
-          title="Ver salud y rendimiento de salidas (FPS, memoria, incidentes)"
+          title={systemMetrics ? `CPU: ${systemMetrics.cpuPercent.toFixed(0)}% | RAM: ${systemMetrics.memory.percentUsed.toFixed(0)}% | Disco: ${systemMetrics.disk.freeGb.toFixed(1)} GB libres` : 'Ver salud y rendimiento de salidas (FPS, memoria, incidentes)'}
           style={{ display: 'flex', alignItems: 'center', gap: 4 }}
         >
           <Activity size={12} color="#38bdf8" />
-          <span>Salud</span>
+          <span>{systemMetrics ? `CPU ${systemMetrics.cpuPercent.toFixed(0)}%` : 'Salud'}</span>
         </button>
       </div>
 

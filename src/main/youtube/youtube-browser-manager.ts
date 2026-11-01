@@ -1,5 +1,6 @@
 import { BrowserWindow, WebContentsView, shell } from 'electron'
 import { youtubeService, YouTubeService } from './youtube-service'
+import { youtubeOutputManager } from './youtube-output-manager'
 import { parseYouTubeUrl } from '../../shared/youtube-utils'
 import { YouTubeSyncTick } from '../../shared/types'
 import { logger } from '../logger'
@@ -26,9 +27,9 @@ export class YouTubeBrowserManager {
     bounds: { x: number; y: number; width: number; height: number }
   ): void {
     youtubeService.initializeSession()
-    this.parentWindow = win
 
     if (!this.view) {
+      this.parentWindow = win
       this.view = new WebContentsView({
         webPreferences: {
           partition: YouTubeService.SESSION_PARTITION,
@@ -74,6 +75,22 @@ export class YouTubeBrowserManager {
 
       win.contentView.addChildView(this.view)
       this.view.webContents.loadURL(this.currentUrl)
+    } else if (this.parentWindow !== win) {
+      if (this.parentWindow && !this.parentWindow.isDestroyed()) {
+        try {
+          this.parentWindow.contentView.removeChildView(this.view)
+        } catch (err) {
+          logger.debug('Parent window view detachment notice:', err)
+        }
+      }
+      this.parentWindow = win
+      if (!win.isDestroyed()) {
+        try {
+          win.contentView.addChildView(this.view)
+        } catch (err) {
+          logger.debug('Parent window view attachment notice:', err)
+        }
+      }
     }
 
     this.currentBounds = bounds
@@ -81,6 +98,7 @@ export class YouTubeBrowserManager {
     this.setBounds(bounds)
     this.view.setVisible(true)
     this.startSyncLoop()
+    this.resyncWithLiveOutputIfActive()
   }
 
   public setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
@@ -98,9 +116,35 @@ export class YouTubeBrowserManager {
       if (this.currentBounds.width > 0 && this.currentBounds.height > 0) {
         this.view.setBounds(this.currentBounds)
       }
+      this.resyncWithLiveOutputIfActive()
     } else {
       // Move offscreen so native view never intercepts mouse clicks or covers React modals
       this.view.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+    }
+  }
+
+  private resyncWithLiveOutputIfActive(): void {
+    if (!this.view || this.view.webContents.isDestroyed()) return
+    try {
+      const outputState = youtubeOutputManager.getPlaybackState()
+      if (outputState.isLive && outputState.isPlaying && outputState.currentTime > 0) {
+        const liveTime = outputState.currentTime
+        this.view.webContents.executeJavaScript(`
+          (function() {
+            const v = document.querySelector('video');
+            if (v && !isNaN(v.duration) && v.duration > 0) {
+              if (Math.abs(v.currentTime - ${liveTime}) > 0.8) {
+                v.currentTime = ${liveTime};
+              }
+              if (v.paused) {
+                v.play().catch(() => {});
+              }
+            }
+          })()
+        `).catch(() => {})
+      }
+    } catch (err) {
+      logger.warn('Failed to resync YouTube browser with live output:', err)
     }
   }
 
@@ -128,7 +172,7 @@ export class YouTubeBrowserManager {
   private startSyncLoop(): void {
     if (this.syncInterval) return
     this.syncInterval = setInterval(async () => {
-      if (!this.view || this.view.webContents.isDestroyed()) return
+      if (!this.view || this.view.webContents.isDestroyed() || !this.isVisible) return
       try {
         const data = await this.view.webContents.executeJavaScript(`
           (function() {

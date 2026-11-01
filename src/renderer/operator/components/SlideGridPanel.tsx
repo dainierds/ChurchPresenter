@@ -9,6 +9,7 @@ import {
   Radio
 } from 'lucide-react'
 import { SlideItem, ThemeConfig } from '../../../shared/types'
+import { toMediaUrl } from '../../../shared/media-url'
 
 interface SlideGridPanelProps {
   title: string
@@ -222,7 +223,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                     }}
                   >
                     {slide.mediaUrl && slide.mediaType === 'image' && (
-                      <img src={slide.mediaUrl} alt="" className="pro-slide-thumb-img" />
+                      <img src={toMediaUrl(slide.mediaUrl)} alt="" className="pro-slide-thumb-img" />
                     )}
                     <div
                       className="pro-slide-text-preview"
@@ -290,7 +291,11 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
 
         {slides.length === 0 && (
           <div className="pro-slide-empty-state">
-            <span>Seleccione un elemento del servicio para previsualizar sus diapositivas.</span>
+            <span>
+              {title
+                ? `Sección "${title}": Arrastre aquí videos, canciones o medios para agregar a esta sección.`
+                : 'Seleccione un elemento del servicio para previsualizar sus diapositivas.'}
+            </span>
           </div>
         )}
       </div>

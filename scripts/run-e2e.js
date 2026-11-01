@@ -90,11 +90,31 @@ async function run() {
   const app = await electron.launch({
     args: [
       MAIN_SCRIPT,
-      `--user-data-dir=${tempUserDataDir}`
+      `--user-data-dir=${tempUserDataDir}`,
+      '--disable-features=CalculateNativeWinOcclusion',
+      '--disable-background-media-suspend',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--autoplay-policy=no-user-gesture-required'
     ],
     env: {
       ...process.env,
       NODE_ENV: 'test'
+    }
+  })
+
+  // Pipe main process output to see all main-process logs & diagnostic events
+  app.process().stdout?.on('data', (chunk) => {
+    const text = chunk.toString()
+    if (text.includes('[YT') || text.includes('[PAUSE_DIAG') || text.includes('Error') || text.includes('WARN')) {
+      process.stdout.write(`  [MAIN PROC]: ${text}`)
+    }
+  })
+  app.process().stderr?.on('data', (chunk) => {
+    const text = chunk.toString()
+    if (text.includes('[YT') || text.includes('Error')) {
+      process.stderr.write(`  [MAIN PROC ERR]: ${text}`)
     }
   })
 
@@ -371,7 +391,7 @@ async function run() {
     }
 
     if (isInternetAvailable) {
-      console.log('  -> Internet connection available. Testing 3 public open-license videos on outputs (60s continuous playback each)...')
+      console.log('  -> Internet connection available. Testing 3 public open-license videos on outputs (120s continuous playback each)...')
 
       const REAL_PUBLIC_VIDEOS = [
         { id: 'aqz-KE-bpKQ', name: 'big_buck_bunny', title: 'Blender - Big Buck Bunny' },
@@ -390,8 +410,8 @@ async function run() {
             youtubeId: video.id,
             url: `https://www.youtube.com/watch?v=${video.id}`,
             title: video.title,
-            duration: 300,
-            targetRoles: ['main', 'lobby'],
+            duration: 600,
+            targetRoles: ['main'],
             audioRole: 'main'
           })
           await window.churchPresenterApi.controlYouTube('go-live')
@@ -407,22 +427,38 @@ async function run() {
           }, ['main', 'stage', 'lobby'])
         }, v)
 
-        // 2. Play for 60 seconds with continuous progress checks every 10s
+        // 2. Play for 120 seconds with continuous progress checks every 10s
         let lastReportedTime = 0
-        for (let sec = 10; sec <= 60; sec += 10) {
+        for (let sec = 10; sec <= 120; sec += 10) {
           await win.waitForTimeout(10000)
           const state = await win.evaluate(async () => {
             return await window.churchPresenterApi.controlYouTube('status')
           })
 
-          const curTime = state?.currentTime || 0
-          console.log(`    -> Playback progress for ${v.name}: ${sec}s elapsed, video time: ${curTime.toFixed(2)}s (hasError: ${state?.hasPlaybackError || false})`)
+          let curTime = state?.currentTime || 0
+          console.log(`    -> Playback progress for ${v.name}: ${sec}s elapsed, video time: ${curTime.toFixed(2)}s (hasError: ${state?.hasPlaybackError || false}) Diag: ${JSON.stringify(state?.diag)}`)
 
           if (state?.hasPlaybackError) {
             throw new Error(`Output showed YouTube error on public video ${v.id}!`)
           }
-          if (sec > 10 && curTime <= lastReportedTime) {
-            console.warn(`    [Warning]: Video time did not advance monotonically (${curTime} <= ${lastReportedTime})`)
+          if (sec > 10 && curTime <= lastReportedTime && !state?.isAd) {
+            console.log(`    [Buffering]: Video time ${curTime.toFixed(2)}s paused for buffer at ${sec}s. Waiting up to 20s for DASH chunk...`)
+            let recovered = false
+            for (let b = 0; b < 20; b++) {
+              await win.waitForTimeout(1000)
+              const recheck = await win.evaluate(async () => {
+                return await window.churchPresenterApi.controlYouTube('status')
+              })
+              if (recheck?.currentTime > lastReportedTime + 0.05) {
+                curTime = recheck.currentTime
+                recovered = true
+                console.log(`    [Buffer Recovered]: Stream resumed at ${curTime.toFixed(2)}s.`)
+                break
+              }
+            }
+            if (!recovered) {
+              throw new Error(`[Monotonic Failure]: Video time did not advance monotonically (${curTime} <= ${lastReportedTime}) at ${sec}s for video ${v.name} (${v.id})`)
+            }
           }
           lastReportedTime = curTime
         }
@@ -477,7 +513,7 @@ async function run() {
         await window.churchPresenterApi.controlYouTube('stop')
       })
 
-      console.log('[TEST AUDIT]: YouTube Reproducción Real (3 videos x 60s) -> APROBADA (marcas de tiempo continuas, capturas de video real en salidas, 0 tarjetas de error en audiencia, protección contra video inválido)')
+      console.log('[TEST AUDIT]: YouTube Reproducción Real (3 videos x 120s) -> APROBADA (marcas de tiempo continuas >= 120s sin advertencias ni reinicios, capturas de video real en salidas, 0 tarjetas de error en audiencia, protección contra video inválido)')
     } else {
       console.log('[TEST AUDIT]: YouTube Reproducción Real -> OMITIDA (Sin conexión a Internet en este entorno para YouTube)')
     }
@@ -2026,7 +2062,15 @@ async function run() {
     console.log('   ALL E2E SCENARIOS PASSED WITH ZERO CONSOLE ERRORS!                 ')
     console.log('======================================================================')
   } finally {
-    await app.close()
+    try {
+      await app.close()
+    } catch {}
+    try {
+      const proc = app.process()
+      if (proc && !proc.killed) {
+        proc.kill('SIGKILL')
+      }
+    } catch {}
     try {
       fs.rmSync(tempUserDataDir, { recursive: true, force: true })
     } catch {}

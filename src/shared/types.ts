@@ -112,6 +112,27 @@ export interface LayerOverlay {
   text?: string
 }
 
+export interface ChurchBrandingConfig {
+  churchName: string
+  logoUrl?: string
+  logoWidthVmin?: number
+  logoOpacity?: number
+  logoTextPosition?: 'bottom' | 'right' | 'none'
+  defaultBackground: LayerBackground
+}
+
+export const DEFAULT_CHURCH_BRANDING: ChurchBrandingConfig = {
+  churchName: 'CHURCH PRESENTER',
+  logoUrl: '',
+  logoWidthVmin: 22,
+  logoOpacity: 1.0,
+  logoTextPosition: 'bottom',
+  defaultBackground: {
+    type: 'gradient',
+    value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
+  }
+}
+
 export interface LayerMessage {
   text: string
   visible: boolean
@@ -847,6 +868,7 @@ export interface PresenterState {
   macroExecutionState?: MacroExecutionState | null
   activeSubtitle?: LiveSubtitleMessage | null
   subtitlesConfig?: LiveSubtitlesConfig | null
+  churchBranding?: ChurchBrandingConfig
   updatedAt: number
 }
 
@@ -975,6 +997,10 @@ export interface ChurchPresenterApi {
   getShortcuts: () => Promise<AppShortcutsConfig>
   saveShortcuts: (config: AppShortcutsConfig) => Promise<boolean>
   openBackupsFolder: () => Promise<void>
+  getWorkspaceInfo: () => Promise<{ rootPath: string; subfolders: string[] }>
+  setWorkspacePath: (path: string) => Promise<{ rootPath: string; subfolders: string[] }>
+  chooseWorkspaceFolder: () => Promise<{ rootPath: string; subfolders: string[] } | null>
+  openWorkspaceFolder: (subfolder?: string) => Promise<boolean>
   onNotification: (callback: (notification: AppNotification) => void) => () => void
 
   // Phase 3: Songs Library
@@ -1069,6 +1095,8 @@ export interface ChurchPresenterApi {
   checkMediaIntegrity: () => Promise<{ missingCount: number; missingIds: string[] }>
   playVideo: (config: VideoItemConfig) => Promise<PresenterState>
   controlVideo: (action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => Promise<void>
+  updateVideoDuration?: (duration: number) => Promise<boolean>
+  onMediaSyncTick?: (callback: (tick: MediaSyncTick) => void) => () => void
   playIndependentAudio: (mediaId: string, filePath: string, title?: string) => Promise<void>
   controlIndependentAudio: (action: 'play' | 'pause' | 'stop' | 'fade-out' | 'volume', value?: number) => Promise<void>
   renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number) => Promise<string>
@@ -1142,6 +1170,8 @@ export interface ChurchPresenterApi {
     action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute' | 'status',
     payload?: any
   ) => Promise<any>
+  getYouTubePreviewFrame: () => Promise<string | null>
+  getYouTubeEmbedUrl?: (videoId: string) => Promise<string>
   downloadYouTubeVideo: (youtubeUrl: string) => Promise<{ success: boolean; item?: MediaItem; error?: string }>
   onYouTubeAdStatus: (callback: (isAd: boolean) => void) => () => void
   onYouTubeSyncTick: (callback: (tick: YouTubeSyncTick) => void) => () => void
@@ -1308,6 +1338,12 @@ export interface ChurchPresenterApi {
   getSecondaryBackupConfig: () => Promise<SecondaryBackupConfig>
   saveSecondaryBackupConfig: (config: Partial<SecondaryBackupConfig>) => Promise<SecondaryBackupConfig>
   runSecondaryBackup: () => Promise<SecondaryBackupStatus>
+
+  // Church Branding (Logo & Background)
+  getChurchBranding: () => Promise<ChurchBrandingConfig>
+  saveChurchBranding: (branding: Partial<ChurchBrandingConfig>) => Promise<ChurchBrandingConfig>
+  uploadChurchLogo: (sourcePath?: string) => Promise<{ success: boolean; filePath?: string; url?: string; error?: string }>
+  uploadChurchBackground: (sourcePath?: string) => Promise<{ success: boolean; filePath?: string; url?: string; fileType?: 'image' | 'video'; error?: string }>
 }
 
 // =========================================================================

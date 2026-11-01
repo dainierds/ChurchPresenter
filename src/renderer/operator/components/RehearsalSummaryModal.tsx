@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, CheckCircle2, Clock, Film, AlertTriangle, FileText } from 'lucide-react'
+import { X, CheckCircle2, FileText } from 'lucide-react'
 import { RehearsalSummary } from '../../../shared/types'
 
 interface RehearsalSummaryModalProps {

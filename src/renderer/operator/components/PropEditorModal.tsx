@@ -25,14 +25,14 @@ export const PropEditorModal: React.FC<PropEditorModalProps> = ({ prop, onSave, 
 
   // Style
   const [opacity, setOpacity] = useState(prop?.style.opacity ?? 0.95)
-  const [fontSizeVmin, setFontSizeVmin] = useState(prop?.style.fontSizeVmin ?? 3.2)
+  const [fontSizeVmin] = useState(prop?.style.fontSizeVmin ?? 3.2)
   const [fontColor, setFontColor] = useState(prop?.style.fontColor || '#ffffff')
   const [backgroundColor, setBackgroundColor] = useState(prop?.style.backgroundColor || '#181818')
-  const [borderRadiusPx, setBorderRadiusPx] = useState(prop?.style.borderRadiusPx ?? 8)
+  const [borderRadiusPx] = useState(prop?.style.borderRadiusPx ?? 8)
 
   // Transition
   const [inType, setInType] = useState<'cut' | 'fade' | 'slide_up' | 'slide_down' | 'zoom'>(prop?.transition.inType || 'slide_up')
-  const [durationMs, setDurationMs] = useState(prop?.transition.durationMs || 400)
+  const [durationMs] = useState(prop?.transition.durationMs || 400)
 
   // Target Roles
   const [targetRoles, setTargetRoles] = useState<OutputRole[]>(prop?.targetRoles || ['main'])

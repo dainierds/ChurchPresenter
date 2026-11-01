@@ -20,11 +20,13 @@ import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 interface YouTubeBrowserPanelProps {
   onAddToPlaylist: (item: ServiceItem) => void
   onProjectNow: (item: ServiceItem) => void
+  isVisible?: boolean
 }
 
 export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   onAddToPlaylist,
-  onProjectNow
+  onProjectNow,
+  isVisible = true
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [currentUrl, setCurrentUrl] = useState<string>('https://www.youtube.com')
@@ -48,11 +50,18 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   const handleAcceptDisclaimer = () => {
     localStorage.setItem('cp_youtube_disclaimer_accepted', 'true')
     setDisclaimerOpen(false)
-    window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
+    if (isVisible) {
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
+    }
   }
 
   // Manage WebContentsView positioning and lifecycle
   useEffect(() => {
+    if (!isVisible) {
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
+      return
+    }
+
     const updateBounds = () => {
       if (!containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
@@ -65,13 +74,23 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       }
       if (bounds.width > 50 && bounds.height > 50) {
         window.churchPresenterApi?.openYouTubeBrowser(bounds)
+        window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
       }
     }
 
     // Delay slightly to let layout settle
-    const timer = setTimeout(updateBounds, 100)
+    const timer = setTimeout(updateBounds, 120)
     window.addEventListener('resize', updateBounds)
 
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', updateBounds)
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
+    }
+  }, [isVisible])
+
+  // Listen to events and poll URL only when visible
+  useEffect(() => {
     // Listen to ad status
     const unsubAd = window.churchPresenterApi?.onYouTubeAdStatus((isAd) => {
       setIsAdActive(isAd)
@@ -82,8 +101,9 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       setDownloadProgress(progress)
     })
 
-    // Poll current URL periodically
+    // Poll current URL periodically only when visible
     const pollInterval = setInterval(async () => {
+      if (!isVisible) return
       try {
         const url = await window.churchPresenterApi?.getYouTubeBrowserUrl()
         if (url && url !== currentUrl) {
@@ -96,14 +116,11 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
     }, 1000)
 
     return () => {
-      clearTimeout(timer)
       clearInterval(pollInterval)
-      window.removeEventListener('resize', updateBounds)
       unsubAd?.()
       unsubProgress?.()
-      window.churchPresenterApi?.closeYouTubeBrowser()
     }
-  }, [])
+  }, [isVisible, currentUrl])
 
   // Re-adjust browser bounds when download progress bar toggles
   useEffect(() => {

@@ -4,6 +4,7 @@ import path from 'path'
 import os from 'os'
 import { databaseService } from '../src/main/db/database-service'
 import { RemoteAuthService } from '../src/main/remote/remote-auth-service'
+import { getStageViewerHtml, getObsBrowserSourceHtml, getRemoteControlHtml } from '../src/main/remote/client-templates'
 
 describe('RemoteAuthService (PIN, Sessions, Rate Limiting & Lockout)', () => {
   let tempDir: string
@@ -123,5 +124,79 @@ describe('RemoteAuthService (PIN, Sessions, Rate Limiting & Lockout)', () => {
 
     // Previous token is now invalidated
     expect(authService.verifySession(token)).toBeNull()
+  })
+
+  it('generates remote HTML templates enforcing PIN and token requirements', () => {
+    // 1. Remote control client always demands PIN and authorization token
+    const remoteHtml = getRemoteControlHtml()
+    expect(remoteHtml).toContain('id="authModal"')
+    expect(remoteHtml).toContain('id="pinInput"')
+    expect(remoteHtml).toContain('/api/auth')
+
+    // 2. Stage viewer template: enforce PIN modal when requirePin is true
+    const stageWithPin = getStageViewerHtml({ requirePin: true })
+    expect(stageWithPin).toContain('id="stageAuthModal"')
+    expect(stageWithPin).toContain('id="stagePinInput"')
+    expect(stageWithPin).toContain('if (!true || token)')
+
+    // 3. Stage viewer template: bypass PIN modal only when requirePin is explicitly false
+    const stageWithoutPin = getStageViewerHtml({ requirePin: false })
+    expect(stageWithoutPin).not.toContain('id="stageAuthModal"')
+    expect(stageWithoutPin).toContain('if (!false || token)')
+
+    // 4. OBS Browser source template: verify requirePin wiring
+    const obsWithPin = getObsBrowserSourceHtml({ role: 'main', requirePin: true })
+    expect(obsWithPin).toContain('const requirePin = true;')
+    const obsWithoutPin = getObsBrowserSourceHtml({ role: 'main', requirePin: false })
+    expect(obsWithoutPin).toContain('const requirePin = false;')
+  })
+
+  it('creates strictly read-only stage sessions and denies operator actions', () => {
+    const stageSession = authService.createReadOnlyStageSession('192.168.1.150', 'iPad Stage')
+    expect(stageSession.role).toBe('stage-viewer')
+    expect(stageSession.id).toBeDefined()
+
+    const verified = authService.verifySession(stageSession.id)
+    expect(verified).not.toBeNull()
+    expect(verified?.role).toBe('stage-viewer')
+
+    // Stage viewer sessions cannot act as operators
+    const isOperator = verified?.role === 'operator'
+    expect(isOperator).toBe(false)
+  })
+
+  it('measures remote control token verification empirical latencies (p50 and p95)', () => {
+    const pin = authService.getPin()
+    const authRes = authService.authenticate({ pin, ip: '127.0.0.1', deviceName: 'Benchmark Client' })
+    expect(authRes.success).toBe(true)
+    const token = authRes.session!.id
+
+    const latenciesMs: number[] = []
+    const iterations = 200
+
+    for (let i = 0; i < iterations; i++) {
+      const t0 = performance.now()
+      const session = authService.verifySession(token)
+      const t1 = performance.now()
+      expect(session).not.toBeNull()
+      latenciesMs.push(t1 - t0)
+    }
+
+    latenciesMs.sort((a, b) => a - b)
+    const p50 = latenciesMs[Math.floor(iterations * 0.5)]
+    const p95 = latenciesMs[Math.floor(iterations * 0.95)]
+    const avg = latenciesMs.reduce((sum, v) => sum + v, 0) / iterations
+
+    console.log('\n======================================================================')
+    console.log('   REMOTE CONTROL EMPIRICAL LATENCY BENCHMARK (200 SAMPLES)          ')
+    console.log('======================================================================')
+    console.log(`-> Muestras Analizadas:  ${iterations}`)
+    console.log(`-> Latencia Media:       ${avg.toFixed(3)} ms`)
+    console.log(`-> Latencia p50:         ${p50.toFixed(3)} ms`)
+    console.log(`-> Latencia p95:         ${p95.toFixed(3)} ms`)
+    console.log('======================================================================\n')
+
+    expect(p50).toBeLessThan(5.0) // sub-millisecond expected in Node memory
+    expect(p95).toBeLessThan(10.0)
   })
 })

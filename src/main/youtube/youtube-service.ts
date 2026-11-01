@@ -1,5 +1,6 @@
 import { session, net } from 'electron'
 import fs from 'fs'
+import http from 'http'
 import { logger } from '../logger'
 import {
   YouTubeAvailabilityStatus,
@@ -41,25 +42,186 @@ export class YouTubeService {
     'play.google.com'
   ]
 
-  // Ad network and tracking URL patterns for blocking
-  public static readonly AD_BLOCK_PATTERNS = [
-    '*://*.doubleclick.net/*',
-    '*://*.googleadservices.com/*',
-    '*://*googleads.g.doubleclick.net/*',
-    '*://*.googlesyndication.com/*',
-    '*://*.youtube.com/api/stats/ads*',
-    '*://*.youtube.com/pagead/*',
-    '*://*.youtube.com/ptracking*',
-    '*://*.youtube.com/get_midroll_info*'
-  ]
-
   private initialized = false
+  private embedServer: http.Server | null = null
+  private embedPort = 0
 
   public static getInstance(): YouTubeService {
     if (!YouTubeService.instance) {
       YouTubeService.instance = new YouTubeService()
     }
     return YouTubeService.instance
+  }
+
+  /**
+   * Starts a local lightweight HTTP embed server on 127.0.0.1 for the operator preview monitor.
+   * Serving the player from an authentic local HTTP origin satisfies YouTube's Referer/Origin
+   * embed requirements, completely eliminating Error 152-4 and Error 153 while maintaining
+   * strict zero-spoofing compliance.
+   */
+  public async startEmbedServer(): Promise<number> {
+    if (this.embedServer && this.embedPort > 0) return this.embedPort
+
+    return new Promise((resolve) => {
+      this.embedServer = http.createServer((req, res) => {
+        try {
+          const parsed = new URL(req.url || '/', 'http://127.0.0.1')
+          if (parsed.pathname === '/embed') {
+            const videoId = parsed.searchParams.get('v') || ''
+            const safeId = videoId.replace(/[^a-zA-Z0-9_-]/g, '')
+            const isMuted = parsed.searchParams.get('muted') !== '0'
+            const startSec = Math.max(0, parseInt(parsed.searchParams.get('start') || '0', 10) || 0)
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>YouTube Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000000; }
+    #player { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="player"></div>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    var player = null;
+    window.__lastError = null;
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        videoId: '${safeId}',
+        playerVars: {
+          autoplay: 1,
+          mute: ${isMuted ? 1 : 0},
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          enablejsapi: 1,
+          start: ${startSec},
+          origin: window.location.origin
+        },
+        events: {
+          onReady: (e) => {
+            window.__player = e.target;
+            try {
+              if (${isMuted}) {
+                e.target.mute();
+              } else {
+                e.target.unMute();
+              }
+              e.target.playVideo();
+            } catch (_) {}
+          },
+          onError: (e) => {
+            console.log('[API] onPlayerError:', e.data);
+            window.__lastError = e.data;
+          }
+        }
+      });
+    }
+
+    window.__getStatus = function() {
+      if (!player || typeof player.getCurrentTime !== 'function') {
+        return {
+          exists: false,
+          isError: Boolean(window.__lastError),
+          errorCode: window.__lastError || null
+        };
+      }
+      var pState = player.getPlayerState();
+      var curTime = player.getCurrentTime() || 0;
+      var duration = player.getDuration() || 0;
+      var loaded = typeof player.getVideoLoadedFraction === 'function' ? player.getVideoLoadedFraction() : 0;
+      return {
+        exists: true,
+        currentTime: curTime,
+        duration: duration,
+        paused: pState === 2,
+        ended: pState === 0 || (duration > 0 && curTime >= duration - 1.5),
+        isAd: false,
+        isError: Boolean(window.__lastError),
+        errorCode: window.__lastError || null,
+        diag: {
+          pState: pState,
+          pTime: curTime,
+          pLoaded: loaded
+        }
+      };
+    };
+
+    window.addEventListener('message', (e) => {
+      if (!player) return;
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data.action === 'play' && typeof player.playVideo === 'function') {
+          player.playVideo();
+        } else if (data.action === 'pause' && typeof player.pauseVideo === 'function') {
+          player.pauseVideo();
+        }
+        if (typeof data.time === 'number' && typeof player.getCurrentTime === 'function') {
+          const cur = player.getCurrentTime();
+          if (Math.abs(cur - data.time) > 1.2 && typeof player.seekTo === 'function') {
+            player.seekTo(data.time, true);
+          }
+        }
+      } catch (_) {}
+    });
+  </script>
+</body>
+</html>`
+            res.writeHead(200, {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Referrer-Policy': 'strict-origin-when-cross-origin',
+              'Access-Control-Allow-Origin': '*'
+            })
+            res.end(html)
+            return
+          }
+
+          res.writeHead(404, { 'Content-Type': 'text/plain' })
+          res.end('Not found')
+        } catch {
+          res.writeHead(500, { 'Content-Type': 'text/plain' })
+          res.end('Error')
+        }
+      })
+
+      this.embedServer.listen(0, '127.0.0.1', () => {
+        const addr = this.embedServer?.address()
+        if (addr && typeof addr === 'object') {
+          this.embedPort = addr.port
+          logger.info(`YouTube Embed Local Server listening on http://127.0.0.1:${this.embedPort}`)
+        }
+        resolve(this.embedPort)
+      })
+
+      this.embedServer.on('error', (err) => {
+        logger.error('YouTube Embed Local Server error:', err)
+        resolve(0)
+      })
+    })
+  }
+
+  public async getEmbedUrl(videoId: string, muted = true, start = 0): Promise<string> {
+    if (!this.embedServer || this.embedPort === 0) {
+      await this.startEmbedServer()
+    }
+    const safeId = videoId.replace(/[^a-zA-Z0-9_-]/g, '')
+    const mutedParam = muted ? '1' : '0'
+    const startParam = Math.max(0, Math.floor(start))
+    return `http://127.0.0.1:${this.embedPort}/embed?v=${safeId}&muted=${mutedParam}&start=${startParam}`
+  }
+
+  public closeEmbedServer(): void {
+    if (this.embedServer) {
+      this.embedServer.close()
+      this.embedServer = null
+      this.embedPort = 0
+    }
   }
 
   /**
@@ -82,19 +244,8 @@ export class YouTubeService {
       (ytSession as any).setDevicePermissionHandler(() => false)
     }
 
-    // 3. Implement ad-blocking via WebRequest API strictly on the dedicated YouTube partition
-    try {
-      ytSession.webRequest.onBeforeRequest(
-        { urls: YouTubeService.AD_BLOCK_PATTERNS },
-        (details, callback) => {
-          logger.debug(`[AdBlocker] Blocked ad request: ${details.url.substring(0, 80)}`)
-          callback({ cancel: true })
-        }
-      )
-      logger.info('YouTube session: Ad-blocking webRequest filters initialized on dedicated partition.')
-    } catch (err) {
-      logger.warn('Failed to configure ad-blocking webRequest:', err)
-    }
+    // 3. Strict compliance: do NOT block, cancel or alter YouTube ad or analytics requests.
+    // YouTube's player runs authentically without trigger-blocking or midroll buffer disruption.
 
     this.initialized = true
     logger.info(`YouTube session initialized for partition '${YouTubeService.SESSION_PARTITION}'.`)

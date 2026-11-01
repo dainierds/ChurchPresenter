@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Radio, Video, Play, Square, Check, Copy, Eye, EyeOff, RefreshCw, AlertCircle } from 'lucide-react'
+import { X, Radio, Video, Check, Copy, Eye, EyeOff, RefreshCw, AlertCircle } from 'lucide-react'
 import { ObsConfig, ObsStatus } from '../../../shared/types'
 
 interface ObsBridgeModalProps {

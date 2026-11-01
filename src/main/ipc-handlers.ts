@@ -18,7 +18,8 @@ import {
   ServiceItem,
   MacroItem,
   PropItem,
-  LoopConfig
+  LoopConfig,
+  ChurchBrandingConfig
 } from '../shared/types'
 import { displayManager } from './display-manager'
 import { databaseService } from './db/database-service'
@@ -37,11 +38,13 @@ import { fileWatcherService } from './media/file-watcher-service'
 import { youtubeService } from './youtube/youtube-service'
 import { youTubeBrowserManager } from './youtube/youtube-browser-manager'
 import { youtubeOutputManager } from './youtube/youtube-output-manager'
+import { parseYouTubeUrl } from '../shared/youtube-utils'
 import { remoteServer } from './remote/remote-server'
 import { remoteAuthService } from './remote/remote-auth-service'
 import { stageLayoutService } from './stage/stage-layout-service'
 import { messageService } from './messages/message-service'
 import { sessionRecoveryService } from './recovery/session-recovery-service'
+import { workspaceService } from './workspace/workspace-service'
 import { outputHealthService } from './health/output-health-service'
 import { systemMonitorService } from './health/system-monitor-service'
 import { checklistService } from './checklist/checklist-service'
@@ -119,7 +122,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.STATE_SEND_SLIDE,
     (_event, slide: TestSlide | SlideItem, targetRoles?: string[], nextSlide?: SlideItem) => {
-      const isYt = (slide as any).mediaType === 'youtube' || Boolean((slide as any).youtubeId)
+      const isYt =
+        (slide as any).mediaType === 'youtube' ||
+        Boolean((slide as any).youtubeId) ||
+        Boolean((slide as any).mediaUrl && parseYouTubeUrl((slide as any).mediaUrl).videoId)
       const isVid = (slide as any).mediaType === 'video' || (slide as any).sourceType === 'video'
 
       if (!isYt) {
@@ -178,6 +184,24 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.BACKUPS_OPEN_FOLDER, () => {
     windowManager.openBackupsFolder()
+  })
+
+  // User Workspace & Auto-created Category Folders
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_GET_INFO, () => {
+    return workspaceService.getInfo()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_SET_PATH, (_event, newPath: string) => {
+    return workspaceService.setWorkspacePath(newPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_CHOOSE_FOLDER, () => {
+    const opWin = windowManager.getOperatorWindow()
+    return workspaceService.chooseWorkspaceFolder(opWin)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_OPEN_FOLDER, (_event, subfolder?: string) => {
+    return workspaceService.openWorkspaceFolder(subfolder)
   })
 
   // Phase 3: Songs
@@ -460,11 +484,17 @@ export function registerIpcHandlers(): void {
   })
 
   // Phase 5A: Video & Media Sync
-  ipcMain.handle(IPC_CHANNELS.VIDEO_PLAY, (_event, config: VideoItemConfig) => {
-    masterMediaSyncService.playVideo(config)
+  ipcMain.handle(IPC_CHANNELS.VIDEO_PLAY, async (_event, config: VideoItemConfig) => {
+    youtubeOutputManager.stop()
+    const mediaItem = databaseService.getMediaItemById(config.mediaId)
+    if (mediaItem && mediaItem.duration) {
+      masterMediaSyncService.updateVideoDuration(mediaItem.duration)
+    }
+    const tick = masterMediaSyncService.playVideo(config)
+    stateManager.updateMediaSyncTick(tick)
     const videoSlide: any = {
       id: `vid_${config.mediaId}_${Date.now()}`,
-      title: 'Video',
+      title: mediaItem?.originalName || 'Video',
       body: '',
       subtitle: '',
       mediaUrl: config.mediaPath || (config as any).filePath || '',
@@ -480,11 +510,22 @@ export function registerIpcHandlers(): void {
     (_event, action: 'play' | 'pause' | 'stop' | 'seek', time?: number) => {
       const tick = masterMediaSyncService.controlVideo(action, time)
       if (tick) {
+        stateManager.updateMediaSyncTick(tick)
         windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
       }
       return true
     }
   )
+
+  ipcMain.handle(IPC_CHANNELS.VIDEO_SET_DURATION, (_event, duration: number) => {
+    if (typeof duration === 'number' && duration > 0 && isFinite(duration)) {
+      masterMediaSyncService.updateVideoDuration(duration)
+      const tick = masterMediaSyncService.createVideoSyncTick()
+      stateManager.updateMediaSyncTick(tick)
+      windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
+    }
+    return true
+  })
 
   // Phase 5A: Independent Audio
   ipcMain.handle(
@@ -581,6 +622,7 @@ export function registerIpcHandlers(): void {
 
   // Connect master media sync events to broadcast to all windows
   masterMediaSyncService.on('sync-tick', (tick) => {
+    stateManager.updateMediaSyncTick(tick)
     windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
   })
 
@@ -890,7 +932,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.YOUTUBE_CONTROL,
-    (
+    async (
       _event,
       action: 'prepare' | 'go-live' | 'play' | 'pause' | 'stop' | 'seek' | 'volume' | 'mute' | 'status',
       payload?: any
@@ -900,7 +942,7 @@ export function registerIpcHandlers(): void {
           // Status query only; does not modify playback
           break
         case 'prepare':
-          youtubeOutputManager.prepareVideo(
+          await youtubeOutputManager.prepareVideo(
             payload as YouTubeItemConfig,
             windowManager.getOutputWindows()
           )
@@ -930,6 +972,14 @@ export function registerIpcHandlers(): void {
       return youtubeOutputManager.getPlaybackState()
     }
   )
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_PREVIEW_FRAME, async () => {
+    return await youtubeOutputManager.capturePreviewFrame()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_EMBED_URL, async (_event, videoId: string) => {
+    return await youtubeService.getEmbedUrl(videoId)
+  })
 
   ipcMain.handle(IPC_CHANNELS.YOUTUBE_DOWNLOAD_VIDEO, async (event, youtubeUrl: string) => {
     const mediaDir = path.join(app.getPath('userData'), 'media')
@@ -1490,6 +1540,25 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.BACKUP_RUN_SECONDARY, async () => {
     return secondaryBackupService.runSecondaryBackup()
+  })
+
+  // Church Branding (Logo & Background)
+  ipcMain.handle(IPC_CHANNELS.CHURCH_BRANDING_GET, () => {
+    return databaseService.getChurchBranding()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHURCH_BRANDING_SAVE, (_event, branding: Partial<ChurchBrandingConfig>) => {
+    const saved = databaseService.saveChurchBranding(branding)
+    stateManager.setChurchBranding(saved)
+    return saved
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_LOGO, async (_event, sourcePath?: string) => {
+    return await workspaceService.saveChurchLogoFile(sourcePath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_BACKGROUND, async (_event, sourcePath?: string) => {
+    return await workspaceService.saveChurchBackgroundFile(sourcePath)
   })
 
   broadcastEngine.on('status-changed', (st) => {

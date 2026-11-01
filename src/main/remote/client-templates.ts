@@ -1060,7 +1060,11 @@ export function getObsBrowserSourceHtml(options: {
   <script>
     const targetRole = "${role}";
     const isTransparent = ${transparent};
+    const requirePin = ${requirePin};
     let token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('cp_remote_token') || '';
+    if (requirePin && !token) {
+      console.warn('Authentication token required for OBS Browser Source connection');
+    }
     let ws = null;
     let state = null;
     let activeProps = [];

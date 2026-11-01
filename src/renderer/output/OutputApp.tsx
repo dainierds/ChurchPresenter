@@ -33,19 +33,7 @@ const formatTimerDisplay = (seconds: number, isOvertime?: boolean): string => {
   return `${sign}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
-function toMediaUrl(raw?: string): string {
-  if (!raw) return ''
-  if (
-    raw.startsWith('file://') ||
-    raw.startsWith('data:') ||
-    raw.startsWith('blob:') ||
-    raw.startsWith('http://') ||
-    raw.startsWith('https://')
-  ) {
-    return raw
-  }
-  return `file:///${raw.replace(/\\/g, '/')}`
-}
+import { toMediaUrl } from '../../shared/media-url'
 
 interface OutputAppProps {
   role: string
@@ -67,7 +55,33 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     return () => unsub?.()
   }, [])
 
-  // Master Clock Video Sync effect
+  // Instantaneous Master Clock Video Sync from media:sync-tick
+  useEffect(() => {
+    const unsub = window.churchPresenterApi?.onMediaSyncTick?.((tick) => {
+      const video = videoRef.current
+      if (!tick || !video) return
+
+      const shouldPlayAudio = role === (tick.audioOutputRole || 'main')
+      video.muted = !shouldPlayAudio
+      if (shouldPlayAudio) {
+        video.volume = tick.volume ?? 1.0
+      }
+
+      if (tick.isPlaying && video.paused) {
+        video.play().catch(() => {})
+      } else if (!tick.isPlaying && !video.paused) {
+        video.pause()
+      }
+
+      const drift = Math.abs(video.currentTime - tick.currentTime)
+      if (drift > 0.25) {
+        video.currentTime = tick.currentTime
+      }
+    })
+    return () => unsub?.()
+  }, [role])
+
+  // Master Clock Video Sync effect from displayState
   useEffect(() => {
     const tick = displayState?.mediaSyncTick
     const video = videoRef.current
@@ -95,7 +109,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   // Reset media error flag on url change
   useEffect(() => {
     setHasMediaError(false)
-  }, [displayState?.currentSlide?.mediaUrl])
+  }, [displayState?.currentSlide?.mediaUrl, displayState?.activeLayers])
 
   // Viewport 1920x1080 canvas scaling
   const [canvasScale, setCanvasScale] = useState<number>(1)
@@ -397,7 +411,9 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
   }
 
   const background: LayerBackground =
-    roleLayerState?.background || effectiveTheme.background || {
+    roleLayerState?.background ||
+    effectiveTheme.background ||
+    displayState?.churchBranding?.defaultBackground || {
       type: 'gradient',
       value: 'linear-gradient(135deg, #181818 0%, #242424 100%)'
     }
@@ -408,7 +424,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     }
     if (bg.type === 'image') {
       return {
-        backgroundImage: `url(${bg.value})`,
+        backgroundImage: `url(${toMediaUrl(bg.value)})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
@@ -797,6 +813,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
               const isMediaVideo =
                 content?.mediaType === 'video' && content?.mediaUrl && !hasMediaError
               const isMediaYouTube =
+                content?.mediaType !== 'video' &&
                 ((content as any)?.mediaType === 'youtube' ||
                   (Boolean(liveYtSync?.videoId) && (!content || (content as any).mediaType === 'youtube'))) &&
                 Boolean(
@@ -815,6 +832,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                         inset: 0,
                         backgroundColor: '#000000',
                         overflow: 'hidden',
+                        zIndex: 15,
                         display: visibility.showContent ? 'block' : 'none'
                       }}
                     >
@@ -829,12 +847,22 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                           height: '100%',
                           objectFit: (content.fitMode as any) || 'contain'
                         }}
-                        onError={() => {
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget
+                          if (v.duration && isFinite(v.duration)) {
+                            window.churchPresenterApi.updateVideoDuration?.(v.duration)
+                          }
+                        }}
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLVideoElement
+                          const errCode = target.error ? target.error.code : 'unknown'
+                          const errMsg = target.error ? target.error.message : 'unknown'
+                          console.error(`[OutputApp] Video playback error (${errCode}): ${errMsg}`)
                           setHasMediaError(true)
                           window.churchPresenterApi.logMediaError(
                             role,
                             content.mediaUrl || '',
-                            'Error al decodificar formato de video'
+                            `Error al reproducir video (${errMsg || 'formato o esquema no soportado'})`
                           )
                         }}
                       />
@@ -1006,22 +1034,47 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
             {/* Layer 3: Overlay (Logo) */}
             {visibility.showOverlay && (
               <div className="layer-overlay">
-                <div className="church-logo-badge">
-                  <svg
-                    className="church-logo-icon"
-                    viewBox="0 0 100 100"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <circle cx="50" cy="50" r="46" stroke="#ffffff" strokeWidth="4" />
-                    <path
-                      d="M50 20 V80 M32 40 H68"
-                      stroke="#ffffff"
-                      strokeWidth="6"
-                      strokeLinecap="round"
+                <div
+                  className="church-logo-badge"
+                  style={{
+                    flexDirection:
+                      displayState?.churchBranding?.logoTextPosition === 'right' ? 'row' : 'column'
+                  }}
+                >
+                  {displayState?.churchBranding?.logoUrl ? (
+                    <img
+                      src={toMediaUrl(displayState.churchBranding.logoUrl)}
+                      alt={displayState.churchBranding.churchName || 'Logo de la Iglesia'}
+                      className="church-logo-custom-img"
+                      style={{
+                        maxHeight: `${displayState.churchBranding.logoWidthVmin || 22}vmin`,
+                        maxWidth: `${(displayState.churchBranding.logoWidthVmin || 22) * 2}vmin`,
+                        objectFit: 'contain',
+                        opacity: displayState.churchBranding.logoOpacity ?? 1,
+                        filter: 'drop-shadow(0 12px 32px rgba(0, 0, 0, 0.85))'
+                      }}
                     />
-                  </svg>
-                  <div className="church-logo-text">CHURCH PRESENTER</div>
+                  ) : (
+                    <svg
+                      className="church-logo-icon"
+                      viewBox="0 0 100 100"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <circle cx="50" cy="50" r="46" stroke="#ffffff" strokeWidth="4" />
+                      <path
+                        d="M50 20 V80 M32 40 H68"
+                        stroke="#ffffff"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  )}
+                  {displayState?.churchBranding?.logoTextPosition !== 'none' && (
+                    <div className="church-logo-text">
+                      {displayState?.churchBranding?.churchName || 'CHURCH PRESENTER'}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

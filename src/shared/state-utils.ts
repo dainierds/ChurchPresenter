@@ -3,7 +3,8 @@ import {
   OutputLayersState,
   PresenterState,
   TestSlide,
-  DEFAULT_THEME
+  DEFAULT_THEME,
+  DEFAULT_CHURCH_BRANDING
 } from './types'
 
 export function createInitialOutputLayersState(): OutputLayersState {
@@ -38,6 +39,7 @@ export function createInitialPresenterState(): PresenterState {
     },
     currentTheme: DEFAULT_THEME,
     stressTestMode: false,
+    churchBranding: { ...DEFAULT_CHURCH_BRANDING },
     updatedAt: Date.now()
   }
 }

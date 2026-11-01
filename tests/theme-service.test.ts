@@ -157,7 +157,7 @@ describe('Theme Service & Priority Resolution', () => {
 
     it('reassigns songs when a custom theme is deleted (Cascade Reassignment)', () => {
       // 1. Create a custom theme
-      const custom = service.saveTheme({
+      const _custom = service.saveTheme({
         ...DEFAULT_THEME,
         id: 'custom-to-delete',
         name: 'Custom Theme',

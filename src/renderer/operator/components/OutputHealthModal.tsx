@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Activity, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Monitor, Clock, HardDrive } from 'lucide-react'
+import { X, Activity, CheckCircle2, Monitor, Clock } from 'lucide-react'
 import { OutputHealthStatus } from '../../../shared/types'
 
 interface OutputHealthModalProps {
@@ -14,7 +14,7 @@ export const OutputHealthModal: React.FC<OutputHealthModalProps> = ({
   onOpenDisplaysModal
 }) => {
   const [statuses, setStatuses] = useState<Record<string, OutputHealthStatus>>({})
-  const [loading, setLoading] = useState<boolean>(false)
+  const [, setLoading] = useState<boolean>(false)
 
   const loadStatuses = async () => {
     setLoading(true)
@@ -110,7 +110,7 @@ export const OutputHealthModal: React.FC<OutputHealthModalProps> = ({
               const s = statuses[r.id]
               const isHealthy = s?.status === 'healthy'
               const isWarning = s?.status === 'warning'
-              const isError = s?.status === 'error'
+              const _isError = s?.status === 'error'
 
               return (
                 <div

@@ -44,7 +44,8 @@ import {
   RemoteServerStatus,
   RemoteNetworkInterface,
   StageLayoutConfig,
-  PresentationMessage
+  PresentationMessage,
+  ChurchBrandingConfig
 } from '../shared/types'
 
 const api: ChurchPresenterApi = {
@@ -121,6 +122,22 @@ const api: ChurchPresenterApi = {
 
   openBackupsFolder: (): Promise<void> => {
     return ipcRenderer.invoke(IPC_CHANNELS.BACKUPS_OPEN_FOLDER)
+  },
+
+  getWorkspaceInfo: (): Promise<{ rootPath: string; subfolders: string[] }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_GET_INFO)
+  },
+
+  setWorkspacePath: (path: string): Promise<{ rootPath: string; subfolders: string[] }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SET_PATH, path)
+  },
+
+  chooseWorkspaceFolder: (): Promise<{ rootPath: string; subfolders: string[] } | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_CHOOSE_FOLDER)
+  },
+
+  openWorkspaceFolder: (subfolder?: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_OPEN_FOLDER, subfolder)
   },
 
   onNotification: (callback: (notif: AppNotification) => void): (() => void) => {
@@ -391,6 +408,18 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.VIDEO_CONTROL, action, time)
   },
 
+  updateVideoDuration: (duration: number): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.VIDEO_SET_DURATION, duration)
+  },
+
+  onMediaSyncTick: (callback: (tick: any) => void): (() => void) => {
+    const handler = (_event: any, tick: any) => callback(tick)
+    ipcRenderer.on(IPC_CHANNELS.MEDIA_SYNC_TICK, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.MEDIA_SYNC_TICK, handler)
+    }
+  },
+
   playIndependentAudio: (mediaId: string, filePath: string, title?: string): Promise<void> => {
     return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_PLAY_INDEPENDENT, mediaId, filePath, title)
   },
@@ -609,6 +638,14 @@ const api: ChurchPresenterApi = {
     payload?: any
   ): Promise<any> => {
     return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_CONTROL, action, payload)
+  },
+
+  getYouTubePreviewFrame: (): Promise<string | null> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_GET_PREVIEW_FRAME)
+  },
+
+  getYouTubeEmbedUrl: (videoId: string): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.YOUTUBE_GET_EMBED_URL, videoId)
   },
 
   downloadYouTubeVideo: (
@@ -1015,7 +1052,13 @@ const api: ChurchPresenterApi = {
   // 6. Secondary Backup
   getSecondaryBackupConfig: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_GET_SECONDARY_CONFIG),
   saveSecondaryBackupConfig: (config: any) => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_SAVE_SECONDARY_CONFIG, config),
-  runSecondaryBackup: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RUN_SECONDARY)
+  runSecondaryBackup: () => ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RUN_SECONDARY),
+
+  // Church Branding (Logo & Background)
+  getChurchBranding: () => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_GET),
+  saveChurchBranding: (branding: Partial<ChurchBrandingConfig>) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_SAVE, branding),
+  uploadChurchLogo: (sourcePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_LOGO, sourcePath),
+  uploadChurchBackground: (sourcePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_BACKGROUND, sourcePath)
 }
 
 try {

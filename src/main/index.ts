@@ -1,6 +1,31 @@
-import { app, session } from 'electron'
+import { app, session, protocol, net } from 'electron'
+import { pathToFileURL } from 'url'
 
 app.name = 'church-presenter'
+
+// Register privileged custom protocol for local media streaming
+// Enables 206 Partial Content range requests and bypasses local-resource loading restrictions in Chromium
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'media',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+      bypassCSP: true
+    }
+  }
+])
+
+// Chromium flags to ensure smooth background media playback across multi-display setups
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,BackgroundVideoTrackOptimization,BackgroundVideoPauseOptimization,SuspendBackgroundMediaPipelines')
+app.commandLine.appendSwitch('disable-background-media-suspend')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 const isTest = process.env.NODE_ENV === 'test'
 
@@ -26,6 +51,7 @@ import { libraryService } from './library-service'
 import { bibleService } from './bible/bible-service'
 import { mediaService } from './media/media-service'
 import { youtubeService } from './youtube/youtube-service'
+import { youTubeBrowserManager } from './youtube/youtube-browser-manager'
 import { stageLayoutService } from './stage/stage-layout-service'
 import { remoteServer } from './remote/remote-server'
 import { sessionRecoveryService } from './recovery/session-recovery-service'
@@ -33,6 +59,8 @@ import { outputHealthService } from './health/output-health-service'
 import { systemMonitorService } from './health/system-monitor-service'
 import { powerProtectionService } from './power/power-protection-service'
 import { emergencyService } from './emergency/emergency-service'
+import { workspaceService } from './workspace/workspace-service'
+import { mediaServer } from './media/media-server'
 
 // Single instance lock (bypassed in test environment)
 const gotTheLock = isTest ? true : app.requestSingleInstanceLock()
@@ -75,6 +103,20 @@ async function initializeApp() {
     const gpuStatus = app.getGPUFeatureStatus()
     logger.info(`Hardware acceleration GPU status: ${JSON.stringify(gpuStatus)}`)
 
+    // Register protocol handler for streaming local media files (MP4, WebM, etc.) with Range header support
+    protocol.handle('media', (request) => {
+      try {
+        let filePath = decodeURIComponent(request.url.replace(/^media:\/\/(file\/)?/, ''))
+        if (/^\/[a-zA-Z]:/.test(filePath)) {
+          filePath = filePath.slice(1)
+        }
+        return net.fetch(pathToFileURL(filePath).href)
+      } catch (err) {
+        logger.error('Failed to handle media request:', err)
+        return new Response('Media file not found', { status: 404 })
+      }
+    })
+
     // Allow YouTube embed preview frames in operator UI & output windows
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const responseHeaders = { ...details.responseHeaders }
@@ -100,6 +142,12 @@ async function initializeApp() {
 
     mediaService.initialize()
     logger.info('MediaService initialized.')
+
+    workspaceService.initialize()
+    logger.info('WorkspaceService initialized.')
+
+    await mediaServer.initialize(58999)
+    logger.info(`MediaServer initialized on port ${mediaServer.getPort()}`)
 
     displayManager.initialize()
     logger.info('DisplayManager initialized.')
@@ -164,6 +212,8 @@ app.on('will-quit', () => {
   systemMonitorService.destroy()
   outputHealthService.destroy()
   remoteServer.stop()
+  mediaServer.close()
+  youTubeBrowserManager.close()
   shortcutsManager.unregisterAll()
   windowManager.closeAllOutputWindows()
   databaseService.close()

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Folder,
+  FolderOpen,
   Video,
   Image as ImageIcon,
   Music,
@@ -12,9 +13,11 @@ import {
   ChevronUp,
   ChevronDown,
   Repeat,
-  Play
+  Play,
+  Trash2
 } from 'lucide-react'
 import { MediaItem, MediaType } from '../../../shared/types'
+import { toMediaUrl } from '../../../shared/media-url'
 
 interface MediaDrawerProps {
   isOpen: boolean
@@ -24,6 +27,7 @@ interface MediaDrawerProps {
   onImportFolder: () => void
   onPlayMedia: (item: MediaItem) => void
   onSetAsBackground: (item: MediaItem) => void
+  onDeleteMedia?: (item: MediaItem) => void
   panelLabels?: {
     library: string
     playlist: string
@@ -42,13 +46,27 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
   onImportFolder,
   onPlayMedia,
   onSetAsBackground,
+  onDeleteMedia,
   panelLabels,
   height
 }) => {
-  const [selectedFolder, setSelectedFolder] = useState<string>('all')
-  const [filterType, setFilterType] = useState<MediaType | 'all' | 'pdf'>('all')
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    return localStorage.getItem('cp_media_folder') || 'all'
+  })
+  const [filterType, setFilterType] = useState<MediaType | 'all' | 'pdf'>(() => {
+    return (localStorage.getItem('cp_media_filter') as any) || 'all'
+  })
   const [searchQuery, setSearchQuery] = useState('')
-  const [mediaZoom, setMediaZoom] = useState(40)
+  const [mediaZoom, setMediaZoom] = useState<number>(() => {
+    const s = localStorage.getItem('cp_media_zoom')
+    return s ? Number(s) : 40
+  })
+
+  useEffect(() => {
+    localStorage.setItem('cp_media_folder', selectedFolder)
+    localStorage.setItem('cp_media_filter', filterType)
+    localStorage.setItem('cp_media_zoom', String(mediaZoom))
+  }, [selectedFolder, filterType, mediaZoom])
 
   const mediaLabel = panelLabels?.media ? panelLabels.media.toUpperCase() : 'MEDIOS'
 
@@ -116,6 +134,28 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
           <button className="pro-btn-secondary" onClick={onImportFolder} title="Importar carpeta completa">
             <Folder size={13} />
             <span>Importar Carpeta</span>
+          </button>
+          <button
+            className="pro-btn-secondary"
+            onClick={() => {
+              const sub =
+                selectedFolder === 'countdown'
+                  ? 'Cuentas Regresivas'
+                  : filterType === 'video'
+                    ? 'Videos'
+                    : filterType === 'image'
+                      ? 'Imágenes'
+                      : filterType === 'audio'
+                        ? 'Audios'
+                        : filterType === 'pdf'
+                          ? 'Documentos PDF'
+                          : undefined
+              window.churchPresenterApi?.openWorkspaceFolder?.(sub)
+            }}
+            title="Abrir carpeta de medios en el Explorador de Windows"
+          >
+            <FolderOpen size={13} />
+            <span>Abrir Carpeta</span>
           </button>
 
           <div className="pro-zoom-controls">
@@ -218,11 +258,25 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
                 key={item.id}
                 className="pro-media-card"
                 style={{ width: thumbSize }}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    'application/json',
+                    JSON.stringify({
+                      source: 'media_drawer',
+                      type: item.mediaType,
+                      id: item.id,
+                      name: item.originalName,
+                      filePath: item.filePath,
+                      duration: item.duration || 0
+                    })
+                  )
+                }}
                 onDoubleClick={() => onPlayMedia(item)}
               >
                 <div className="pro-media-thumb-box" style={{ height: Math.round(thumbSize * 0.6) }}>
                   {item.thumbnailPath ? (
-                    <img src={`file:///${item.thumbnailPath.replace(/\\/g, '/')}`} alt="" />
+                    <img src={toMediaUrl(item.thumbnailPath)} alt="" />
                   ) : item.mediaType === 'video' ? (
                     <Video size={28} className="placeholder-icon" />
                   ) : item.mediaType === 'image' ? (
@@ -259,6 +313,18 @@ export const MediaDrawer: React.FC<MediaDrawerProps> = ({
                         title="Enviar como fondo"
                       >
                         Fondo
+                      </button>
+                    )}
+                    {onDeleteMedia && (
+                      <button
+                        className="pro-thumb-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteMedia(item)
+                        }}
+                        title="Eliminar este archivo de medios"
+                      >
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>

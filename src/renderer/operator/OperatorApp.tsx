@@ -20,18 +20,14 @@ import {
   DEFAULT_THEME,
   BibleTranslationMeta,
   BibleImportResult,
-  BibleSearchResult,
   MediaItem,
-  MediaType,
   RoleBibleConfigsMap,
   DEFAULT_ROLE_BIBLE_CONFIGS,
-  IndependentAudioState,
   PptConverterInfo,
   PptConverterType,
   PptPresentationManifest,
   FfmpegStatus,
   UserLibrary,
-  ServiceItemType,
   PresentationTimer,
   FileChangedEvent,
   YouTubeItem,
@@ -39,8 +35,10 @@ import {
   RemoteServerStatus,
   RemoteNetworkInterface,
   StageLayoutConfig,
-  PresentationMessage
+  ChurchBrandingConfig,
+  DEFAULT_CHURCH_BRANDING
 } from '../../shared/types'
+import { toMediaUrl } from '../../shared/media-url'
 import { TopMenuBar } from './components/TopMenuBar'
 import { ProToolbar } from './components/ProToolbar'
 import { LibraryPanel } from './components/LibraryPanel'
@@ -81,16 +79,10 @@ import {
   splitGroupContentIntoSlides
 } from '../../shared/song-parser'
 import { searchItems } from '../../shared/search-utils'
-import { createServiceFromTemplate, duplicateService } from '../../shared/service-utils'
+import { createServiceFromTemplate } from '../../shared/service-utils'
 import { parseBibleReference } from '../../shared/bible-reference-parser'
 import {
   Monitor,
-  Eye,
-  Slash,
-  Snowflake,
-  ShieldCheck,
-  Play,
-  Settings,
   FolderOpen,
   X,
   AlertCircle,
@@ -102,48 +94,20 @@ import {
   Copy,
   ArrowUp,
   ArrowDown,
-  Search,
-  Music,
-  FileText,
-  Layers,
-  Image as ImageIcon,
-  Palette,
   Undo,
   Redo,
-  Send,
-  Minus,
   Sparkles,
-  Download,
   Upload,
   BookOpen,
   Star,
   CheckCircle,
-  Database,
-  FileUp,
-  FileCheck,
-  History,
-  Book,
-  Video,
   Volume2,
-  VolumeX,
-  Square,
-  Pause,
-  RotateCcw,
-  FolderPlus,
-  ExternalLink,
   Film,
-  RefreshCw,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Image as ImageIcon
 } from 'lucide-react'
 import './operator.css'
-
-function formatSeconds(sec: number): string {
-  if (isNaN(sec) || sec < 0) return '00:00'
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}
 
 export const OperatorApp: React.FC = () => {
   // Screens & Assignments
@@ -347,14 +311,9 @@ export const OperatorApp: React.FC = () => {
   const [secondaryBibleAbbrev, setSecondaryBibleAbbrev] = useState<string>('KJV')
   const [isDualBibleActive, setIsDualBibleActive] = useState<boolean>(false)
   const [dualBibleLayout, setDualBibleLayout] = useState<'stacked' | 'sideBySide'>('stacked')
-  const [bibleRefInput, setBibleRefInput] = useState<string>('Juan 3:16')
   const [currentLoadedBibleRef, setCurrentLoadedBibleRef] = useState<string>('Juan 3:16')
   const [bibleFavorites, setBibleFavorites] = useState<string[]>([])
   const [bibleRecentHistory, setBibleRecentHistory] = useState<string[]>([])
-  const [bibleSearchMode, setBibleSearchMode] = useState<'reference' | 'text'>('reference')
-  const [bibleTextQuery, setBibleTextQuery] = useState<string>('')
-  const [bibleSearchResults, setBibleSearchResults] = useState<BibleSearchResult[]>([])
-  const [bibleTestamentFilter, setBibleTestamentFilter] = useState<'ALL' | 'OT' | 'NT'>('ALL')
   const [bibleDirectSlides, setBibleDirectSlides] = useState<SlideItem[]>([])
 
   // Active Service & Current Selection
@@ -368,17 +327,12 @@ export const OperatorApp: React.FC = () => {
   const [liveSourceId, setLiveSourceId] = useState<string | null>(null)
   const [isLiveDirty, setIsLiveDirty] = useState<boolean>(false)
 
-  // Stage Message Bar
-  const [stageMessageText, setStageMessageText] = useState<string>('')
-  const [isStageMessageActive, setIsStageMessageActive] = useState<boolean>(false)
-
-  // Zone 1 Library State ('songs' | 'presentations' | 'bible' | 'media')
-  const [libraryTab, setLibraryTab] = useState<'songs' | 'presentations' | 'bible' | 'media'>('songs')
+  // Search & Library Import
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const libraryFileInputRef = React.useRef<HTMLInputElement | null>(null)
 
   // Phase 5A: Media Library State
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
-  const [mediaFilterType, setMediaFilterType] = useState<MediaType | 'all'>('all')
   const [isMediaImportModalOpen, setIsMediaImportModalOpen] = useState<boolean>(false)
   const [importMediaFilePath, setImportMediaFilePath] = useState<string>('')
   const [importMediaTags, setImportMediaTags] = useState<string>('')
@@ -388,35 +342,51 @@ export const OperatorApp: React.FC = () => {
   const [roleBibleConfigs, setRoleBibleConfigs] = useState<RoleBibleConfigsMap>({ ...DEFAULT_ROLE_BIBLE_CONFIGS })
   const [audioOutputRole, setAudioOutputRole] = useState<string>('main')
 
-  // Video Transport State
-  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false)
-  const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0)
-  const [videoDuration, setVideoDuration] = useState<number>(0)
-  const [videoVolume, setVideoVolume] = useState<number>(1.0)
-  const [videoLoop, setVideoLoop] = useState<boolean>(false)
-  const [videoInPoint, setVideoInPoint] = useState<number>(0)
-  const [videoOutPoint, setVideoOutPoint] = useState<number>(0)
-  const [videoEndAction, setVideoEndAction] = useState<'freeze' | 'background' | 'next'>('freeze')
+  // Church Branding (Logo & Background)
+  const [_churchBranding, setChurchBranding] = useState<ChurchBrandingConfig>(DEFAULT_CHURCH_BRANDING)
+  const [tempChurchBranding, setTempChurchBranding] = useState<ChurchBrandingConfig>(DEFAULT_CHURCH_BRANDING)
+  const [brandingStatusMsg, setBrandingStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   // ProPresenter 7 Workspace States
   const [userLibraries, setUserLibraries] = useState<UserLibrary[]>([])
-  const [activeUserLibraryId, setActiveUserLibraryId] = useState<string>('lib_songs')
+  const [activeUserLibraryId, setActiveUserLibraryId] = useState<string>(() => {
+    return localStorage.getItem('cp_layout_active_library_id') || 'lib_songs'
+  })
   const [presentationTimers, setPresentationTimers] = useState<PresentationTimer[]>([])
   const [slideZoom, setSlideZoom] = useState<number>(() => {
     const saved = localStorage.getItem('cp_slide_zoom')
     return saved ? Number(saved) : 40
   })
-  const [slideViewMode, setSlideViewMode] = useState<'grid' | 'list'>('grid')
-  const [isMediaDrawerOpen, setIsMediaDrawerOpen] = useState<boolean>(false)
+  const [slideViewMode, setSlideViewMode] = useState<'grid' | 'list'>(() => {
+    const s = localStorage.getItem('cp_layout_slide_view_mode')
+    return s === 'list' ? 'list' : 'grid'
+  })
+  const [isMediaDrawerOpen, setIsMediaDrawerOpen] = useState<boolean>(() => {
+    return localStorage.getItem('cp_layout_media_drawer_open') === 'true'
+  })
   const [isDraggingFiles, setIsDraggingFiles] = useState<boolean>(false)
   const [fileWatcherEvent, setFileWatcherEvent] = useState<FileChangedEvent | null>(null)
-  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast'>('show')
+  const [activeToolbarMode, setActiveToolbarMode] = useState<'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast'>(() => {
+    const s = localStorage.getItem('cp_layout_active_mode')
+    if (s && ['show', 'edit', 'bible', 'youtube', 'more', 'broadcast'].includes(s)) {
+      return s as any
+    }
+    return 'show'
+  })
   const [youtubeItems, setYoutubeItems] = useState<YouTubeItem[]>([])
   const [isYouTubeVerifyOpen, setIsYouTubeVerifyOpen] = useState<boolean>(false)
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState<boolean>(false)
   const [isBroadcastSettingsOpen, setIsBroadcastSettingsOpen] = useState<boolean>(false)
   const [isObsBridgeOpen, setIsObsBridgeOpen] = useState<boolean>(false)
   const [broadcastStatus, setBroadcastStatus] = useState<BroadcastStatus | null>(null)
+
+  // Save layout & view preferences
+  useEffect(() => {
+    localStorage.setItem('cp_layout_active_library_id', activeUserLibraryId)
+    localStorage.setItem('cp_layout_slide_view_mode', slideViewMode)
+    localStorage.setItem('cp_layout_media_drawer_open', isMediaDrawerOpen.toString())
+    localStorage.setItem('cp_layout_active_mode', activeToolbarMode)
+  }, [activeUserLibraryId, slideViewMode, isMediaDrawerOpen, activeToolbarMode])
 
   // Phase 9: Broadcast Engine Telemetry Listener
   useEffect(() => {
@@ -470,21 +440,8 @@ export const OperatorApp: React.FC = () => {
     return undefined
   }, [])
 
-  // Independent Background Audio State
-  const [independentAudio, setIndependentAudio] = useState<IndependentAudioState>({
-    isPlaying: false,
-    mediaId: null,
-    filePath: null,
-    title: null,
-    currentTime: 0,
-    duration: 0,
-    volume: 0.8,
-    isFadingOut: false
-  })
-
   // PDF Page Navigation State
   const [pdfPageCount, setPdfPageCount] = useState<number>(1)
-  const [pdfFitMode, setPdfFitMode] = useState<'contain' | 'cover' | 'center'>('contain')
 
   // Dev Environment State (Requirement A.6)
   const [isDev, setIsDev] = useState<boolean>(false)
@@ -495,15 +452,9 @@ export const OperatorApp: React.FC = () => {
   const [audioDeviceVideo, setAudioDeviceVideo] = useState<string>(localStorage.getItem('cp_audio_device_video') || '')
   const [audioDeviceAmbient, setAudioDeviceAmbient] = useState<string>(localStorage.getItem('cp_audio_device_ambient') || '')
 
-  // Video Fade Controls (Requirement A.3)
-  const [videoFadeInSec, setVideoFadeInSec] = useState<number>(0)
-  const [videoFadeOutSec, setVideoFadeOutSec] = useState<number>(0)
-
   // Media Library Search & Tags (Requirement A.3)
-  const [selectedMediaTag, setSelectedMediaTag] = useState<string>('all')
   const [isFolderImportModalOpen, setIsFolderImportModalOpen] = useState<boolean>(false)
   const [importFolderPath, setImportFolderPath] = useState<string>('')
-  const [exportIncludeMedia, setExportIncludeMedia] = useState<boolean>(false)
 
   // FFmpeg State (Requirement A.5)
   const [ffmpegStatus, setFfmpegStatus] = useState<FfmpegStatus>({ available: false, path: null, version: null })
@@ -569,11 +520,24 @@ export const OperatorApp: React.FC = () => {
   const [isLiveSubtitlesModalOpen, setIsLiveSubtitlesModalOpen] = useState<boolean>(false)
   const [isAiAssistantModalOpen, setIsAiAssistantModalOpen] = useState<boolean>(false)
   const [isSecondaryBackupModalOpen, setIsSecondaryBackupModalOpen] = useState<boolean>(false)
+  const [newPlaylistModal, setNewPlaylistModal] = useState<{
+    isOpen: boolean
+    mode: 'create' | 'template' | 'from_template'
+    title: string
+    initialValue: string
+    templateToUse?: ServicePlan
+  }>({
+    isOpen: false,
+    mode: 'create',
+    title: 'Crear Nueva Playlist de Culto',
+    initialValue: ''
+  })
 
   // Check if any modal is currently visible on screen
   const isAnyModalOpen = Boolean(
     isDisplaysModalOpen ||
     isSettingsOpen ||
+    newPlaylistModal.isOpen ||
     isSongEditorOpen ||
     isPresentationEditorOpen ||
     isThemesModalOpen ||
@@ -603,10 +567,12 @@ export const OperatorApp: React.FC = () => {
     isSecondaryBackupModalOpen
   )
 
-  // Prevent native WebContentsView (YouTube) from covering modal overlays
+  // Prevent native WebContentsView (YouTube) from covering modal overlays or staying visible on other tabs
   useEffect(() => {
     if (activeToolbarMode === 'youtube') {
       window.churchPresenterApi?.setYouTubeBrowserVisible?.(!isAnyModalOpen)
+    } else {
+      window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
     }
   }, [isAnyModalOpen, activeToolbarMode])
 
@@ -650,6 +616,7 @@ export const OperatorApp: React.FC = () => {
   const [editingPresentation, setEditingPresentation] = useState<GenericPresentation | null>(null)
   const [tempShortcuts, setTempShortcuts] = useState<AppShortcutsConfig>(DEFAULT_SHORTCUTS)
   const [toasts, setToasts] = useState<AppNotification[]>([])
+  const [workspacePath, setWorkspacePath] = useState<string>('')
 
   // Load initial data
   const loadAllData = useCallback(async () => {
@@ -670,7 +637,8 @@ export const OperatorApp: React.FC = () => {
         bFavs,
         bRecents,
         mediaList,
-        rbConfigs
+        rbConfigs,
+        brandingRes
       ] = await Promise.all([
         window.churchPresenterApi.getDisplays(),
         window.churchPresenterApi.getRoleAssignments(),
@@ -687,7 +655,8 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.getBibleFavorites(),
         window.churchPresenterApi.getBibleRecentHistory(),
         window.churchPresenterApi.getMediaItems(),
-        window.churchPresenterApi.getRoleBibleConfigs()
+        window.churchPresenterApi.getRoleBibleConfigs(),
+        window.churchPresenterApi.getChurchBranding?.()
       ])
 
       setDisplays(disp)
@@ -707,6 +676,19 @@ export const OperatorApp: React.FC = () => {
       setBibleRecentHistory(bRecents)
       setMediaItems(mediaList)
       if (rbConfigs) setRoleBibleConfigs(rbConfigs)
+      if (brandingRes) {
+        setChurchBranding(brandingRes)
+        setTempChurchBranding(brandingRes)
+      }
+
+      try {
+        const wsInfo = await window.churchPresenterApi.getWorkspaceInfo?.()
+        if (wsInfo?.rootPath) {
+          setWorkspacePath(wsInfo.rootPath)
+        }
+      } catch {
+        // ignore
+      }
 
       if (window.churchPresenterApi.getLibraries) {
         try {
@@ -830,37 +812,53 @@ export const OperatorApp: React.FC = () => {
       if (newState.currentSlide?.id) {
         setLiveSlideId(newState.currentSlide.id)
       }
-      if (newState.mediaSyncTick) {
-        setVideoCurrentTime(newState.mediaSyncTick.currentTime)
-        setVideoDuration(newState.mediaSyncTick.duration)
-        setIsVideoPlaying(newState.mediaSyncTick.isPlaying)
-      }
-      if (newState.independentAudio) {
-        setIndependentAudio(newState.independentAudio)
-      }
       if (newState.roleBibleConfigs) {
         setRoleBibleConfigs(newState.roleBibleConfigs)
+      }
+      if (newState.churchBranding) {
+        setChurchBranding(newState.churchBranding)
+        setTempChurchBranding(newState.churchBranding)
       }
     })
 
     const unsubNotif = window.churchPresenterApi.onNotification((notif) => {
-      setToasts((prev) => [...prev, notif])
+      setToasts((prev) => {
+        if (prev.some((t) => t.id === notif.id || (t.title === notif.title && t.message === notif.message))) {
+          return prev
+        }
+        return [...prev.slice(-3), notif]
+      })
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== notif.id))
       }, 4500)
     })
 
     const unsubYtErr = window.churchPresenterApi.onYouTubeError?.((err) => {
-      const errNotif = {
-        id: `yt_err_${Date.now()}`,
-        type: 'error' as const,
-        title: `YouTube [Error ${err.code}]`,
-        message: `${err.message}. La salida de proyección mantiene el fondo seguro.`,
-        timestamp: Date.now()
-      }
-      setToasts((prev) => [...prev, errNotif])
+      const notifId = `yt_err_${err.videoId || err.code}`
+      setToasts((prev) => {
+        // Prevent duplicate toasts if an identical error or one for this video is already displayed
+        const isDuplicate = prev.some(
+          (t) =>
+            t.type === 'error' &&
+            (t.id === notifId ||
+              t.title.includes(err.code) ||
+              (err.videoId && t.message.includes(err.videoId)) ||
+              t.title.includes('YouTube [Error'))
+        )
+        if (isDuplicate) return prev
+
+        const errNotif = {
+          id: notifId,
+          type: 'error' as const,
+          title: `YouTube [Error ${err.code}]`,
+          message: `${err.message}. La salida de proyección mantiene el fondo seguro.`,
+          timestamp: Date.now()
+        }
+        return [...prev.slice(-3), errNotif]
+      })
+
       setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== errNotif.id))
+        setToasts((prev) => prev.filter((t) => t.id !== notifId))
       }, 7000)
     })
 
@@ -1034,7 +1032,6 @@ export const OperatorApp: React.FC = () => {
         )
 
         setCurrentLoadedBibleRef(res.parsed.formattedReference)
-        setBibleRefInput(res.parsed.formattedReference)
 
         const slides = await window.churchPresenterApi.generateBibleSlides(
           res.verses,
@@ -1085,7 +1082,7 @@ export const OperatorApp: React.FC = () => {
   // Generated slides for the currently selected item in Zone 3
   const activeSlides: SlideItem[] = useMemo(() => {
     // If operator is on Bible tab and has searched/loaded a passage directly, prioritize Bible slides
-    if ((libraryTab === 'bible' || activeToolbarMode === 'bible') && bibleDirectSlides.length > 0) {
+    if (activeToolbarMode === 'bible' && bibleDirectSlides.length > 0) {
       return bibleDirectSlides
     }
 
@@ -1108,19 +1105,7 @@ export const OperatorApp: React.FC = () => {
     }
 
     if (currentServiceItem.type === 'header') {
-      return [
-        {
-          id: `header_${currentServiceItem.id}`,
-          sourceId: currentServiceItem.id,
-          sourceType: 'blank',
-          groupLabel: 'Separador',
-          slideIndex: 1,
-          totalSlidesInGroup: 1,
-          title: currentServiceItem.name,
-          body: currentServiceItem.notes || '',
-          subtitle: 'Separador de Servicio'
-        }
-      ]
+      return []
     }
 
     if (currentServiceItem.type === 'scripture' && currentServiceItem.scriptureRef) {
@@ -1165,10 +1150,14 @@ export const OperatorApp: React.FC = () => {
       }))
     }
 
-    if (currentServiceItem.type === 'video') {
+    if (currentServiceItem.type === 'video' || currentServiceItem.type === 'media') {
       const mItem = mediaItems.find(
-        (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+        (m) =>
+          m.id === currentServiceItem.mediaId ||
+          m.originalName === currentServiceItem.name ||
+          m.filePath === currentServiceItem.notes
       )
+      const vPath = mItem?.filePath || currentServiceItem.notes || ''
       return [
         {
           id: `vid_slide_${currentServiceItem.id}`,
@@ -1179,10 +1168,11 @@ export const OperatorApp: React.FC = () => {
           totalSlidesInGroup: 1,
           title: currentServiceItem.name,
           body: mItem
-            ? `${mItem.container} (${mItem.codec || 'Video'}) • ${(mItem.fileSize / (1024 * 1024)).toFixed(1)} MB`
-            : 'Reproducción de Video',
+            ? `${mItem.container || 'MP4'} (${mItem.codec || 'Video'}) • ${(mItem.fileSize / (1024 * 1024)).toFixed(1)} MB`
+            : 'Clip de Video',
           subtitle: 'Clip de Video',
-          mediaUrl: mItem?.filePath
+          mediaUrl: vPath,
+          mediaType: 'video'
         }
       ]
     }
@@ -1205,7 +1195,7 @@ export const OperatorApp: React.FC = () => {
         mediaUrl: mItem?.filePath,
         pdfPage: pIdx + 1,
         pdfPageCount: pages,
-        fitMode: pdfFitMode
+        fitMode: 'contain'
       }))
     }
 
@@ -1285,7 +1275,7 @@ export const OperatorApp: React.FC = () => {
 
     return []
   }, [
-    libraryTab,
+    activeToolbarMode,
     bibleDirectSlides,
     currentServiceItem,
     currentSong,
@@ -1293,7 +1283,6 @@ export const OperatorApp: React.FC = () => {
     currentPresentation,
     mediaItems,
     pdfPageCount,
-    pdfFitMode,
     pptManifests
   ])
 
@@ -1377,21 +1366,29 @@ export const OperatorApp: React.FC = () => {
   const handleGoLive = useCallback(
     (slide: SlideItem, nextSlide?: SlideItem) => {
       // If video slide, start video master playback
-      if (slide.sourceType === 'video' && currentServiceItem?.type === 'video') {
+      const isVideoItem =
+        slide.sourceType === 'video' ||
+        slide.mediaType === 'video' ||
+        currentServiceItem?.type === 'video' ||
+        (currentServiceItem?.type === 'media' &&
+          mediaItems.find((m) => m.id === currentServiceItem.mediaId)?.mediaType === 'video')
+
+      if (isVideoItem) {
         const mItem = mediaItems.find(
-          (m) => m.id === currentServiceItem.mediaId || m.originalName === currentServiceItem.name
+          (m) =>
+            m.id === currentServiceItem?.mediaId ||
+            m.filePath === slide.mediaUrl ||
+            m.originalName === currentServiceItem?.name ||
+            m.originalName === slide.title
         )
-        if (mItem) {
+        const videoPath = mItem?.filePath || slide.mediaUrl
+        if (videoPath) {
           window.churchPresenterApi.playVideo({
-            mediaId: mItem.id,
-            mediaPath: mItem.filePath,
-            loop: videoLoop,
-            volume: videoVolume,
-            inPoint: videoInPoint > 0 ? videoInPoint : undefined,
-            outPoint: videoOutPoint > 0 ? videoOutPoint : undefined,
-            fadeInSeconds: videoFadeInSec > 0 ? videoFadeInSec : undefined,
-            fadeOutSeconds: videoFadeOutSec > 0 ? videoFadeOutSec : undefined,
-            endAction: videoEndAction,
+            mediaId: mItem?.id || slide.id,
+            mediaPath: videoPath,
+            loop: false,
+            volume: 1.0,
+            endAction: 'freeze',
             audioOutputRole: audioOutputRole || 'main'
           })
         }
@@ -1411,7 +1408,7 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.runMacro?.(slide.macroTrigger.onEnterMacroId).catch(() => {})
       }
     },
-    [currentServiceItem, mediaItems, videoLoop, videoVolume, videoInPoint, videoOutPoint, videoFadeInSec, videoFadeOutSec, videoEndAction, audioOutputRole]
+    [currentServiceItem, mediaItems, audioOutputRole]
   )
 
   // Send current preview slide to live
@@ -1513,7 +1510,6 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.setOutputMessage('stage', '', false)
         window.churchPresenterApi.setOutputMessage('main', '', false)
         window.churchPresenterApi.setOutputMessage('lobby', '', false)
-        setIsStageMessageActive(false)
       }
     },
     []
@@ -1822,6 +1818,12 @@ export const OperatorApp: React.FC = () => {
   useEffect(() => {
     if (isSettingsOpen) {
       loadRemoteSettings()
+      window.churchPresenterApi.getChurchBranding?.().then((cb) => {
+        if (cb) {
+          setChurchBranding(cb)
+          setTempChurchBranding(cb)
+        }
+      })
     }
   }, [isSettingsOpen, loadRemoteSettings])
 
@@ -1846,6 +1848,115 @@ export const OperatorApp: React.FC = () => {
     setRemoteStatus(status)
   }
 
+  const handleUploadLogo = async () => {
+    try {
+      const res = await window.churchPresenterApi.uploadChurchLogo?.()
+      if (res && res.success && res.filePath) {
+        const updated: ChurchBrandingConfig = {
+          ...tempChurchBranding,
+          logoUrl: res.filePath
+        }
+        setTempChurchBranding(updated)
+        setChurchBranding(updated)
+        await window.churchPresenterApi.saveChurchBranding?.(updated)
+        setBrandingStatusMsg({ text: 'Logo de la iglesia cargado y aplicado a todas las pantallas.', type: 'success' })
+      }
+    } catch (err: any) {
+      setBrandingStatusMsg({ text: err.message || 'Error al cargar logo', type: 'error' })
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    const updated: ChurchBrandingConfig = {
+      ...tempChurchBranding,
+      logoUrl: ''
+    }
+    setTempChurchBranding(updated)
+    setChurchBranding(updated)
+    await window.churchPresenterApi.saveChurchBranding?.(updated)
+    setBrandingStatusMsg({ text: 'Logo personalizado eliminado (usando icono de cruz por defecto).', type: 'success' })
+  }
+
+  const handleUploadBackgroundImage = async () => {
+    try {
+      const res = await window.churchPresenterApi.uploadChurchBackground?.()
+      if (res && res.success && res.filePath) {
+        const updated: ChurchBrandingConfig = {
+          ...tempChurchBranding,
+          defaultBackground: {
+            type: 'image',
+            value: res.filePath
+          }
+        }
+        setTempChurchBranding(updated)
+        setChurchBranding(updated)
+        await window.churchPresenterApi.saveChurchBranding?.(updated)
+        setBrandingStatusMsg({ text: 'Fondo de imagen cargado y aplicado a todas las pantallas.', type: 'success' })
+      }
+    } catch (err: any) {
+      setBrandingStatusMsg({ text: err.message || 'Error al cargar imagen de fondo', type: 'error' })
+    }
+  }
+
+  const handleUploadBackgroundVideo = async () => {
+    try {
+      const res = await window.churchPresenterApi.uploadChurchBackground?.()
+      if (res && res.success && res.filePath) {
+        const updated: ChurchBrandingConfig = {
+          ...tempChurchBranding,
+          defaultBackground: {
+            type: 'video',
+            value: res.filePath
+          }
+        }
+        setTempChurchBranding(updated)
+        setChurchBranding(updated)
+        await window.churchPresenterApi.saveChurchBranding?.(updated)
+        setBrandingStatusMsg({ text: 'Video de fondo en bucle cargado y aplicado a todas las pantallas.', type: 'success' })
+      }
+    } catch (err: any) {
+      setBrandingStatusMsg({ text: err.message || 'Error al cargar video de fondo', type: 'error' })
+    }
+  }
+
+  const handleApplyPresetGradient = async (gradientValue: string, name: string) => {
+    const updated: ChurchBrandingConfig = {
+      ...tempChurchBranding,
+      defaultBackground: {
+        type: 'gradient',
+        value: gradientValue
+      }
+    }
+    setTempChurchBranding(updated)
+    setChurchBranding(updated)
+    await window.churchPresenterApi.saveChurchBranding?.(updated)
+    setBrandingStatusMsg({ text: `Degradado '${name}' aplicado como fondo.`, type: 'success' })
+  }
+
+  const handleApplySolidColor = async (colorHex: string) => {
+    const updated: ChurchBrandingConfig = {
+      ...tempChurchBranding,
+      defaultBackground: {
+        type: 'color',
+        value: colorHex
+      }
+    }
+    setTempChurchBranding(updated)
+    setChurchBranding(updated)
+    await window.churchPresenterApi.saveChurchBranding?.(updated)
+    setBrandingStatusMsg({ text: `Color sólido '${colorHex}' aplicado como fondo.`, type: 'success' })
+  }
+
+  const handleSaveAllBranding = async () => {
+    try {
+      await window.churchPresenterApi.saveChurchBranding?.(tempChurchBranding)
+      setChurchBranding(tempChurchBranding)
+      setBrandingStatusMsg({ text: 'Identidad y configuración de la iglesia guardada exitosamente.', type: 'success' })
+    } catch (err: any) {
+      setBrandingStatusMsg({ text: err.message || 'Error al guardar identidad', type: 'error' })
+    }
+  }
+
   // Filtered Library Items (Accent-insensitive & typo-tolerant)
   const filteredSongs = useMemo(() => {
     return searchItems(songs, searchQuery, (s) => [
@@ -1866,78 +1977,13 @@ export const OperatorApp: React.FC = () => {
     ])
   }, [presentations, searchQuery])
 
-  const allMediaTags = useMemo(() => {
-    const tagSet = new Set<string>()
-    for (const item of mediaItems) {
-      if (item.tags) {
-        for (const t of item.tags) {
-          if (t.trim()) tagSet.add(t.trim())
-        }
-      }
-    }
-    return Array.from(tagSet)
-  }, [mediaItems])
-
-  const filteredMediaItems = useMemo(() => {
-    return mediaItems.filter((item) => {
-      if (mediaFilterType !== 'all') {
-        if (mediaFilterType === 'image') {
-          if (item.mediaType !== 'image' && !item.originalName.toLowerCase().endsWith('.pdf')) {
-            return false
-          }
-        } else if (item.mediaType !== mediaFilterType) {
-          return false
-        }
-      }
-      if (selectedMediaTag !== 'all') {
-        if (!item.tags || !item.tags.includes(selectedMediaTag)) {
-          return false
-        }
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        return (
-          item.originalName.toLowerCase().includes(q) ||
-          item.tags?.some((t) => t.toLowerCase().includes(q))
-        )
-      }
-      return true
-    })
-  }, [mediaItems, mediaFilterType, selectedMediaTag, searchQuery])
-
-  // Bible Text Search Runner
-  const handleRunBibleTextSearch = async () => {
-    if (!bibleTextQuery.trim()) return
-    const filter =
-      bibleTestamentFilter === 'ALL'
-        ? undefined
-        : { testament: bibleTestamentFilter }
-    const results = await window.churchPresenterApi.searchBibleText(
-      bibleTextQuery.trim(),
-      primaryBibleAbbrev,
-      filter
-    )
-    setBibleSearchResults(results)
-  }
-
-  // Stage Message Handlers
-  const handleSendStageMessage = async () => {
-    if (!stageMessageText.trim()) return
-    await window.churchPresenterApi.setOutputMessage('stage', stageMessageText.trim(), true)
-    setIsStageMessageActive(true)
-  }
-
-  const handleClearStageMessage = async () => {
-    await window.churchPresenterApi.setOutputMessage('stage', '', false)
-    setIsStageMessageActive(false)
-    setStageMessageText('')
-  }
 
   // Live Update for Currently Live Item
   const handleUpdateLiveProjection = () => {
     if (activeSlides.length > 0) {
       const idx = Math.min(previewSlideIndex, activeSlides.length - 1)
       handleGoLive(activeSlides[idx], activeSlides[idx + 1])
+      setIsLiveDirty(false)
     }
   }
 
@@ -1950,15 +1996,25 @@ export const OperatorApp: React.FC = () => {
   ) => {
     if (!currentService) return
 
+    let actualType = type
+    let targetMediaId: string | undefined = undefined
+
+    if (type === 'video' || type === 'media' || type === 'audio' || type === 'pdf' || type === 'image_presentation') {
+      targetMediaId = id
+      const m = mediaItems.find((x) => x.id === id)
+      if (m?.mediaType === 'video') actualType = 'video'
+      else if (m?.mediaType === 'audio') actualType = 'audio'
+    }
+
     const newItem: ServiceItem = {
       id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      type,
+      type: actualType,
       name,
       songId: type === 'song' ? id : undefined,
-      presentationId: type === 'presentation' ? id : undefined,
+      presentationId: type === 'presentation' || type === 'powerpoint' ? id : undefined,
       scriptureRef: type === 'scripture' ? scriptureRef || name : undefined,
       bibleTranslation: type === 'scripture' ? primaryBibleAbbrev : undefined,
-      mediaId: ['video', 'audio', 'pdf', 'image_presentation'].includes(type) ? id : undefined
+      mediaId: targetMediaId
     }
 
     const updatedService: ServicePlan = {
@@ -1991,152 +2047,34 @@ export const OperatorApp: React.FC = () => {
     })
   }
 
-  const handleAddHeaderItem = () => {
-    if (!currentService) return
-    const title = prompt('Nombre del separador (ej. "Bienvenida", "Predicación"):', 'Separador')
-    if (!title) return
-
-    const newItem: ServiceItem = {
-      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      type: 'header',
-      name: title
-    }
-    const updatedService: ServicePlan = {
-      ...currentService,
-      items: [...currentService.items, newItem],
-      updatedAt: new Date().toISOString()
-    }
-    window.churchPresenterApi.saveService(updatedService).then((saved) => {
-      setCurrentService(saved)
-      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
-    })
-  }
-
-  const handleMovePlaylistItem = (index: number, direction: 'up' | 'down') => {
-    if (!currentService) return
-    const items = [...currentService.items]
-    const targetIdx = direction === 'up' ? index - 1 : index + 1
-    if (targetIdx < 0 || targetIdx >= items.length) return
-
-    const temp = items[index]
-    items[index] = items[targetIdx]
-    items[targetIdx] = temp
-
-    const updatedService: ServicePlan = {
-      ...currentService,
-      items,
-      updatedAt: new Date().toISOString()
-    }
-
-    window.churchPresenterApi.saveService(updatedService).then((saved) => {
-      setCurrentService(saved)
-      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
-      setSelectedServiceItemIndex(targetIdx)
-    })
-  }
-
-  const handleRemovePlaylistItem = (index: number) => {
-    if (!currentService) return
-    const items = currentService.items.filter((_, idx) => idx !== index)
-    const updatedService: ServicePlan = {
-      ...currentService,
-      items,
-      updatedAt: new Date().toISOString()
-    }
-
-    window.churchPresenterApi.saveService(updatedService).then((saved) => {
-      setCurrentService(saved)
-      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
-      if (selectedServiceItemIndex >= items.length) {
-        setSelectedServiceItemIndex(Math.max(0, items.length - 1))
-      }
-    })
-  }
-
-  const handleServiceArrangementChange = (index: number, arrangementId: string) => {
-    if (!currentService) return
-    const items = [...currentService.items]
-    items[index] = { ...items[index], arrangementId }
-    setSelectedArrangementId(arrangementId)
-
-    const updatedService: ServicePlan = {
-      ...currentService,
-      items,
-      updatedAt: new Date().toISOString()
-    }
-
-    window.churchPresenterApi.saveService(updatedService).then((saved) => {
-      setCurrentService(saved)
-      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
-    })
-  }
-
   // Service Management
   const handleCreateNewService = () => {
-    const name = prompt('Nombre del nuevo servicio:', 'Servicio Domingo')
-    if (!name) return
-
-    const newService: ServicePlan = {
-      id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name,
-      date: new Date().toISOString().split('T')[0],
-      items: [],
-      isTemplate: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-
-    window.churchPresenterApi.saveService(newService).then((saved) => {
-      setServices((prev) => [saved, ...prev])
-      setCurrentService(saved)
-      setSelectedServiceItemIndex(0)
-    })
-  }
-
-  const handleDuplicateCurrentService = () => {
-    if (!currentService) return
-    const duplicated = duplicateService(currentService)
-    window.churchPresenterApi.saveService(duplicated).then((saved) => {
-      setServices((prev) => [saved, ...prev])
-      setCurrentService(saved)
-      setSelectedServiceItemIndex(0)
+    const defaultName = `Culto ${new Date().toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}`
+    setNewPlaylistModal({
+      isOpen: true,
+      mode: 'create',
+      title: 'Crear Nueva Playlist de Culto',
+      initialValue: defaultName
     })
   }
 
   const handleSaveAsTemplate = () => {
     if (!currentService) return
-    const templateName = prompt('Nombre de la plantilla:', `${currentService.name} (Plantilla)`)
-    if (!templateName) return
-
-    const template: ServicePlan = {
-      ...currentService,
-      id: `tmpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: templateName,
-      isTemplate: true,
-      updatedAt: new Date().toISOString()
-    }
-
-    window.churchPresenterApi.saveService(template).then((saved) => {
-      setTemplates((prev) => [saved, ...prev])
-      alert('¡Plantilla guardada exitosamente!')
+    setNewPlaylistModal({
+      isOpen: true,
+      mode: 'template',
+      title: 'Guardar como Plantilla de Servicio',
+      initialValue: `${currentService.name} (Plantilla)`
     })
   }
 
   const handleCreateFromTemplate = (template: ServicePlan) => {
-    const newName = prompt('Nombre para el nuevo servicio:', template.name.replace(' (Plantilla)', ''))
-    if (!newName) return
-
-    const newService = createServiceFromTemplate(
-      template,
-      newName,
-      new Date().toISOString().split('T')[0]
-    )
-
-    window.churchPresenterApi.saveService(newService).then((saved) => {
-      setServices((prev) => [saved, ...prev])
-      setCurrentService(saved)
-      setSelectedServiceItemIndex(0)
-      setIsTemplateModalOpen(false)
+    setNewPlaylistModal({
+      isOpen: true,
+      mode: 'from_template',
+      title: 'Nuevo Servicio desde Plantilla',
+      initialValue: template.name.replace(' (Plantilla)', ''),
+      templateToUse: template
     })
   }
 
@@ -2312,9 +2250,45 @@ export const OperatorApp: React.FC = () => {
     setSongs((prev) => prev.filter((s) => s.id !== id))
   }
 
+  const handleDeleteMediaItem = async (mediaId: string, name?: string) => {
+    if (!confirm(`¿Está seguro de eliminar definitivamente "${name || 'este archivo de medios'}"?\n\nEsta acción no se puede deshacer.`)) return
+    try {
+      await window.churchPresenterApi.deleteMediaItem(mediaId)
+      setMediaItems((prev) => prev.filter((m) => m.id !== mediaId))
+      setToasts((prev) => [
+        ...prev,
+        {
+          id: `del_med_${Date.now()}`,
+          type: 'info',
+          title: 'Medio Eliminado',
+          message: `Se ha eliminado "${name || 'el archivo de medios'}" de la biblioteca.`,
+          timestamp: Date.now()
+        }
+      ])
+    } catch (err: any) {
+      alert(`Error al eliminar medio: ${err.message}`)
+    }
+  }
+
+  const handleDeleteLibraryItem = async (type: string, id: string, title: string) => {
+    if (type === 'video' || type === 'media' || type === 'audio' || type === 'image' || type === 'pdf') {
+      await handleDeleteMediaItem(id, title)
+    } else if (type === 'song') {
+      await handleDeleteSong(id, title)
+    } else if (type === 'youtube') {
+      if (!confirm(`¿Eliminar definitivamente el video de YouTube "${title}" de la biblioteca?`)) return
+      await window.churchPresenterApi.deleteYouTubeItem(id)
+      setYoutubeItems((prev) => prev.filter((y) => y.id !== id))
+    } else if (type === 'presentation' || type === 'powerpoint') {
+      if (!confirm(`¿Eliminar definitivamente la presentación "${title}"?`)) return
+      await window.churchPresenterApi.deletePresentation(id)
+      setPresentations((prev) => prev.filter((p) => p.id !== id))
+    }
+  }
+
   // Library Export & Import
   const handleExportLibrary = async () => {
-    const jsonStr = await window.churchPresenterApi.exportLibrary(exportIncludeMedia)
+    const jsonStr = await window.churchPresenterApi.exportLibrary(false)
     const blob = new Blob([jsonStr], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -2665,6 +2639,171 @@ export const OperatorApp: React.FC = () => {
     window.churchPresenterApi.saveService(updated)
   }
 
+  const handleMoveServiceSection = (headerIndex: number, direction: 'up' | 'down') => {
+    if (!currentService) return
+    const items = [...currentService.items]
+    if (items[headerIndex]?.type !== 'header') return
+
+    interface SectionGroup {
+      headerIdx: number
+      items: ServiceItem[]
+    }
+    const leadingItems: ServiceItem[] = []
+    const sections: SectionGroup[] = []
+    let currentGroup: SectionGroup | null = null
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.type === 'header') {
+        if (currentGroup) sections.push(currentGroup)
+        currentGroup = { headerIdx: i, items: [it] }
+      } else {
+        if (currentGroup) currentGroup.items.push(it)
+        else leadingItems.push(it)
+      }
+    }
+    if (currentGroup) sections.push(currentGroup)
+
+    const secIdx = sections.findIndex((s) => s.headerIdx === headerIndex)
+    if (secIdx === -1) return
+
+    const targetSecIdx = direction === 'up' ? secIdx - 1 : secIdx + 1
+    if (targetSecIdx < 0 || targetSecIdx >= sections.length) return
+
+    const temp = sections[secIdx]
+    sections[secIdx] = sections[targetSecIdx]
+    sections[targetSecIdx] = temp
+
+    const newItems: ServiceItem[] = [
+      ...leadingItems,
+      ...sections.flatMap((s) => s.items)
+    ]
+
+    const updatedService: ServicePlan = {
+      ...currentService,
+      items: newItems,
+      updatedAt: new Date().toISOString()
+    }
+
+    window.churchPresenterApi.saveService(updatedService).then((saved) => {
+      setCurrentService(saved)
+      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
+      const newHeaderIdx = newItems.findIndex((it) => it.id === items[headerIndex].id)
+      if (newHeaderIdx !== -1) setSelectedServiceItemIndex(newHeaderIdx)
+    })
+  }
+
+  const handleReorderSectionByDrag = (fromHeaderIdx: number, toHeaderIdx: number) => {
+    if (!currentService || fromHeaderIdx === toHeaderIdx) return
+    const items = [...currentService.items]
+    if (items[fromHeaderIdx]?.type !== 'header' || items[toHeaderIdx]?.type !== 'header') return
+
+    const leadingItems: ServiceItem[] = []
+    const sections: { headerIdx: number; items: ServiceItem[] }[] = []
+    let currentGroup: { headerIdx: number; items: ServiceItem[] } | null = null
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.type === 'header') {
+        if (currentGroup) sections.push(currentGroup)
+        currentGroup = { headerIdx: i, items: [it] }
+      } else {
+        if (currentGroup) currentGroup.items.push(it)
+        else leadingItems.push(it)
+      }
+    }
+    if (currentGroup) sections.push(currentGroup)
+
+    const fromSecIdx = sections.findIndex((s) => s.headerIdx === fromHeaderIdx)
+    const toSecIdx = sections.findIndex((s) => s.headerIdx === toHeaderIdx)
+    if (fromSecIdx === -1 || toSecIdx === -1) return
+
+    const [moved] = sections.splice(fromSecIdx, 1)
+    sections.splice(toSecIdx, 0, moved)
+
+    const newItems: ServiceItem[] = [
+      ...leadingItems,
+      ...sections.flatMap((s) => s.items)
+    ]
+
+    const updatedService: ServicePlan = {
+      ...currentService,
+      items: newItems,
+      updatedAt: new Date().toISOString()
+    }
+
+    window.churchPresenterApi.saveService(updatedService).then((saved) => {
+      setCurrentService(saved)
+      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
+      const newHeaderIdx = newItems.findIndex((it) => it.id === items[fromHeaderIdx].id)
+      if (newHeaderIdx !== -1) setSelectedServiceItemIndex(newHeaderIdx)
+    })
+  }
+
+  const handleDropItemToPlaylist = (data: any, targetIndex: number) => {
+    if (!currentService || !data) return
+
+    let actualType = data.type || 'media'
+    let mediaId: string | undefined = undefined
+    let songId: string | undefined = undefined
+    let presentationId: string | undefined = undefined
+    const name = data.name || 'Nuevo Elemento'
+
+    if (
+      data.source === 'media_drawer' ||
+      actualType === 'video' ||
+      actualType === 'audio' ||
+      actualType === 'image' ||
+      actualType === 'pdf'
+    ) {
+      mediaId = data.id
+      const m = mediaItems.find((x) => x.id === data.id)
+      if (m?.mediaType) {
+        actualType = m.mediaType
+      }
+    } else if (actualType === 'song') {
+      songId = data.id
+    } else if (actualType === 'presentation' || actualType === 'powerpoint') {
+      presentationId = data.id
+    }
+
+    const newItem: ServiceItem = {
+      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: actualType,
+      name,
+      songId,
+      presentationId,
+      mediaId,
+      notes: data.filePath || undefined
+    }
+
+    const newItems = [...currentService.items]
+    const clampedIndex = Math.max(0, Math.min(targetIndex, newItems.length))
+    newItems.splice(clampedIndex, 0, newItem)
+
+    const updatedService: ServicePlan = {
+      ...currentService,
+      items: newItems,
+      updatedAt: new Date().toISOString()
+    }
+
+    window.churchPresenterApi.saveService(updatedService).then((saved) => {
+      setCurrentService(saved)
+      setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
+      setSelectedServiceItemIndex(clampedIndex)
+      setToasts((prev) => [
+        ...prev.slice(-3),
+        {
+          id: `added_${Date.now()}`,
+          type: 'info',
+          title: 'Elemento Agregado',
+          message: `"${name}" se agregó a la sección.`,
+          timestamp: Date.now()
+        }
+      ])
+    })
+  }
+
   const handleAddSlideToCurrent = () => {
     if (!currentSong) {
       handleAddBlankItem()
@@ -2917,12 +3056,22 @@ export const OperatorApp: React.FC = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Hidden file input for full library package import (.cpr, .json) */}
+      <input
+        type="file"
+        ref={libraryFileInputRef}
+        style={{ display: 'none' }}
+        accept=".cpr,.json"
+        onChange={handleImportLibrary}
+      />
+
       {/* 1. ProPresenter Top Menu Bar */}
       <TopMenuBar
         onNewService={handleCreateNewService}
         onImportPpt={handleNativeImportPpt}
         onImportMedia={handleNativeImportMedia}
         onImportFolder={handleNativeImportFolder}
+        onImportLibrary={() => libraryFileInputRef.current?.click()}
         onExportService={handleExportLibrary}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onLoadDemoData={async () => {
@@ -3119,23 +3268,40 @@ export const OperatorApp: React.FC = () => {
                       setSelectedServiceItemIndex(updated.items.length - 1)
                       window.churchPresenterApi.saveService(updated)
                     }
+                  } else if (type === 'video' || type === 'media') {
+                    const m = mediaItems.find((x) => x.id === id)
+                    if (m && currentService) {
+                      const item: ServiceItem = {
+                        id: `item_v_${Date.now()}`,
+                        type: m.mediaType === 'video' ? 'video' : 'media',
+                        name: m.originalName,
+                        mediaId: m.id
+                      }
+                      const updated = { ...currentService, items: [...currentService.items, item] }
+                      setCurrentService(updated)
+                      setSelectedServiceItemIndex(updated.items.length - 1)
+                      window.churchPresenterApi.saveService(updated)
+                    }
+                  } else if (type === 'presentation' || type === 'powerpoint') {
+                    const p = presentations.find((x) => x.id === id)
+                    if (p && currentService) {
+                      const item: ServiceItem = {
+                        id: `item_p_${Date.now()}`,
+                        type: type === 'powerpoint' ? 'powerpoint' : 'presentation',
+                        name: p.title,
+                        presentationId: p.id
+                      }
+                      const updated = { ...currentService, items: [...currentService.items, item] }
+                      setCurrentService(updated)
+                      setSelectedServiceItemIndex(updated.items.length - 1)
+                      window.churchPresenterApi.saveService(updated)
+                    }
                   }
                 }}
                 onAddItemToPlaylist={(type, id, name) => {
-                  if (currentService) {
-                    const newItem: ServiceItem = {
-                      id: `item_${Date.now()}`,
-                      type: type as ServiceItemType,
-                      name,
-                      songId: type === 'song' ? id : undefined,
-                      presentationId: type === 'presentation' ? id : undefined,
-                      mediaId: type === 'media' ? id : undefined
-                    }
-                    const updated = { ...currentService, items: [...currentService.items, newItem] }
-                    setCurrentService(updated)
-                    window.churchPresenterApi.saveService(updated)
-                  }
+                  handleAddItemToService(type, id, name)
                 }}
+                onDeleteItem={handleDeleteLibraryItem}
               />
 
               {/* Horizontal Resizer H1: Library vs Playlist */}
@@ -3159,6 +3325,7 @@ export const OperatorApp: React.FC = () => {
                 onNewService={handleCreateNewService}
                 onRenameService={handleRenameService}
                 onDuplicateService={handleDuplicateService}
+                onSaveAsTemplate={handleSaveAsTemplate}
                 onDeleteService={handleDeleteService}
                 selectedItemIndex={selectedServiceItemIndex}
                 onSelectItemIndex={setSelectedServiceItemIndex}
@@ -3173,6 +3340,9 @@ export const OperatorApp: React.FC = () => {
                     : null
                 }
                 onReorderItem={handleReorderPlaylistItem}
+                onMoveSection={handleMoveServiceSection}
+                onDropItemToPlaylist={handleDropItemToPlaylist}
+                onReorderSectionByDrag={handleReorderSectionByDrag}
                 onDeleteItem={handleDeletePlaylistItem}
                 onDuplicateItem={handleDuplicatePlaylistItem}
                 onAddHeader={(headerName, color) => {
@@ -3259,13 +3429,17 @@ export const OperatorApp: React.FC = () => {
         {/* Center Column: Slide Thumbnails Grid & Bottom Media Drawer OR YouTube/Bible Panels */}
         <section className="pro-center-column">
           <ErrorBoundary panelName="Área Central">
-            {activeToolbarMode === 'broadcast' ? (
-              <BroadcastStudioPanel
-                onOpenSettings={() => setIsBroadcastSettingsOpen(true)}
-                onOpenObsBridge={() => setIsObsBridgeOpen(true)}
-              />
-            ) : activeToolbarMode === 'youtube' ? (
+            <div
+              style={{
+                display: activeToolbarMode === 'youtube' ? 'flex' : 'none',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                height: '100%'
+              }}
+            >
               <YouTubeBrowserPanel
+                isVisible={activeToolbarMode === 'youtube' && !isAnyModalOpen}
                 onAddToPlaylist={(item) => {
                   if (currentService) {
                     const updated = { ...currentService, items: [...currentService.items, item] }
@@ -3294,7 +3468,13 @@ export const OperatorApp: React.FC = () => {
                   }
                 }}
               />
-            ) : activeToolbarMode === 'bible' ? (
+            </div>
+            {activeToolbarMode === 'broadcast' ? (
+              <BroadcastStudioPanel
+                onOpenSettings={() => setIsBroadcastSettingsOpen(true)}
+                onOpenObsBridge={() => setIsObsBridgeOpen(true)}
+              />
+            ) : activeToolbarMode === 'youtube' ? null : activeToolbarMode === 'bible' ? (
               <BibleBrowserPanel
                 translations={bibleTranslations}
                 primaryAbbrev={primaryBibleAbbrev}
@@ -3806,12 +3986,7 @@ export const OperatorApp: React.FC = () => {
                   >
                     <span>⚠️ El tema de este elemento se modificó pero aún no se ha proyectado en vivo.</span>
                     <button
-                      onClick={() => {
-                        if (activeSlides[previewSlideIndex]) {
-                          handleGoLive(activeSlides[previewSlideIndex], activeSlides[previewSlideIndex + 1])
-                          setIsLiveDirty(false)
-                        }
-                      }}
+                      onClick={handleUpdateLiveProjection}
                       style={{
                         backgroundColor: '#f97316',
                         color: '#ffffff',
@@ -3887,8 +4062,28 @@ export const OperatorApp: React.FC = () => {
                       audioOutputRole: 'main'
                     })
                   }}
-                  onSetAsBackground={(_item) => {
-                    // handle set background
+                  onSetAsBackground={(item) => {
+                    const bgType = item.mediaType === 'video' ? 'video' : 'image'
+                    window.churchPresenterApi.sendSlide({
+                      id: `bg_${item.id}_${Date.now()}`,
+                      title: '',
+                      body: '',
+                      subtitle: '',
+                      background: { type: bgType as any, value: item.filePath }
+                    })
+                    setToasts((prev) => [
+                      ...prev.slice(-3),
+                      {
+                        id: `bg_${Date.now()}`,
+                        type: 'info',
+                        title: 'Fondo Establecido',
+                        message: `"${item.originalName}" establecido como fondo activo.`,
+                        timestamp: Date.now()
+                      }
+                    ])
+                  }}
+                  onDeleteMedia={(item) => {
+                    handleDeleteMediaItem(item.id, item.originalName)
                   }}
                 />
               </>
@@ -4720,13 +4915,27 @@ export const OperatorApp: React.FC = () => {
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button className="secondary-action-btn" onClick={() => setIsSongEditorOpen(false)}>
-                Cancelar
-              </button>
-              <button className="primary-action-btn" onClick={handleSaveSong}>
-                Guardar Canción
-              </button>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {editingSong.id ? (
+                  <button
+                    type="button"
+                    className="danger-action-btn"
+                    style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef4444', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '13px' }}
+                    onClick={() => handleDeleteSong(editingSong.id, editingSong.title)}
+                  >
+                    Eliminar Canción
+                  </button>
+                ) : null}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="secondary-action-btn" onClick={() => setIsSongEditorOpen(false)}>
+                  Cancelar
+                </button>
+                <button className="primary-action-btn" onClick={handleSaveSong}>
+                  Guardar Canción
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -4959,6 +5168,124 @@ export const OperatorApp: React.FC = () => {
       )}
 
       {/* =========================================================
+          NEW PLAYLIST / TEMPLATE MODAL
+          ========================================================= */}
+      {newPlaylistModal.isOpen && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setNewPlaylistModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: 440, backgroundColor: '#18191c', border: '1px solid #334155' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div className="modal-title">{newPlaylistModal.title}</div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setNewPlaylistModal((prev) => ({ ...prev, isOpen: false }))}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const formEl = e.currentTarget
+                const inputEl = formEl.elements.namedItem('playlistName') as HTMLInputElement | null
+                const input = inputEl?.value?.trim()
+                if (!input) return
+
+                if (newPlaylistModal.mode === 'create') {
+                  const newService: ServicePlan = {
+                    id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    name: input,
+                    date: new Date().toISOString().split('T')[0],
+                    items: [],
+                    isTemplate: false,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  }
+                  window.churchPresenterApi.saveService(newService).then((saved) => {
+                    setServices((prev) => [saved, ...prev])
+                    setCurrentService(saved)
+                    setSelectedServiceItemIndex(0)
+                  })
+                } else if (newPlaylistModal.mode === 'template' && currentService) {
+                  const template: ServicePlan = {
+                    ...currentService,
+                    id: `tmpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    name: input,
+                    isTemplate: true,
+                    updatedAt: new Date().toISOString()
+                  }
+                  window.churchPresenterApi.saveService(template).then((saved) => {
+                    setTemplates((prev) => [saved, ...prev])
+                  })
+                } else if (newPlaylistModal.mode === 'from_template' && newPlaylistModal.templateToUse) {
+                  const newService = createServiceFromTemplate(
+                    newPlaylistModal.templateToUse,
+                    input,
+                    new Date().toISOString().split('T')[0]
+                  )
+                  window.churchPresenterApi.saveService(newService).then((saved) => {
+                    setServices((prev) => [saved, ...prev])
+                    setCurrentService(saved)
+                    setSelectedServiceItemIndex(0)
+                  })
+                }
+                setNewPlaylistModal((prev) => ({ ...prev, isOpen: false }))
+              }}
+            >
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <label style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>
+                  Nombre del servicio o playlist:
+                </label>
+                <input
+                  name="playlistName"
+                  type="text"
+                  autoFocus
+                  defaultValue={newPlaylistModal.initialValue}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    backgroundColor: '#1e2229',
+                    border: '1px solid #334155',
+                    borderRadius: 4,
+                    color: '#f8fafc',
+                    fontSize: 14,
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => e.target.select()}
+                />
+              </div>
+              <div
+                className="modal-footer"
+                style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}
+              >
+                <button
+                  type="button"
+                  className="secondary-action-btn"
+                  onClick={() => setNewPlaylistModal((prev) => ({ ...prev, isOpen: false }))}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="primary-action-btn"
+                  style={{ backgroundColor: '#FF7A00', borderColor: '#FF7A00', color: '#FFFFFF' }}
+                >
+                  {newPlaylistModal.mode === 'template' ? 'Guardar Plantilla' : 'Crear Playlist'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
           SETTINGS & SHORTCUTS MODAL
           ========================================================= */}
       {isSettingsOpen && (
@@ -4972,6 +5299,477 @@ export const OperatorApp: React.FC = () => {
             </div>
 
             <div className="modal-body">
+              {/* Church Branding & Background Section: Identidad de la Iglesia */}
+              <div className="settings-section" style={{ borderLeft: '4px solid #FF7A00', paddingLeft: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 16, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>Identidad de la Iglesia: Logo y Fondo Predeterminado</span>
+                    </h3>
+                    <p className="section-note" style={{ margin: '4px 0 0 0' }}>
+                      Personalice el logo de su iglesia para la pantalla de bloqueo/logo (F3) y configure el fondo predeterminado (imagen, video en bucle o degradado) para todas las salidas.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-action-btn"
+                    onClick={() => window.churchPresenterApi.toggleGlobalControl('logo')}
+                    title="Alterna la pantalla de logo en vivo (F3)"
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px' }}
+                  >
+                    <span>Probar Logo (F3)</span>
+                  </button>
+                </div>
+
+                {brandingStatusMsg && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 4,
+                      marginBottom: 12,
+                      fontSize: 12,
+                      backgroundColor: brandingStatusMsg.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                      border: `1px solid ${brandingStatusMsg.type === 'success' ? '#22c55e' : '#ef4444'}`,
+                      color: brandingStatusMsg.type === 'success' ? '#4ade80' : '#f87171',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <span>{brandingStatusMsg.text}</span>
+                    <button
+                      type="button"
+                      onClick={() => setBrandingStatusMsg(null)}
+                      style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginTop: 12 }}>
+                  {/* Panel Izquierdo: LOGO DE LA IGLESIA */}
+                  <div
+                    style={{
+                      background: '#15171c',
+                      border: '1px solid #282d37',
+                      borderRadius: 8,
+                      padding: 14,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>1. Logo de la Iglesia</span>
+                      {tempChurchBranding.logoUrl && (
+                        <span style={{ fontSize: 10, padding: '1px 6px', background: '#22c55e', color: '#fff', borderRadius: 3, fontWeight: 700 }}>
+                          Personalizado
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Previsualización del Logo */}
+                    <div
+                      style={{
+                        height: 120,
+                        backgroundColor: '#0a0a0c',
+                        border: '1px solid #334155',
+                        borderRadius: 6,
+                        display: 'flex',
+                        flexDirection: tempChurchBranding.logoTextPosition === 'right' ? 'row' : 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        padding: 10,
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {tempChurchBranding.logoUrl ? (
+                        <img
+                          src={toMediaUrl(tempChurchBranding.logoUrl)}
+                          alt="Logo de la Iglesia"
+                          style={{
+                            maxHeight: 64,
+                            maxWidth: 120,
+                            objectFit: 'contain',
+                            opacity: tempChurchBranding.logoOpacity ?? 1,
+                            filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))'
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: '50%',
+                            border: '2px solid rgba(255,255,255,0.7)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ffffff',
+                            fontWeight: 900,
+                            fontSize: 22
+                          }}
+                        >
+                          ✝
+                        </div>
+                      )}
+                      {tempChurchBranding.logoTextPosition !== 'none' && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 900,
+                            color: '#ffffff',
+                            letterSpacing: 1.5,
+                            textTransform: 'uppercase',
+                            textAlign: 'center',
+                            maxWidth: '90%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            textShadow: '0 2px 8px rgba(0,0,0,0.8)'
+                          }}
+                        >
+                          {tempChurchBranding.churchName || 'CHURCH PRESENTER'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Botones de acción del logo */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="primary-action-btn"
+                        onClick={handleUploadLogo}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12 }}
+                      >
+                        <Upload size={14} />
+                        <span>{tempChurchBranding.logoUrl ? 'Cambiar Imagen de Logo...' : 'Cargar Imagen de Logo...'}</span>
+                      </button>
+                      {tempChurchBranding.logoUrl && (
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={handleRemoveLogo}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', fontSize: 12, color: '#f87171' }}
+                        >
+                          <Trash2 size={14} />
+                          <span>Quitar Logo</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Configuración de nombre y texto */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1' }}>Nombre de la Iglesia:</label>
+                      <input
+                        type="text"
+                        value={tempChurchBranding.churchName}
+                        onChange={(e) => setTempChurchBranding({ ...tempChurchBranding, churchName: e.target.value })}
+                        placeholder="Ej. Iglesia Bautista de la Gracia"
+                        style={{
+                          padding: '6px 10px',
+                          background: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: 4,
+                          color: '#f8fafc',
+                          fontSize: 12
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
+                          Posición del Texto:
+                        </label>
+                        <select
+                          value={tempChurchBranding.logoTextPosition || 'bottom'}
+                          onChange={(e) =>
+                            setTempChurchBranding({
+                              ...tempChurchBranding,
+                              logoTextPosition: e.target.value as any
+                            })
+                          }
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            background: '#0f172a',
+                            border: '1px solid #334155',
+                            borderRadius: 4,
+                            color: '#f8fafc',
+                            fontSize: 12
+                          }}
+                        >
+                          <option value="bottom">Debajo del Logo</option>
+                          <option value="right">A la derecha del Logo</option>
+                          <option value="none">Sin texto (Solo Logo)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
+                          Tamaño en Pantalla ({tempChurchBranding.logoWidthVmin || 22}vmin):
+                        </label>
+                        <input
+                          type="range"
+                          min={12}
+                          max={36}
+                          value={tempChurchBranding.logoWidthVmin || 22}
+                          onChange={(e) =>
+                            setTempChurchBranding({
+                              ...tempChurchBranding,
+                              logoWidthVmin: Number(e.target.value)
+                            })
+                          }
+                          style={{ width: '100%', accentColor: '#FF7A00', cursor: 'pointer' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel Derecho: FONDO PREDETERMINADO */}
+                  <div
+                    style={{
+                      background: '#15171c',
+                      border: '1px solid #282d37',
+                      borderRadius: 8,
+                      padding: 14,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>2. Fondo Predeterminado de la Iglesia</span>
+                      <span style={{ fontSize: 10, padding: '1px 6px', background: '#3b82f6', color: '#fff', borderRadius: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+                        {tempChurchBranding.defaultBackground?.type || 'gradient'}
+                      </span>
+                    </div>
+
+                    {/* Previsualización del Fondo */}
+                    <div
+                      style={{
+                        height: 120,
+                        backgroundColor: tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000',
+                        backgroundImage: tempChurchBranding.defaultBackground?.type === 'gradient' ? tempChurchBranding.defaultBackground.value : undefined,
+                        border: '1px solid #334155',
+                        borderRadius: 6,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {tempChurchBranding.defaultBackground?.type === 'image' && (
+                        <img
+                          src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
+                          alt="Fondo de imagen"
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      )}
+                      {tempChurchBranding.defaultBackground?.type === 'video' && (
+                        <video
+                          src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
+                          autoPlay
+                          loop
+                          muted
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      )}
+                      <div
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          background: 'rgba(0,0,0,0.65)',
+                          backdropFilter: 'blur(4px)',
+                          padding: '4px 10px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          color: '#fff',
+                          fontWeight: 600
+                        }}
+                      >
+                        {tempChurchBranding.defaultBackground?.type === 'image' && '🖼️ Imagen de Fondo'}
+                        {tempChurchBranding.defaultBackground?.type === 'video' && '🎬 Video en Bucle'}
+                        {tempChurchBranding.defaultBackground?.type === 'gradient' && '🎨 Degradado Pro'}
+                        {tempChurchBranding.defaultBackground?.type === 'color' && '⬛ Color Sólido'}
+                      </div>
+                    </div>
+
+                    {/* Botones de Carga de Medios */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="secondary-action-btn"
+                        onClick={handleUploadBackgroundImage}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
+                      >
+                        <ImageIcon size={14} />
+                        <span>Cargar Imagen...</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action-btn"
+                        onClick={handleUploadBackgroundVideo}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
+                      >
+                        <Film size={14} />
+                        <span>Cargar Video...</span>
+                      </button>
+                    </div>
+
+                    {/* Presets de Degradados y Color Sólido */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>
+                        Degradados y Colores Rápidos:
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #181818 0%, #242424 100%)', 'Carbón')}
+                          title="Carbón Elegante"
+                          style={{
+                            height: 26,
+                            background: 'linear-gradient(135deg, #181818 0%, #242424 100%)',
+                            border: '1px solid #475569',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)', 'Azul Celestial')}
+                          title="Azul Celestial"
+                          style={{
+                            height: 26,
+                            background: 'linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)',
+                            border: '1px solid #475569',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)', 'Púrpura Sacro')}
+                          title="Púrpura Sacro"
+                          style={{
+                            height: 26,
+                            background: 'linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)',
+                            border: '1px solid #475569',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)', 'Cálido')}
+                          title="Cálido Crepúsculo"
+                          style={{
+                            height: 26,
+                            background: 'linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)',
+                            border: '1px solid #475569',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)', 'Esmeralda')}
+                          title="Esmeralda Solemne"
+                          style={{
+                            height: 26,
+                            background: 'linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)',
+                            border: '1px solid #475569',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{ fontSize: 11, color: '#94a3b8' }}>Color Sólido:</label>
+                        <input
+                          type="color"
+                          value={tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000'}
+                          onChange={(e) => handleApplySolidColor(e.target.value)}
+                          style={{ width: 34, height: 26, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        />
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => handleApplySolidColor('#000000')}
+                          style={{ fontSize: 11, padding: '3px 8px' }}
+                        >
+                          Negro Puro
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="primary-action-btn"
+                    onClick={handleSaveAllBranding}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, backgroundColor: '#FF7A00' }}
+                  >
+                    <span>Guardar y Aplicar Identidad a Todas las Pantallas</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* User Workspace & Auto-created Category Folders */}
+              <div className="settings-section">
+                <h3>Carpeta de Medios y Biblioteca (Workspace)</h3>
+                <p className="section-note">
+                  ChurchPresenter crea y organiza automáticamente las subcarpetas de todas las secciones (Videos, Imágenes, Audios, Cuentas Regresivas, Presentaciones, Documentos PDF, Canciones, Biblias, Cultos y Copias de Seguridad). Puede colocar esta carpeta en sus Documentos o en cualquier otra unidad de disco de su preferencia.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={workspacePath || 'Cargando ubicación...'}
+                      style={{
+                        flex: 1,
+                        padding: '7px 10px',
+                        background: '#1e2229',
+                        border: '1px solid #334155',
+                        borderRadius: 4,
+                        color: '#f8fafc',
+                        fontSize: 12,
+                        fontFamily: 'monospace'
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                      className="secondary-action-btn"
+                      onClick={async () => {
+                        const res = await window.churchPresenterApi.chooseWorkspaceFolder?.()
+                        if (res) {
+                          setWorkspacePath(res.rootPath)
+                        }
+                      }}
+                    >
+                      <span>Cambiar Carpeta...</span>
+                    </button>
+                    <button
+                      className="secondary-action-btn"
+                      onClick={() => {
+                        window.churchPresenterApi.openWorkspaceFolder?.()
+                      }}
+                    >
+                      <span>Abrir en Explorador de Windows</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Demo Data Management */}
               <div className="settings-section">
                 <h3>Datos de Demostración</h3>
@@ -5829,6 +6627,8 @@ export const OperatorApp: React.FC = () => {
                 onClick={async () => {
                   await window.churchPresenterApi.saveShortcuts(tempShortcuts)
                   setShortcuts(tempShortcuts)
+                  await window.churchPresenterApi.saveChurchBranding?.(tempChurchBranding)
+                  setChurchBranding(tempChurchBranding)
                   for (const rId of Object.keys(roleBibleConfigs)) {
                     await window.churchPresenterApi.saveRoleBibleConfig(roleBibleConfigs[rId])
                   }
@@ -5845,6 +6645,15 @@ export const OperatorApp: React.FC = () => {
       {/* =========================================================
           MEDIA IMPORT MODAL
           ========================================================= */}
+      {isImportingPpt && (
+        <div className="modal-backdrop" style={{ zIndex: 10000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#181818', padding: '24px 32px', borderRadius: 8, border: '1px solid #333', textAlign: 'center' }}>
+            <div style={{ color: '#FF7A00', fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Importando Presentación PowerPoint...</div>
+            <div style={{ color: '#94a3b8', fontSize: 13 }}>Convirtiendo diapositivas de alta resolución, por favor espere.</div>
+          </div>
+        </div>
+      )}
+
       {isMediaImportModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-content" style={{ maxWidth: 520 }}>
@@ -6335,7 +7144,7 @@ export const OperatorApp: React.FC = () => {
               <div className="backgrounds-grid">
                 {backgroundImages.map((bg) => (
                   <div key={bg.id} className="bg-card">
-                    <img src={bg.url || bg.filePath} alt={bg.name} className="bg-thumbnail" />
+                    <img src={toMediaUrl(bg.url || bg.filePath)} alt={bg.name} className="bg-thumbnail" />
                     <div className="bg-info">
                       <span className="bg-name">{bg.name}</span>
                       <button
