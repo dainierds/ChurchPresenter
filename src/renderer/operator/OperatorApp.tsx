@@ -70,6 +70,7 @@ import { LibrarySyncModal } from './components/LibrarySyncModal'
 import { LiveSubtitlesModal } from './components/LiveSubtitlesModal'
 import { AiAssistantModal } from './components/AiAssistantModal'
 import { SecondaryBackupModal } from './components/SecondaryBackupModal'
+import { CameraSettingsSection } from './components/CameraSettingsSection'
 import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus, BroadcastStatus } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
@@ -105,6 +106,14 @@ import {
   Film,
   ChevronRight,
   ChevronLeft,
+  Settings,
+  Wifi,
+  Camera,
+  Radio,
+  Keyboard,
+  Database,
+  HardDrive,
+  Cpu,
   Image as ImageIcon
 } from 'lucide-react'
 import './operator.css'
@@ -475,6 +484,76 @@ export const OperatorApp: React.FC = () => {
 
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
+  const [settingsCategory, setSettingsCategory] = useState<string>('general')
+
+  const SETTINGS_CATEGORIES = [
+    {
+      id: 'general',
+      label: 'General',
+      subtitle: 'Identidad, Nombres de Paneles',
+      icon: Settings
+    },
+    {
+      id: 'displays',
+      label: 'Pantallas',
+      subtitle: 'Monitores, Diseño de Pantalla de Escenario',
+      icon: Monitor
+    },
+    {
+      id: 'audio',
+      label: 'Audio',
+      subtitle: 'Salida y Dispositivos de Audio',
+      icon: Volume2
+    },
+    {
+      id: 'remote',
+      label: 'Red y Remoto',
+      subtitle: 'Control Remoto desde Celular y Tablet',
+      icon: Wifi
+    },
+    {
+      id: 'cameras',
+      label: 'Cámaras',
+      subtitle: 'Teléfonos PWA, WebRTC y Cloudflare',
+      icon: Camera
+    },
+    {
+      id: 'broadcast',
+      label: 'Transmisión',
+      subtitle: 'Estudio RTMP, OBS y Grabación',
+      icon: Radio
+    },
+    {
+      id: 'bibles',
+      label: 'Biblias',
+      subtitle: 'Traducciones Bíblicas y Versiones, Doble Traducción por Pantalla',
+      icon: BookOpen
+    },
+    {
+      id: 'keyboard',
+      label: 'Teclado',
+      subtitle: 'Atajos de Teclado y Perfiles',
+      icon: Keyboard
+    },
+    {
+      id: 'data',
+      label: 'Datos y Respaldo',
+      subtitle: 'Workspace, Copias de Seguridad, Datos de Demostración',
+      icon: Database
+    },
+    {
+      id: 'appearance',
+      label: 'Apariencia',
+      subtitle: 'Apariencia y Paleta ProPresenter',
+      icon: Sliders
+    },
+    {
+      id: 'advanced',
+      label: 'Avanzado',
+      subtitle: 'YouTube, Diagnóstico, Entorno',
+      icon: Cpu
+    }
+  ]
   const [isDisplaysModalOpen, setIsDisplaysModalOpen] = useState<boolean>(false)
   const [isSongEditorOpen, setIsSongEditorOpen] = useState<boolean>(false)
   const [isPresentationEditorOpen, setIsPresentationEditorOpen] = useState<boolean>(false)
@@ -1172,6 +1251,7 @@ export const OperatorApp: React.FC = () => {
             : 'Clip de Video',
           subtitle: 'Clip de Video',
           mediaUrl: vPath,
+          thumbnailUrl: mItem?.thumbnailPath,
           mediaType: 'video'
         }
       ]
@@ -1763,10 +1843,22 @@ export const OperatorApp: React.FC = () => {
           handleNextSlide()
         } else if (action.type === 'prev-slide') {
           handlePrevSlide()
+        } else if (action.type === 'select-slide') {
+          const idx = typeof (action as any).index === 'number' ? (action as any).index : 0
+          if (activeSlides[idx]) {
+            setPreviewSlideIndex(idx)
+            handleGoLive(activeSlides[idx], activeSlides[idx + 1])
+          }
         } else if (action.type === 'next-item') {
           handleNextPlaylistItem()
         } else if (action.type === 'prev-item') {
           handlePrevPlaylistItem()
+        } else if (action.type === 'select-item') {
+          const idx = typeof (action as any).index === 'number' ? (action as any).index : 0
+          if (currentService && currentService.items[idx]) {
+            setSelectedServiceItemIndex(idx)
+            setPreviewSlideIndex(0)
+          }
         } else if (action.type === 'clear-layer') {
           handleClearLayer((action as any).layer)
         }
@@ -1774,7 +1866,7 @@ export const OperatorApp: React.FC = () => {
       return () => unsub()
     }
     return undefined
-  }, [handleNextSlide, handlePrevSlide, handleNextPlaylistItem, handlePrevPlaylistItem, handleClearLayer])
+  }, [handleNextSlide, handlePrevSlide, handleNextPlaylistItem, handlePrevPlaylistItem, handleClearLayer, activeSlides, handleGoLive, currentService])
 
   const loadRemoteSettings = useCallback(async () => {
     try {
@@ -1838,6 +1930,14 @@ export const OperatorApp: React.FC = () => {
   const handleRegeneratePin = async () => {
     const newPin = await window.churchPresenterApi.regenerateRemotePin()
     if (remoteConfig) setRemoteConfig({ ...remoteConfig, pin: newPin })
+    const status = await window.churchPresenterApi.getRemoteStatus()
+    setRemoteStatus(status)
+  }
+
+  const handleRegenerateRemoteOperatorPin = async () => {
+    if (!window.churchPresenterApi?.regenerateRemoteOperatorPin) return
+    const newPin = await window.churchPresenterApi.regenerateRemoteOperatorPin()
+    if (remoteConfig) setRemoteConfig({ ...remoteConfig, remoteOperatorPin: newPin })
     const status = await window.churchPresenterApi.getRemoteStatus()
     setRemoteStatus(status)
   }
@@ -5298,1323 +5398,1707 @@ export const OperatorApp: React.FC = () => {
               </button>
             </div>
 
-            <div className="modal-body">
-              {/* Church Branding & Background Section: Identidad de la Iglesia */}
-              <div className="settings-section" style={{ borderLeft: '4px solid #FF7A00', paddingLeft: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 16, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>Identidad de la Iglesia: Logo y Fondo Predeterminado</span>
-                    </h3>
-                    <p className="section-note" style={{ margin: '4px 0 0 0' }}>
-                      Personalice el logo de su iglesia para la pantalla de bloqueo/logo (F3) y configure el fondo predeterminado (imagen, video en bucle o degradado) para todas las salidas.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-action-btn"
-                    onClick={() => window.churchPresenterApi.toggleGlobalControl('logo')}
-                    title="Alterna la pantalla de logo en vivo (F3)"
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px' }}
-                  >
-                    <span>Probar Logo (F3)</span>
-                  </button>
-                </div>
+            {/* Selector desplegable en pantallas pequeñas (< 900px) */}
+            <div className="settings-mobile-nav">
+              <select
+                className="settings-mobile-select"
+                value={settingsCategory}
+                onChange={(e) => setSettingsCategory(e.target.value)}
+              >
+                {SETTINGS_CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {brandingStatusMsg && (
-                  <div
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 4,
-                      marginBottom: 12,
-                      fontSize: 12,
-                      backgroundColor: brandingStatusMsg.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      border: `1px solid ${brandingStatusMsg.type === 'success' ? '#22c55e' : '#ef4444'}`,
-                      color: brandingStatusMsg.type === 'success' ? '#4ade80' : '#f87171',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <span>{brandingStatusMsg.text}</span>
+            <div className="settings-modal-body">
+              {/* Columna Izquierda: Barra Lateral con Categorías (220px fija) */}
+              <div className="settings-sidebar">
+                {SETTINGS_CATEGORIES.map((cat) => {
+                  const Icon = cat.icon
+                  const isActive = settingsCategory === cat.id
+                  return (
                     <button
+                      key={cat.id}
                       type="button"
-                      onClick={() => setBrandingStatusMsg(null)}
-                      style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                      className={`settings-nav-btn ${isActive ? 'active' : ''}`}
+                      onClick={() => setSettingsCategory(cat.id)}
                     >
-                      <X size={14} />
+                      <div className="settings-nav-header">
+                        <Icon size={16} />
+                        <span>{cat.label}</span>
+                      </div>
+                      <div className="settings-nav-subtitle">
+                        {cat.subtitle}
+                      </div>
                     </button>
+                  )
+                })}
+              </div>
+
+              {/* Columna Derecha: Contenido de la Categoría Seleccionada */}
+              <div className="settings-content-area">
+                {/* =========================================================
+                    1. GENERAL
+                    ========================================================= */}
+                {settingsCategory === 'general' && (
+                  <>
+                    {/* Church Branding & Background Section: Identidad de la Iglesia */}
+                    <div className="settings-section" style={{ borderLeft: '4px solid #FF7A00', paddingLeft: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: 16, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>Identidad de la Iglesia: Logo y Fondo Predeterminado</span>
+                          </h3>
+                          <p className="section-note" style={{ margin: '4px 0 0 0' }}>
+                            Personalice el logo de su iglesia para la pantalla de bloqueo/logo (F3) y configure el fondo predeterminado (imagen, video en bucle o degradado) para todas las salidas.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => window.churchPresenterApi.toggleGlobalControl('logo')}
+                          title="Alterna la pantalla de logo en vivo (F3)"
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px' }}
+                        >
+                          <span>Probar Logo (F3)</span>
+                        </button>
+                      </div>
+
+                      {brandingStatusMsg && (
+                        <div
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 4,
+                            marginBottom: 12,
+                            fontSize: 12,
+                            backgroundColor: brandingStatusMsg.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            border: `1px solid ${brandingStatusMsg.type === 'success' ? '#22c55e' : '#ef4444'}`,
+                            color: brandingStatusMsg.type === 'success' ? '#4ade80' : '#f87171',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span>{brandingStatusMsg.text}</span>
+                          <button
+                            type="button"
+                            onClick={() => setBrandingStatusMsg(null)}
+                            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginTop: 12 }}>
+                        {/* Panel Izquierdo: LOGO DE LA IGLESIA */}
+                        <div
+                          style={{
+                            background: '#15171c',
+                            border: '1px solid #282d37',
+                            borderRadius: 8,
+                            padding: 14,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>1. Logo de la Iglesia</span>
+                            {tempChurchBranding.logoUrl && (
+                              <span style={{ fontSize: 10, padding: '1px 6px', background: '#22c55e', color: '#fff', borderRadius: 3, fontWeight: 700 }}>
+                                Personalizado
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Previsualización del Logo */}
+                          <div
+                            style={{
+                              height: 120,
+                              backgroundColor: '#0a0a0c',
+                              border: '1px solid #334155',
+                              borderRadius: 6,
+                              display: 'flex',
+                              flexDirection: tempChurchBranding.logoTextPosition === 'right' ? 'row' : 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 10,
+                              padding: 10,
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {tempChurchBranding.logoUrl ? (
+                              <img
+                                src={toMediaUrl(tempChurchBranding.logoUrl)}
+                                alt="Logo de la Iglesia"
+                                style={{
+                                  maxHeight: 64,
+                                  maxWidth: 120,
+                                  objectFit: 'contain',
+                                  opacity: tempChurchBranding.logoOpacity ?? 1,
+                                  filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))'
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: '50%',
+                                  border: '2px solid rgba(255,255,255,0.7)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: '#ffffff',
+                                  fontWeight: 900,
+                                  fontSize: 22
+                                }}
+                              >
+                                ✝
+                              </div>
+                            )}
+                            {tempChurchBranding.logoTextPosition !== 'none' && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 900,
+                                  color: '#ffffff',
+                                  letterSpacing: 1.5,
+                                  textTransform: 'uppercase',
+                                  textAlign: 'center',
+                                  maxWidth: '90%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  textShadow: '0 2px 8px rgba(0,0,0,0.8)'
+                                }}
+                              >
+                                {tempChurchBranding.churchName || 'CHURCH PRESENTER'}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Botones de acción del logo */}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="primary-action-btn"
+                              onClick={handleUploadLogo}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12 }}
+                            >
+                              <Upload size={14} />
+                              <span>{tempChurchBranding.logoUrl ? 'Cambiar Imagen de Logo...' : 'Cargar Imagen de Logo...'}</span>
+                            </button>
+                            {tempChurchBranding.logoUrl && (
+                              <button
+                                type="button"
+                                className="secondary-action-btn"
+                                onClick={handleRemoveLogo}
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', fontSize: 12, color: '#f87171' }}
+                              >
+                                <Trash2 size={14} />
+                                <span>Quitar Logo</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Configuración de nombre y texto */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1' }}>Nombre de la Iglesia:</label>
+                            <input
+                              type="text"
+                              value={tempChurchBranding.churchName}
+                              onChange={(e) => setTempChurchBranding({ ...tempChurchBranding, churchName: e.target.value })}
+                              placeholder="Ej. Iglesia Bautista de la Gracia"
+                              style={{
+                                padding: '6px 10px',
+                                background: '#0f172a',
+                                border: '1px solid #334155',
+                                borderRadius: 4,
+                                color: '#f8fafc',
+                                fontSize: 12
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
+                                Posición del Texto:
+                              </label>
+                              <select
+                                value={tempChurchBranding.logoTextPosition || 'bottom'}
+                                onChange={(e) =>
+                                  setTempChurchBranding({
+                                    ...tempChurchBranding,
+                                    logoTextPosition: e.target.value as any
+                                  })
+                                }
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 8px',
+                                  background: '#0f172a',
+                                  border: '1px solid #334155',
+                                  borderRadius: 4,
+                                  color: '#f8fafc',
+                                  fontSize: 12
+                                }}
+                              >
+                                <option value="bottom">Debajo del Logo</option>
+                                <option value="right">A la derecha del Logo</option>
+                                <option value="none">Sin texto (Solo Logo)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
+                                Tamaño en Pantalla ({tempChurchBranding.logoWidthVmin || 22}vmin):
+                              </label>
+                              <input
+                                type="range"
+                                min={12}
+                                max={36}
+                                value={tempChurchBranding.logoWidthVmin || 22}
+                                onChange={(e) =>
+                                  setTempChurchBranding({
+                                    ...tempChurchBranding,
+                                    logoWidthVmin: Number(e.target.value)
+                                  })
+                                }
+                                style={{ width: '100%', accentColor: '#FF7A00', cursor: 'pointer' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Panel Derecho: FONDO PREDETERMINADO */}
+                        <div
+                          style={{
+                            background: '#15171c',
+                            border: '1px solid #282d37',
+                            borderRadius: 8,
+                            padding: 14,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>2. Fondo Predeterminado de la Iglesia</span>
+                            <span style={{ fontSize: 10, padding: '1px 6px', background: '#3b82f6', color: '#fff', borderRadius: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+                              {tempChurchBranding.defaultBackground?.type || 'gradient'}
+                            </span>
+                          </div>
+
+                          {/* Previsualización del Fondo */}
+                          <div
+                            style={{
+                              height: 120,
+                              backgroundColor: tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000',
+                              backgroundImage: tempChurchBranding.defaultBackground?.type === 'gradient' ? tempChurchBranding.defaultBackground.value : undefined,
+                              border: '1px solid #334155',
+                              borderRadius: 6,
+                              position: 'relative',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {tempChurchBranding.defaultBackground?.type === 'image' && (
+                              <img
+                                src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
+                                alt="Fondo de imagen"
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            )}
+                            {tempChurchBranding.defaultBackground?.type === 'video' && (
+                              <video
+                                src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
+                                autoPlay
+                                loop
+                                muted
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            )}
+                            <div
+                              style={{
+                                position: 'relative',
+                                zIndex: 2,
+                                background: 'rgba(0,0,0,0.65)',
+                                backdropFilter: 'blur(4px)',
+                                padding: '4px 10px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                color: '#fff',
+                                fontWeight: 600
+                              }}
+                            >
+                              {tempChurchBranding.defaultBackground?.type === 'image' && '🖼️ Imagen de Fondo'}
+                              {tempChurchBranding.defaultBackground?.type === 'video' && '🎬 Video en Bucle'}
+                              {tempChurchBranding.defaultBackground?.type === 'gradient' && '🎨 Degradado Pro'}
+                              {tempChurchBranding.defaultBackground?.type === 'color' && '⬛ Color Sólido'}
+                            </div>
+                          </div>
+
+                          {/* Botones de Carga de Medios */}
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              type="button"
+                              className="secondary-action-btn"
+                              onClick={handleUploadBackgroundImage}
+                              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
+                            >
+                              <ImageIcon size={14} />
+                              <span>Cargar Imagen...</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-action-btn"
+                              onClick={handleUploadBackgroundVideo}
+                              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
+                            >
+                              <Film size={14} />
+                              <span>Cargar Video...</span>
+                            </button>
+                          </div>
+
+                          {/* Presets de Degradados y Color Sólido */}
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>
+                              Degradados y Colores Rápidos:
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #181818 0%, #242424 100%)', 'Carbón')}
+                                title="Carbón Elegante"
+                                style={{
+                                  height: 26,
+                                  background: 'linear-gradient(135deg, #181818 0%, #242424 100%)',
+                                  border: '1px solid #475569',
+                                  borderRadius: 4,
+                                  cursor: 'pointer'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)', 'Azul Celestial')}
+                                title="Azul Celestial"
+                                style={{
+                                  height: 26,
+                                  background: 'linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)',
+                                  border: '1px solid #475569',
+                                  borderRadius: 4,
+                                  cursor: 'pointer'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)', 'Púrpura Sacro')}
+                                title="Púrpura Sacro"
+                                style={{
+                                  height: 26,
+                                  background: 'linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)',
+                                  border: '1px solid #475569',
+                                  borderRadius: 4,
+                                  cursor: 'pointer'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)', 'Cálido')}
+                                title="Cálido Crepúsculo"
+                                style={{
+                                  height: 26,
+                                  background: 'linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)',
+                                  border: '1px solid #475569',
+                                  borderRadius: 4,
+                                  cursor: 'pointer'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)', 'Esmeralda')}
+                                title="Esmeralda Solemne"
+                                style={{
+                                  height: 26,
+                                  background: 'linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)',
+                                  border: '1px solid #475569',
+                                  borderRadius: 4,
+                                  cursor: 'pointer'
+                                }}
+                              />
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <label style={{ fontSize: 11, color: '#94a3b8' }}>Color Sólido:</label>
+                              <input
+                                type="color"
+                                value={tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000'}
+                                onChange={(e) => handleApplySolidColor(e.target.value)}
+                                style={{ width: 34, height: 26, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                              />
+                              <button
+                                type="button"
+                                className="secondary-action-btn"
+                                onClick={() => handleApplySolidColor('#000000')}
+                                style={{ fontSize: 11, padding: '3px 8px' }}
+                              >
+                                Negro Puro
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button
+                          type="button"
+                          className="primary-action-btn"
+                          onClick={handleSaveAllBranding}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, backgroundColor: '#FF7A00' }}
+                        >
+                          <span>Guardar y Aplicar Identidad a Todas las Pantallas</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Requirement 1: Nombres de Paneles (Estilo ProPresenter vs Español) */}
+                    <div className="settings-section">
+                      <h3>Nombres de Paneles y Botones</h3>
+                      <p className="section-note">
+                        Elija la terminología utilizada en la interfaz del operador. Por defecto se usan los nombres estándar de ProPresenter 7 ("Library", "Playlist", "Media", "Audience", "Stage") para facilitar el flujo de trabajo del equipo audiovisual. Los textos de ayuda, diálogos y mensajes del sistema permanecen en español.
+                      </p>
+                      <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                          <input
+                            type="radio"
+                            name="panelNaming"
+                            value="propresenter"
+                            checked={panelNaming === 'propresenter'}
+                            onChange={() => {
+                              setPanelNaming('propresenter')
+                              localStorage.setItem('cp_panel_naming', 'propresenter')
+                            }}
+                          />
+                          <span><strong>ProPresenter por Defecto:</strong> Library, Playlist, Media, Audience, Stage</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                          <input
+                            type="radio"
+                            name="panelNaming"
+                            value="spanish"
+                            checked={panelNaming === 'spanish'}
+                            onChange={() => {
+                              setPanelNaming('spanish')
+                              localStorage.setItem('cp_panel_naming', 'spanish')
+                            }}
+                          />
+                          <span><strong>Español:</strong> Biblioteca, Playlist, Medios, Audiencia, Escenario</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Información General de la Aplicación */}
+                    <div className="settings-section">
+                      <h3>Información de la Aplicación y Versión</h3>
+                      <p className="section-note">
+                        ChurchPresenter Pro 7 — Software profesional para presentación de alabanza, multimedia y transmisión en vivo.
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginTop: 10 }}>
+                        <div style={{ background: '#12141a', border: '1px solid #1f242e', borderRadius: 6, padding: '10px 14px' }}>
+                          <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Versión Instalada:</span>
+                          <strong style={{ fontSize: 14, color: '#f8fafc' }}>v{appVersion}</strong>
+                        </div>
+                        <div style={{ background: '#12141a', border: '1px solid #1f242e', borderRadius: 6, padding: '10px 14px' }}>
+                          <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Entorno de Ejecución:</span>
+                          <strong style={{ fontSize: 13, color: isDev ? '#38bdf8' : '#22c55e' }}>
+                            {isDev ? 'Modo Desarrollo (Dev)' : 'Producción (Estable)'}
+                          </strong>
+                        </div>
+                        <div style={{ background: '#12141a', border: '1px solid #1f242e', borderRadius: 6, padding: '10px 14px' }}>
+                          <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Carpeta de Datos:</span>
+                          <strong style={{ fontSize: 11, color: '#cbd5e1', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            {userDataPath || 'Predeterminada'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* =========================================================
+                    2. PANTALLAS (DISPLAYS & STAGE)
+                    ========================================================= */}
+                {settingsCategory === 'displays' && (
+                  <>
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div>
+                          <h3>Asignación de Roles a Monitores Físicos</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            Asigne cada rol de salida (Sala Principal, Escenario, Lobby) a una pantalla o proyector detectado por el sistema.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => window.churchPresenterApi.identifyDisplays()}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                        >
+                          <Monitor size={14} />
+                          <span>Identificar Pantallas (Overlay)</span>
+                        </button>
+                      </div>
+
+                      <div className="displays-roles-table" style={{ marginTop: 12 }}>
+                        {STANDARD_OUTPUT_ROLES.filter((r) => r.id !== 'operator').map((role) => {
+                          const assignedStableId = assignments[role.id]
+                          const matchedDisplay = assignedStableId
+                            ? matchDisplayByStableId(assignedStableId, displays)
+                            : null
+                          const isAssigned = !!assignedStableId
+                          const isConnected = !!matchedDisplay
+
+                          return (
+                            <div key={role.id} className="role-assignment-row">
+                              <div className="role-info">
+                                <div className="role-name">{role.label}</div>
+                                <div className="role-desc">{role.description}</div>
+                                <div className="role-status">
+                                  {isAssigned ? (
+                                    isConnected ? (
+                                      <span className="status-pill connected">Conectada</span>
+                                    ) : (
+                                      <span className="status-pill disconnected">
+                                        Desconectada (Guardada)
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="status-pill unassigned">Sin asignar</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="role-select-box">
+                                <select
+                                  value={assignedStableId || 'none'}
+                                  onChange={async (e) => {
+                                    const val = e.target.value === 'none' ? null : e.target.value
+                                    await window.churchPresenterApi.assignRole(role.id, val)
+                                    const updated = await window.churchPresenterApi.getRoleAssignments()
+                                    setAssignments(updated)
+                                  }}
+                                >
+                                  <option value="none">-- Sin asignar --</option>
+                                  {displays.map((d) => (
+                                    <option key={d.stableId} value={d.stableId}>
+                                      {formatDisplayTitle(d)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Phase 6: Diseño de Pantalla de Escenario */}
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3>Diseño de Pantalla de Escenario (Stage Monitor)</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            Personalice los elementos visibles para los predicadores y músicos (diapositiva actual, siguiente, reloj, notas, temporizadores).
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsStageLayoutModalOpen(true)}
+                          className="secondary-action-btn"
+                          style={{ borderColor: '#38bdf8', color: '#38bdf8', fontSize: 12 }}
+                        >
+                          Editar Diseños de Escenario...
+                        </button>
+                      </div>
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 12, color: '#9ca3af' }}>Diseño activo asignado:</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', backgroundColor: '#1a1a1a', padding: '4px 10px', borderRadius: 6, border: '1px solid #333' }}>
+                          {assignedStageLayout?.name || 'Escenario - Clásico Pro'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Monitor de Salud de Salidas */}
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3>Diagnóstico y Salud de Pantallas</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            Monitoree la frecuencia de actualización, memoria de video, resolución activa y latencia de cada monitor físico.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsOutputHealthModalOpen(true)}
+                          style={{ fontSize: 12 }}
+                        >
+                          <span>Ver Monitor de Salud de Pantallas</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* =========================================================
+                    3. AUDIO
+                    ========================================================= */}
+                {settingsCategory === 'audio' && (
+                  <div className="settings-section">
+                    <h3>Salida y Dispositivos de Audio</h3>
+                    <p className="section-note">
+                      Configure la pantalla que reproducirá el audio del video, y asigne los dispositivos físicos de audio para medios y música ambiental.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <label style={{ minWidth: 200 }}>Pantalla con audio activo:</label>
+                        <select
+                          value={audioOutputRole}
+                          onChange={(e) => setAudioOutputRole(e.target.value)}
+                          className="bible-select"
+                        >
+                          <option value="main">Sala Principal (main) - HDMI / Mesa de Sonido</option>
+                          <option value="stage">Escenario (stage)</option>
+                          <option value="lobby">Vestíbulo / Lobby</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <label style={{ minWidth: 200 }}>Dispositivo de Audio (Video):</label>
+                        <select
+                          value={audioDeviceVideo}
+                          onChange={(e) => {
+                            setAudioDeviceVideo(e.target.value)
+                            localStorage.setItem('cp_audio_device_video', e.target.value)
+                          }}
+                          className="bible-select"
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">Predeterminado del Sistema</option>
+                          {audioDevices.map((d) => (
+                            <option key={d.deviceId} value={d.deviceId}>
+                              {d.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="sound-test-btn"
+                          onClick={() => playTestAudioChime(audioDeviceVideo)}
+                          title="Probar sonido en este dispositivo"
+                        >
+                          <Volume2 size={13} />
+                          <span>Probar Sonido</span>
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <label style={{ minWidth: 200 }}>Dispositivo Música Ambiental:</label>
+                        <select
+                          value={audioDeviceAmbient}
+                          onChange={(e) => {
+                            setAudioDeviceAmbient(e.target.value)
+                            localStorage.setItem('cp_audio_device_ambient', e.target.value)
+                          }}
+                          className="bible-select"
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">Predeterminado del Sistema</option>
+                          {audioDevices.map((d) => (
+                            <option key={d.deviceId} value={d.deviceId}>
+                              {d.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="sound-test-btn"
+                          onClick={() => playTestAudioChime(audioDeviceAmbient)}
+                          title="Probar sonido en este dispositivo"
+                        >
+                          <Volume2 size={13} />
+                          <span>Probar Sonido</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginTop: 12 }}>
-                  {/* Panel Izquierdo: LOGO DE LA IGLESIA */}
-                  <div
-                    style={{
-                      background: '#15171c',
-                      border: '1px solid #282d37',
-                      borderRadius: 8,
-                      padding: 14,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>1. Logo de la Iglesia</span>
-                      {tempChurchBranding.logoUrl && (
-                        <span style={{ fontSize: 10, padding: '1px 6px', background: '#22c55e', color: '#fff', borderRadius: 3, fontWeight: 700 }}>
-                          Personalizado
+                {/* =========================================================
+                    4. RED Y ACCESO REMOTO
+                    ========================================================= */}
+                {settingsCategory === 'remote' && (
+                  <div className="settings-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3>Control Remoto desde Celular y Tablet</h3>
+                        <p className="section-note" style={{ margin: 0 }}>
+                          Opere la presentación y pantallas desde cualquier teléfono o tableta conectado a la red Wi-Fi local mediante navegador web.
+                        </p>
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(remoteConfig?.enabled)}
+                          onChange={(e) => handleToggleRemoteEnabled(e.target.checked)}
+                        />
+                        <span style={{ color: remoteConfig?.enabled ? '#22c55e' : '#9ca3af' }}>
+                          {remoteConfig?.enabled ? 'ACTIVADO' : 'DESACTIVADO'}
                         </span>
-                      )}
+                      </label>
                     </div>
 
-                    {/* Previsualización del Logo */}
-                    <div
-                      style={{
-                        height: 120,
-                        backgroundColor: '#0a0a0c',
-                        border: '1px solid #334155',
-                        borderRadius: 6,
-                        display: 'flex',
-                        flexDirection: tempChurchBranding.logoTextPosition === 'right' ? 'row' : 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 10,
-                        padding: 10,
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {tempChurchBranding.logoUrl ? (
-                        <img
-                          src={toMediaUrl(tempChurchBranding.logoUrl)}
-                          alt="Logo de la Iglesia"
-                          style={{
-                            maxHeight: 64,
-                            maxWidth: 120,
-                            objectFit: 'contain',
-                            opacity: tempChurchBranding.logoOpacity ?? 1,
-                            filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))'
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: '50%',
-                            border: '2px solid rgba(255,255,255,0.7)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#ffffff',
-                            fontWeight: 900,
-                            fontSize: 22
-                          }}
-                        >
-                          ✝
-                        </div>
-                      )}
-                      {tempChurchBranding.logoTextPosition !== 'none' && (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 900,
-                            color: '#ffffff',
-                            letterSpacing: 1.5,
-                            textTransform: 'uppercase',
-                            textAlign: 'center',
-                            maxWidth: '90%',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            textShadow: '0 2px 8px rgba(0,0,0,0.8)'
-                          }}
-                        >
-                          {tempChurchBranding.churchName || 'CHURCH PRESENTER'}
-                        </div>
-                      )}
-                    </div>
+                    {remoteConfig?.enabled && (
+                      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {remoteStatus?.portConflictWarning && (
+                          <div style={{ backgroundColor: '#7c2d12', border: '1px solid #ea580c', color: '#ffedd5', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                            ⚠️ <strong>Conflicto de puerto:</strong> {remoteStatus.portConflictWarning}
+                          </div>
+                        )}
+                        {remoteStatus?.isWindowsPublicNetwork && (
+                          <div style={{ backgroundColor: '#451a03', border: '1px solid #d97706', color: '#fef3c7', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                            ⚠️ <strong>Perfil de red de Windows detectado como "Público":</strong> El Firewall de Windows suele bloquear conexiones entrantes en redes públicas. Si los dispositivos no pueden conectarse, configure la conexión como "Red privada" en Windows &gt; Configuración &gt; Red e Internet.
+                          </div>
+                        )}
 
-                    {/* Botones de acción del logo */}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="primary-action-btn"
-                        onClick={handleUploadLogo}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12 }}
-                      >
-                        <Upload size={14} />
-                        <span>{tempChurchBranding.logoUrl ? 'Cambiar Imagen de Logo...' : 'Cargar Imagen de Logo...'}</span>
-                      </button>
-                      {tempChurchBranding.logoUrl && (
-                        <button
-                          type="button"
-                          className="secondary-action-btn"
-                          onClick={handleRemoveLogo}
-                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', fontSize: 12, color: '#f87171' }}
-                        >
-                          <Trash2 size={14} />
-                          <span>Quitar Logo</span>
-                        </button>
-                      )}
-                    </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px', gap: 10 }}>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Interfaz de Red (IP Local):</label>
+                            <select
+                              value={remoteConfig.selectedIp || '0.0.0.0'}
+                              onChange={async (e) => {
+                                const updated = await window.churchPresenterApi.saveRemoteConfig({ selectedIp: e.target.value })
+                                setRemoteConfig(updated)
+                                const status = await window.churchPresenterApi.getRemoteStatus()
+                                setRemoteStatus(status)
+                              }}
+                              style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                            >
+                              {networkInterfaces.map((ni) => (
+                                <option key={ni.ip} value={ni.ip}>{ni.name}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                    {/* Configuración de nombre y texto */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1' }}>Nombre de la Iglesia:</label>
-                      <input
-                        type="text"
-                        value={tempChurchBranding.churchName}
-                        onChange={(e) => setTempChurchBranding({ ...tempChurchBranding, churchName: e.target.value })}
-                        placeholder="Ej. Iglesia Bautista de la Gracia"
-                        style={{
-                          padding: '6px 10px',
-                          background: '#0f172a',
-                          border: '1px solid #334155',
-                          borderRadius: 4,
-                          color: '#f8fafc',
-                          fontSize: 12
-                        }}
-                      />
-                    </div>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Puerto HTTP:</label>
+                            <input
+                              type="number"
+                              value={remoteConfig.port || 8080}
+                              onChange={async (e) => {
+                                const port = parseInt(e.target.value, 10) || 8080
+                                const updated = await window.churchPresenterApi.saveRemoteConfig({ port })
+                                setRemoteConfig(updated)
+                              }}
+                              style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                            />
+                          </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
-                          Posición del Texto:
-                        </label>
-                        <select
-                          value={tempChurchBranding.logoTextPosition || 'bottom'}
-                          onChange={(e) =>
-                            setTempChurchBranding({
-                              ...tempChurchBranding,
-                              logoTextPosition: e.target.value as any
-                            })
-                          }
-                          style={{
-                            width: '100%',
-                            padding: '6px 8px',
-                            background: '#0f172a',
-                            border: '1px solid #334155',
-                            borderRadius: 4,
-                            color: '#f8fafc',
-                            fontSize: 12
-                          }}
-                        >
-                          <option value="bottom">Debajo del Logo</option>
-                          <option value="right">A la derecha del Logo</option>
-                          <option value="none">Sin texto (Solo Logo)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', display: 'block', marginBottom: 4 }}>
-                          Tamaño en Pantalla ({tempChurchBranding.logoWidthVmin || 22}vmin):
-                        </label>
-                        <input
-                          type="range"
-                          min={12}
-                          max={36}
-                          value={tempChurchBranding.logoWidthVmin || 22}
-                          onChange={(e) =>
-                            setTempChurchBranding({
-                              ...tempChurchBranding,
-                              logoWidthVmin: Number(e.target.value)
-                            })
-                          }
-                          style={{ width: '100%', accentColor: '#FF7A00', cursor: 'pointer' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Panel Derecho: FONDO PREDETERMINADO */}
-                  <div
-                    style={{
-                      background: '#15171c',
-                      border: '1px solid #282d37',
-                      borderRadius: 8,
-                      padding: 14,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>2. Fondo Predeterminado de la Iglesia</span>
-                      <span style={{ fontSize: 10, padding: '1px 6px', background: '#3b82f6', color: '#fff', borderRadius: 3, fontWeight: 700, textTransform: 'uppercase' }}>
-                        {tempChurchBranding.defaultBackground?.type || 'gradient'}
-                      </span>
-                    </div>
-
-                    {/* Previsualización del Fondo */}
-                    <div
-                      style={{
-                        height: 120,
-                        backgroundColor: tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000',
-                        backgroundImage: tempChurchBranding.defaultBackground?.type === 'gradient' ? tempChurchBranding.defaultBackground.value : undefined,
-                        border: '1px solid #334155',
-                        borderRadius: 6,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {tempChurchBranding.defaultBackground?.type === 'image' && (
-                        <img
-                          src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
-                          alt="Fondo de imagen"
-                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      )}
-                      {tempChurchBranding.defaultBackground?.type === 'video' && (
-                        <video
-                          src={toMediaUrl(tempChurchBranding.defaultBackground.value)}
-                          autoPlay
-                          loop
-                          muted
-                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      )}
-                      <div
-                        style={{
-                          position: 'relative',
-                          zIndex: 2,
-                          background: 'rgba(0,0,0,0.65)',
-                          backdropFilter: 'blur(4px)',
-                          padding: '4px 10px',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          color: '#fff',
-                          fontWeight: 600
-                        }}
-                      >
-                        {tempChurchBranding.defaultBackground?.type === 'image' && '🖼️ Imagen de Fondo'}
-                        {tempChurchBranding.defaultBackground?.type === 'video' && '🎬 Video en Bucle'}
-                        {tempChurchBranding.defaultBackground?.type === 'gradient' && '🎨 Degradado Pro'}
-                        {tempChurchBranding.defaultBackground?.type === 'color' && '⬛ Color Sólido'}
-                      </div>
-                    </div>
-
-                    {/* Botones de Carga de Medios */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        type="button"
-                        className="secondary-action-btn"
-                        onClick={handleUploadBackgroundImage}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
-                      >
-                        <ImageIcon size={14} />
-                        <span>Cargar Imagen...</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action-btn"
-                        onClick={handleUploadBackgroundVideo}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 8px', fontSize: 12 }}
-                      >
-                        <Film size={14} />
-                        <span>Cargar Video...</span>
-                      </button>
-                    </div>
-
-                    {/* Presets de Degradados y Color Sólido */}
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>
-                        Degradados y Colores Rápidos:
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #181818 0%, #242424 100%)', 'Carbón')}
-                          title="Carbón Elegante"
-                          style={{
-                            height: 26,
-                            background: 'linear-gradient(135deg, #181818 0%, #242424 100%)',
-                            border: '1px solid #475569',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)', 'Azul Celestial')}
-                          title="Azul Celestial"
-                          style={{
-                            height: 26,
-                            background: 'linear-gradient(135deg, #091e3a 0%, #1e3a8a 50%, #030712 100%)',
-                            border: '1px solid #475569',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)', 'Púrpura Sacro')}
-                          title="Púrpura Sacro"
-                          style={{
-                            height: 26,
-                            background: 'linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #090214 100%)',
-                            border: '1px solid #475569',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)', 'Cálido')}
-                          title="Cálido Crepúsculo"
-                          style={{
-                            height: 26,
-                            background: 'linear-gradient(135deg, #431407 0%, #7c2d12 50%, #0c0a09 100%)',
-                            border: '1px solid #475569',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPresetGradient('linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)', 'Esmeralda')}
-                          title="Esmeralda Solemne"
-                          style={{
-                            height: 26,
-                            background: 'linear-gradient(135deg, #022c22 0%, #064e3b 50%, #02110c 100%)',
-                            border: '1px solid #475569',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label style={{ fontSize: 11, color: '#94a3b8' }}>Color Sólido:</label>
-                        <input
-                          type="color"
-                          value={tempChurchBranding.defaultBackground?.type === 'color' ? tempChurchBranding.defaultBackground.value : '#000000'}
-                          onChange={(e) => handleApplySolidColor(e.target.value)}
-                          style={{ width: 34, height: 26, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                        />
-                        <button
-                          type="button"
-                          className="secondary-action-btn"
-                          onClick={() => handleApplySolidColor('#000000')}
-                          style={{ fontSize: 11, padding: '3px 8px' }}
-                        >
-                          Negro Puro
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="primary-action-btn"
-                    onClick={handleSaveAllBranding}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, backgroundColor: '#FF7A00' }}
-                  >
-                    <span>Guardar y Aplicar Identidad a Todas las Pantallas</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* User Workspace & Auto-created Category Folders */}
-              <div className="settings-section">
-                <h3>Carpeta de Medios y Biblioteca (Workspace)</h3>
-                <p className="section-note">
-                  ChurchPresenter crea y organiza automáticamente las subcarpetas de todas las secciones (Videos, Imágenes, Audios, Cuentas Regresivas, Presentaciones, Documentos PDF, Canciones, Biblias, Cultos y Copias de Seguridad). Puede colocar esta carpeta en sus Documentos o en cualquier otra unidad de disco de su preferencia.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="text"
-                      readOnly
-                      value={workspacePath || 'Cargando ubicación...'}
-                      style={{
-                        flex: 1,
-                        padding: '7px 10px',
-                        background: '#1e2229',
-                        border: '1px solid #334155',
-                        borderRadius: 4,
-                        color: '#f8fafc',
-                        fontSize: 12,
-                        fontFamily: 'monospace'
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button
-                      className="secondary-action-btn"
-                      onClick={async () => {
-                        const res = await window.churchPresenterApi.chooseWorkspaceFolder?.()
-                        if (res) {
-                          setWorkspacePath(res.rootPath)
-                        }
-                      }}
-                    >
-                      <span>Cambiar Carpeta...</span>
-                    </button>
-                    <button
-                      className="secondary-action-btn"
-                      onClick={() => {
-                        window.churchPresenterApi.openWorkspaceFolder?.()
-                      }}
-                    >
-                      <span>Abrir en Explorador de Windows</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Demo Data Management */}
-              <div className="settings-section">
-                <h3>Datos de Demostración</h3>
-                <p className="section-note">
-                  Cargue o elimine los himnos y cultos de demostración de dominio público (Martín Lutero, John Newton, Isaac Watts, etc.) sin afectar los datos reales de su iglesia.
-                </p>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    className="secondary-action-btn"
-                    onClick={async () => {
-                      const res = await window.churchPresenterApi.loadDemoData()
-                      alert(`Se cargaron ${res.songsCount} canciones de demostración de dominio público y 1 plantilla.`)
-                      loadAllData()
-                    }}
-                  >
-                    <span>Cargar datos de demostración</span>
-                  </button>
-                  <button
-                    className="secondary-action-btn"
-                    style={{ borderColor: '#ef4444', color: '#f87171' }}
-                    onClick={async () => {
-                      if (confirm('¿Desea borrar todos los datos de demostración? Los datos reales no serán afectados.')) {
-                        const res = await window.churchPresenterApi.clearDemoData()
-                        alert(`Se eliminaron ${res.deletedSongs} canciones de demostración.`)
-                        loadAllData()
-                      }
-                    }}
-                  >
-                    <span>Borrar datos de demostración</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Requirement 1: Nombres de Paneles (Estilo ProPresenter vs Español) */}
-              <div className="settings-section">
-                <h3>Nombres de Paneles y Botones</h3>
-                <p className="section-note">
-                  Elija la terminología utilizada en la interfaz del operador. Por defecto se usan los nombres estándar de ProPresenter 7 ("Library", "Playlist", "Media", "Audience", "Stage") para facilitar el flujo de trabajo del equipo audiovisual. Los textos de ayuda, diálogos y mensajes del sistema permanecen en español.
-                </p>
-                <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                    <input
-                      type="radio"
-                      name="panelNaming"
-                      value="propresenter"
-                      checked={panelNaming === 'propresenter'}
-                      onChange={() => {
-                        setPanelNaming('propresenter')
-                        localStorage.setItem('cp_panel_naming', 'propresenter')
-                      }}
-                    />
-                    <span><strong>ProPresenter por Defecto:</strong> Library, Playlist, Media, Audience, Stage</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                    <input
-                      type="radio"
-                      name="panelNaming"
-                      value="spanish"
-                      checked={panelNaming === 'spanish'}
-                      onChange={() => {
-                        setPanelNaming('spanish')
-                        localStorage.setItem('cp_panel_naming', 'spanish')
-                      }}
-                    />
-                    <span><strong>Español:</strong> Biblioteca, Playlist, Medios, Audiencia, Escenario</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Requirement 6: Apariencia y Colores de la Interfaz */}
-              <div className="settings-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div>
-                    <h3>Apariencia y Paleta ProPresenter</h3>
-                    <p className="section-note" style={{ margin: 0 }}>
-                      Paleta oscura profesional con contraste WCAG AA. Personalice los colores de acento principales del operador.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-action-btn"
-                    style={{ fontSize: 11, padding: '3px 8px' }}
-                    onClick={() => {
-                      setAccentPrimary('#FF7A00')
-                      setAccentLive('#22C55E')
-                      setAccentPreview('#2D9CFF')
-                      setAccentDanger('#EF4444')
-                    }}
-                    title="Restablecer paleta a valores predeterminados de ProPresenter"
-                  >
-                    Restablecer Colores
-                  </button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 10 }}>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>Acento Primario (Naranja Pro):</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <input
-                        type="color"
-                        value={accentPrimary}
-                        onChange={(e) => setAccentPrimary(e.target.value)}
-                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPrimary}</span>
-                    </div>
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>En Vivo (Verde Pro):</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <input
-                        type="color"
-                        value={accentLive}
-                        onChange={(e) => setAccentLive(e.target.value)}
-                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentLive}</span>
-                    </div>
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>Vista Previa (Azul Pro):</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <input
-                        type="color"
-                        value={accentPreview}
-                        onChange={(e) => setAccentPreview(e.target.value)}
-                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPreview}</span>
-                    </div>
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>Peligro / Salida Desconectada:</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <input
-                        type="color"
-                        value={accentDanger}
-                        onChange={(e) => setAccentDanger(e.target.value)}
-                        style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentDanger}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Requirement 10: Atajos de Teclado y Perfiles Configurables */}
-              <div className="settings-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div>
-                    <h3>Atajos de Teclado y Perfiles</h3>
-                    <p className="section-note" style={{ margin: 0 }}>
-                      Configure las teclas para las acciones primarias de la iglesia o seleccione el perfil por defecto de ProPresenter.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <label style={{ fontSize: 12, color: '#94a3b8' }}>Perfil:</label>
-                    <select
-                      value={tempShortcuts.profile || 'propresenter'}
-                      onChange={(e) => {
-                        const prof = e.target.value as ShortcutProfile
-                        if (prof === 'propresenter') {
-                          setTempShortcuts({ ...DEFAULT_SHORTCUTS, profile: 'propresenter' })
-                        } else {
-                          setTempShortcuts({ ...tempShortcuts, profile: 'custom' })
-                        }
-                      }}
-                      style={{
-                        backgroundColor: 'var(--bg-input)',
-                        color: 'var(--text-main)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 3,
-                        padding: '3px 8px',
-                        fontSize: 12
-                      }}
-                    >
-                      <option value="propresenter">ProPresenter por Defecto</option>
-                      <option value="custom">Personalizado</option>
-                    </select>
-                    <button
-                      className="secondary-action-btn"
-                      style={{ fontSize: 11, padding: '3px 8px' }}
-                      onClick={() => setTempShortcuts(DEFAULT_SHORTCUTS)}
-                      title="Restablecer todos los atajos al perfil original de ProPresenter"
-                    >
-                      Restablecer
-                    </button>
-                  </div>
-                </div>
-
-                <div className="shortcuts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
-                  <div className="shortcut-field">
-                    <label>Siguiente Diapositiva:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.nextSlide || 'ArrowRight'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, nextSlide: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Anterior Diapositiva:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.prevSlide || 'ArrowLeft'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, prevSlide: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Siguiente Ítem Playlist:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.nextPlaylistItem || 'ArrowDown'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, nextPlaylistItem: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Anterior Ítem Playlist:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.prevPlaylistItem || 'ArrowUp'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, prevPlaylistItem: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Pantalla a Negro (Black):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.black || 'F1'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, black: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Todo (Clear All):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearAll || tempShortcuts.clear || 'F2'}
-                      onChange={(e) =>
-                        setTempShortcuts({
-                          ...tempShortcuts,
-                          clearAll: e.target.value.toUpperCase(),
-                          clear: e.target.value.toUpperCase(),
-                          profile: 'custom'
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Mostrar Logo:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.logo || 'F3'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, logo: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Congelar Salidas (Freeze):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.freeze || 'F4'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, freeze: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Capa Audio:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearAudio || 'F5'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clearAudio: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Fondo (Fondo):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearBackground || 'F6'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clearBackground: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Diapo (Slide):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearSlide || 'F7'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clearSlide: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Mensaje:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearMessage || 'F8'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clearMessage: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Limpiar Medios (Media):</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.clearMedia || 'F9'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, clearMedia: e.target.value.toUpperCase(), profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Alternar Cajón Medios:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.toggleMedia || 'Ctrl+M'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, toggleMedia: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                  <div className="shortcut-field">
-                    <label>Foco a Búsqueda:</label>
-                    <input
-                      type="text"
-                      value={tempShortcuts.focusSearch || 'Ctrl+F'}
-                      onChange={(e) =>
-                        setTempShortcuts({ ...tempShortcuts, focusSearch: e.target.value, profile: 'custom' })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-section">
-                <h3>Copias de Seguridad Automáticas</h3>
-                <p className="section-note">
-                  El sistema genera copias de seguridad de la base de datos SQLite rotativas y
-                  periódicas.
-                </p>
-                <button
-                  className="secondary-action-btn"
-                  onClick={() => window.churchPresenterApi.openBackupsFolder()}
-                >
-                  <FolderOpen size={14} />
-                  <span>Abrir Carpeta de Copias de Seguridad</span>
-                </button>
-              </div>
-
-              {/* Requirement A.1: Doble traducción por rol de salida */}
-              <div className="settings-section">
-                <h3>Doble Traducción por Pantalla de Salida</h3>
-                <p className="section-note">
-                  Configure de manera independiente para cada pantalla física (Sala Principal, Escenario, Lobby) qué versión o versiones bíblicas proyectará y si se mostrarán en una sola traducción, apiladas o lado a lado.
-                </p>
-
-                <div className="role-bible-configs-table">
-                  {STANDARD_OUTPUT_ROLES.map((r) => {
-                    const config = roleBibleConfigs[r.id] || { role: r.id, mode: 'single', primaryTranslation: 'RVR1909' }
-                    return (
-                      <div key={r.id} className="role-bible-config-row">
-                        <div className="role-meta">
-                          <strong>{r.label} ({r.id})</strong>
-                          <span className="role-desc">{r.description}</span>
-                        </div>
-
-                        <div className="role-fields">
-                          <label>Modo:</label>
-                          <select
-                            value={config.mode}
-                            onChange={(e) => {
-                              const updated = { ...config, mode: e.target.value as any }
-                              setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
-                            }}
-                          >
-                            <option value="single">Una traducción</option>
-                            <option value="stacked">Doble traducción apilada</option>
-                            <option value="sideBySide">Doble traducción lado a lado</option>
-                          </select>
-
-                          <label>Principal:</label>
-                          <select
-                            value={config.primaryTranslation}
-                            onChange={(e) => {
-                              const updated = { ...config, primaryTranslation: e.target.value }
-                              setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
-                            }}
-                          >
-                            {bibleTranslations.map((t) => (
-                              <option key={t.id} value={t.abbrev}>
-                                {t.name} ({t.abbrev})
-                              </option>
-                            ))}
-                          </select>
-
-                          {config.mode !== 'single' && (
-                            <>
-                              <label>Secundaria:</label>
-                              <select
-                                value={config.secondaryTranslation || 'KJV'}
-                                onChange={(e) => {
-                                  const updated = { ...config, secondaryTranslation: e.target.value }
-                                  setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
-                                }}
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>PIN Control Local (8080):</label>
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: '#f97316', backgroundColor: '#1a1a1a', border: '1px solid #333', padding: '6px 10px', borderRadius: 6, flex: 1, textAlign: 'center' }}>
+                                {remoteConfig.pin || '------'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleRegeneratePin}
+                                className="secondary-action-btn"
+                                title="Regenerar PIN numérico de control local"
+                                style={{ padding: '6px 8px', fontSize: 11 }}
                               >
-                                {bibleTranslations.map((t) => (
-                                  <option key={t.id} value={t.abbrev}>
-                                    {t.name} ({t.abbrev})
-                                  </option>
+                                ↻
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>PIN Operador Remoto (Tailscale 8443):</label>
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: '#38bdf8', backgroundColor: '#1a1a1a', border: '1px solid #333', padding: '6px 10px', borderRadius: 6, flex: 1, textAlign: 'center' }}>
+                                {remoteConfig.remoteOperatorPin || '888888'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleRegenerateRemoteOperatorPin}
+                                className="secondary-action-btn"
+                                title="Regenerar PIN de operador remoto"
+                                style={{ padding: '6px 8px', fontSize: 11 }}
+                              >
+                                ↻
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Operador Remoto desde Casa (Tailscale VPN) Banner */}
+                        <div style={{ backgroundColor: '#111827', border: '1px solid #1e293b', borderRadius: 8, padding: 14 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#f97316', textTransform: 'uppercase' }}>
+                              💻 Panel de Operador Remoto desde Casa (Tailscale)
+                            </div>
+                            <span style={{ fontSize: 10, backgroundColor: 'rgba(249, 115, 22, 0.2)', color: '#f97316', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                              HTTPS 8443
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#e5e7eb', marginBottom: 4 }}>
+                            Acceso directo para la laptop del operador: <code style={{ color: '#38bdf8', backgroundColor: '#000', padding: '2px 6px', borderRadius: 4 }}>https://100.73.59.102:8443/operator</code>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                            Permite monitoreo de programa, conmutación de escenas de estudio, control de cámaras, diapositivas y transmisión en vivo desde casa. Requiere conexión activa a Tailscale.
+                          </div>
+                        </div>
+
+                        {/* QR Code and URLs: Operator & Stage */}
+                        {remoteStatus?.addresses && remoteStatus.addresses.length > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            {/* Operator Remote Card */}
+                            <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
+                              {remoteStatus.addresses[0].qrDataUrl && (
+                                <img
+                                  src={remoteStatus.addresses[0].qrDataUrl}
+                                  alt="Código QR de Conexión Remota Operador"
+                                  style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
+                                />
+                              )}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', marginBottom: 4 }}>
+                                  📱 Control Remoto (Operador)
+                                </div>
+                                {remoteStatus.addresses.map((addr) => (
+                                  <div key={addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
+                                      {addr.url}
+                                    </span>
+                                  </div>
                                 ))}
-                              </select>
-                            </>
+                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                                  Permite operar diapositivas, playlist y temporizadores (requiere PIN).
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Stage Viewer Card */}
+                            <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
+                              {remoteStatus.addresses[0].stageQrDataUrl && (
+                                <img
+                                  src={remoteStatus.addresses[0].stageQrDataUrl}
+                                  alt="Código QR para Pantalla de Escenario"
+                                  style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
+                                />
+                              )}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', marginBottom: 4 }}>
+                                  🎭 Pantalla de Escenario (Tablets)
+                                </div>
+                                {remoteStatus.addresses.map((addr) => (
+                                  <div key={addr.stageUrl || addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
+                                      {addr.stageUrl || `${addr.url}/stage`}
+                                    </span>
+                                  </div>
+                                ))}
+                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                                  Visor de escenario para músicos y orador (QR incluye token de solo lectura).
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Stage Without PIN option */}
+                        <div style={{ padding: '10px 12px', backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 6 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(remoteConfig?.allowReadOnlyWithoutPin)}
+                              onChange={async (e) => {
+                                const updated = await window.churchPresenterApi.saveRemoteConfig({ allowReadOnlyWithoutPin: e.target.checked })
+                                setRemoteConfig(updated)
+                                const status = await window.churchPresenterApi.getRemoteStatus()
+                                setRemoteStatus(status)
+                              }}
+                            />
+                            <span style={{ color: '#fff', fontWeight: 600 }}>Permitir visor de Escenario (/stage) sin código PIN</span>
+                          </label>
+                          <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                            ⚠️ <strong>Advertencia:</strong> Si se activa, cualquier dispositivo en la red local podrá ver la pantalla de retorno sin ingresar el PIN. Manténgalo desactivado si desea exigir autorización por PIN o código QR.
+                          </div>
+                        </div>
+
+                        {/* Connected Devices Table */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 6 }}>
+                            Dispositivos Conectados ({remoteStatus?.connectedClients?.length || 0}):
+                          </div>
+                          {(remoteStatus?.connectedClients?.length || 0) === 0 ? (
+                            <div style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', padding: '6px 0' }}>
+                              No hay dispositivos remotos conectados actualmente.
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {remoteStatus?.connectedClients.map((client) => (
+                                <div
+                                  key={client.id}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #2e2e2e',
+                                    borderRadius: 6,
+                                    padding: '8px 12px'
+                                  }}
+                                >
+                                  <div>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{client.name}</span>
+                                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>({client.ip})</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: client.role === 'operator' ? '#f97316' : '#38bdf8', color: '#000', padding: '2px 6px', borderRadius: 4, marginLeft: 8 }}>
+                                      {client.role === 'operator' ? 'CONTROL TOTAL' : 'SOLO LECTURA'}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleKickClient(client.id)}
+                                    style={{ backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
+                                  >
+                                    Expulsar
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Requirement 0: Gestión e Importación de Traducciones Bíblicas */}
-              <div className="settings-section">
-                <h3>Traducciones Bíblicas y Versiones</h3>
-                <p className="section-note">
-                  El sistema cuenta con {bibleTranslations.length} traducciones instaladas ({bibleTranslations.map((b) => b.abbrev).join(', ')}). Cada versión se indexa de forma independiente en SQLite con búsqueda de texto instantánea.
-                </p>
-                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                  <button
-                    type="button"
-                    className="primary-action-btn"
-                    onClick={() => {
-                      setIsSettingsOpen(false)
-                      resetBibleImportForm()
-                      setIsBibleImportModalOpen(true)
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <Upload size={14} />
-                    <span>Importar traducción...</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-action-btn"
-                    onClick={() => {
-                      setIsSettingsOpen(false)
-                      setIsBibleManagerModalOpen(true)
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <BookOpen size={14} />
-                    <span>Administrar traducciones instaladas</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Requirement B.4 & A.2: Salidas y Dispositivos de Audio Físicos */}
-              <div className="settings-section">
-                <h3>Salida y Dispositivos de Audio</h3>
-                <p className="section-note">
-                  Configure la pantalla que reproducirá el audio del video, y asigne los dispositivos físicos de audio para medios y música ambiental.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <label style={{ minWidth: 200 }}>Pantalla con audio activo:</label>
-                    <select
-                      value={audioOutputRole}
-                      onChange={(e) => setAudioOutputRole(e.target.value)}
-                      className="bible-select"
-                    >
-                      <option value="main">Sala Principal (main) - HDMI / Mesa de Sonido</option>
-                      <option value="stage">Escenario (stage)</option>
-                      <option value="lobby">Vestíbulo / Lobby</option>
-                    </select>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <label style={{ minWidth: 200 }}>Dispositivo de Audio (Video):</label>
-                    <select
-                      value={audioDeviceVideo}
-                      onChange={(e) => {
-                        setAudioDeviceVideo(e.target.value)
-                        localStorage.setItem('cp_audio_device_video', e.target.value)
-                      }}
-                      className="bible-select"
-                      style={{ flex: 1 }}
-                    >
-                      <option value="">Predeterminado del Sistema</option>
-                      {audioDevices.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="sound-test-btn"
-                      onClick={() => playTestAudioChime(audioDeviceVideo)}
-                      title="Probar sonido en este dispositivo"
-                    >
-                      <Volume2 size={13} />
-                      <span>Probar Sonido</span>
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <label style={{ minWidth: 200 }}>Dispositivo Música Ambiental:</label>
-                    <select
-                      value={audioDeviceAmbient}
-                      onChange={(e) => {
-                        setAudioDeviceAmbient(e.target.value)
-                        localStorage.setItem('cp_audio_device_ambient', e.target.value)
-                      }}
-                      className="bible-select"
-                      style={{ flex: 1 }}
-                    >
-                      <option value="">Predeterminado del Sistema</option>
-                      {audioDevices.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="sound-test-btn"
-                      onClick={() => playTestAudioChime(audioDeviceAmbient)}
-                      title="Probar sonido en este dispositivo"
-                    >
-                      <Volume2 size={13} />
-                      <span>Probar Sonido</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Requirement A.6: Información del Entorno y Copia de Biblioteca */}
-              <div className="settings-section">
-                <h3>Información de Entorno y Datos</h3>
-                <p className="section-note">
-                  Versión instalada: <strong>v{appVersion}</strong> {isDev ? '(Modo Desarrollo Activo)' : '(Producción)'}
-                  <br />
-                  Carpeta de datos: <code>{userDataPath || 'Predeterminada'}</code>
-                </p>
-                {isDev && (
-                  <div style={{ marginTop: 10 }}>
-                    <button
-                      className="secondary-action-btn"
-                      id="copy-prod-btn"
-                      onClick={async () => {
-                        if (
-                          confirm(
-                            '¿Copiar la biblioteca real de producción a este entorno de desarrollo?\n\n' +
-                            'Esta acción reemplazará la base de datos y archivos de prueba locales con los datos reales para depuración segura. Los datos reales nunca serán modificados.'
-                          )
-                        ) {
-                          try {
-                            const res = await window.churchPresenterApi.copyProdLibraryToDev()
-                            if (res.success) {
-                              alert(res.message)
-                              loadAllData()
-                            } else {
-                              alert(`No se pudo copiar: ${res.message}`)
-                            }
-                          } catch (err: any) {
-                            alert(`Error: ${err.message}`)
-                          }
-                        }
-                      }}
-                    >
-                      <Copy size={13} />
-                      <span>Copiar Biblioteca Real a Desarrollo</span>
-                    </button>
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* Requirement 1: YouTube Session & Privacy */}
-              <div className="settings-section">
-                <h3>Sesión y Privacidad de YouTube</h3>
-                <p className="section-note">
-                  La sesión de YouTube se almacena de forma aislada en la partición persistente <code>persist:youtube</code>. La aplicación nunca lee ni guarda sus contraseñas.
-                </p>
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    className="secondary-action-btn"
-                    style={{ borderColor: '#f59e0b', color: '#fbbf24' }}
-                    onClick={async () => {
-                      if (confirm('¿Desea cerrar la sesión y borrar todas las cookies y almacenamiento de YouTube?')) {
-                        await window.churchPresenterApi.clearYouTubeSession()
-                        alert('Sesión de YouTube cerrada y datos borrados con éxito.')
-                      }
-                    }}
-                  >
-                    <span>Cerrar sesión / borrar datos de YouTube</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Phase 6: Control Remoto desde Celular y Tablet */}
-              <div className="settings-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3>Control Remoto desde Celular y Tablet</h3>
-                    <p className="section-note" style={{ margin: 0 }}>
-                      Opere la presentación y pantallas desde cualquier teléfono o tableta conectado a la red Wi-Fi local mediante navegador web.
-                    </p>
+                {/* =========================================================
+                    5. CÁMARAS
+                    ========================================================= */}
+                {settingsCategory === 'cameras' && (
+                  <div className="settings-section">
+                    <CameraSettingsSection />
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(remoteConfig?.enabled)}
-                      onChange={(e) => handleToggleRemoteEnabled(e.target.checked)}
-                    />
-                    <span style={{ color: remoteConfig?.enabled ? '#22c55e' : '#9ca3af' }}>
-                      {remoteConfig?.enabled ? 'ACTIVADO' : 'DESACTIVADO'}
-                    </span>
-                  </label>
-                </div>
+                )}
 
-                {remoteConfig?.enabled && (
-                  <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {remoteStatus?.portConflictWarning && (
-                      <div style={{ backgroundColor: '#7c2d12', border: '1px solid #ea580c', color: '#ffedd5', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
-                        ⚠️ <strong>Conflicto de puerto:</strong> {remoteStatus.portConflictWarning}
-                      </div>
-                    )}
-                    {remoteStatus?.isWindowsPublicNetwork && (
-                      <div style={{ backgroundColor: '#451a03', border: '1px solid #d97706', color: '#fef3c7', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
-                        ⚠️ <strong>Perfil de red de Windows detectado como "Público":</strong> El Firewall de Windows suele bloquear conexiones entrantes en redes públicas. Si los dispositivos no pueden conectarse, configure la conexión como "Red privada" en Windows &gt; Configuración &gt; Red e Internet.
-                      </div>
-                    )}
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px', gap: 10 }}>
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Interfaz de Red (IP Local):</label>
-                        <select
-                          value={remoteConfig.selectedIp || '0.0.0.0'}
-                          onChange={async (e) => {
-                            const updated = await window.churchPresenterApi.saveRemoteConfig({ selectedIp: e.target.value })
-                            setRemoteConfig(updated)
-                            const status = await window.churchPresenterApi.getRemoteStatus()
-                            setRemoteStatus(status)
-                          }}
-                          style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                {/* =========================================================
+                    6. TRANSMISIÓN
+                    ========================================================= */}
+                {settingsCategory === 'broadcast' && (
+                  <>
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <h3>Estudio de Transmisión y Grabación (RTMP)</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            Configure las claves de stream (YouTube Live, Facebook Live, Twitch), resolución de salida, bitrate y carpeta local de grabación.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="primary-action-btn"
+                          onClick={() => setIsBroadcastSettingsOpen(true)}
+                          style={{ fontSize: 12 }}
                         >
-                          {networkInterfaces.map((ni) => (
-                            <option key={ni.ip} value={ni.ip}>{ni.name}</option>
-                          ))}
-                        </select>
+                          Configurar Transmisión y Grabación...
+                        </button>
                       </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginTop: 12 }}>
+                        <div style={{ background: '#12141a', border: '1px solid #1f242e', borderRadius: 8, padding: 14 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', marginBottom: 4 }}>
+                            🎥 Salida RTMP
+                          </div>
+                          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                            Transmita la salida de programa directamente a su plataforma de video en 1080p o 720p.
+                          </div>
+                        </div>
+                        <div style={{ background: '#12141a', border: '1px solid #1f242e', borderRadius: 8, padding: 14 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', marginBottom: 4 }}>
+                            ⚡ Codificación Hardware (NVENC)
+                          </div>
+                          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                            Aprovecha la aceleración por hardware de tarjetas NVIDIA RTX para 0% de sobrecarga en CPU.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Puerto HTTP:</label>
-                        <input
-                          type="number"
-                          value={remoteConfig.port || 8080}
-                          onChange={async (e) => {
-                            const port = parseInt(e.target.value, 10) || 8080
-                            const updated = await window.churchPresenterApi.saveRemoteConfig({ port })
-                            setRemoteConfig(updated)
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <h3>Puente con OBS Studio</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            Conecte ChurchPresenter con OBS Studio a través de obs-websocket v5 y use fuentes de navegador transparentes.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsObsBridgeOpen(true)}
+                          style={{ borderColor: '#22c55e', color: '#4ade80', fontSize: 12 }}
+                        >
+                          Abrir Puente con OBS Studio...
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', background: '#12141a', border: '1px solid #1f242e', borderRadius: 8, padding: 14 }}>
+                        Permite cambiar escenas automáticamente en OBS al avanzar diapositivas, sincronizar inicio y fin de stream, y recibir títulos con transparencia alfa para tercios inferiores.
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* =========================================================
+                    7. BIBLIAS
+                    ========================================================= */}
+                {settingsCategory === 'bibles' && (
+                  <>
+                    {/* Requirement A.1: Doble traducción por rol de salida */}
+                    <div className="settings-section">
+                      <h3>Doble Traducción por Pantalla de Salida</h3>
+                      <p className="section-note">
+                        Configure de manera independiente para cada pantalla física (Sala Principal, Escenario, Lobby) qué versión o versiones bíblicas proyectará y si se mostrarán en una sola traducción, apiladas o lado a lado.
+                      </p>
+
+                      <div className="role-bible-configs-table">
+                        {STANDARD_OUTPUT_ROLES.map((r) => {
+                          const config = roleBibleConfigs[r.id] || { role: r.id, mode: 'single', primaryTranslation: 'RVR1909' }
+                          return (
+                            <div key={r.id} className="role-bible-config-row">
+                              <div className="role-meta">
+                                <strong>{r.label} ({r.id})</strong>
+                                <span className="role-desc">{r.description}</span>
+                              </div>
+
+                              <div className="role-fields">
+                                <label>Modo:</label>
+                                <select
+                                  value={config.mode}
+                                  onChange={(e) => {
+                                    const updated = { ...config, mode: e.target.value as any }
+                                    setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                                  }}
+                                >
+                                  <option value="single">Una traducción</option>
+                                  <option value="stacked">Doble traducción apilada</option>
+                                  <option value="sideBySide">Doble traducción lado a lado</option>
+                                </select>
+
+                                <label>Principal:</label>
+                                <select
+                                  value={config.primaryTranslation}
+                                  onChange={(e) => {
+                                    const updated = { ...config, primaryTranslation: e.target.value }
+                                    setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                                  }}
+                                >
+                                  {bibleTranslations.map((t) => (
+                                    <option key={t.id} value={t.abbrev}>
+                                      {t.name} ({t.abbrev})
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {config.mode !== 'single' && (
+                                  <>
+                                    <label>Secundaria:</label>
+                                    <select
+                                      value={config.secondaryTranslation || 'KJV'}
+                                      onChange={(e) => {
+                                        const updated = { ...config, secondaryTranslation: e.target.value }
+                                        setRoleBibleConfigs({ ...roleBibleConfigs, [r.id]: updated })
+                                      }}
+                                    >
+                                      {bibleTranslations.map((t) => (
+                                        <option key={t.id} value={t.abbrev}>
+                                          {t.name} ({t.abbrev})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Requirement 0: Gestión e Importación de Traducciones Bíblicas */}
+                    <div className="settings-section">
+                      <h3>Traducciones Bíblicas y Versiones</h3>
+                      <p className="section-note">
+                        El sistema cuenta con {bibleTranslations.length} traducciones instaladas ({bibleTranslations.map((b) => b.abbrev).join(', ')}). Cada versión se indexa de forma independiente en SQLite con búsqueda de texto instantánea.
+                      </p>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                        <button
+                          type="button"
+                          className="primary-action-btn"
+                          onClick={() => {
+                            setIsSettingsOpen(false)
+                            resetBibleImportForm()
+                            setIsBibleImportModalOpen(true)
                           }}
-                          style={{ width: '100%', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#fff', padding: '8px', borderRadius: 6, fontSize: 13, marginTop: 4 }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Upload size={14} />
+                          <span>Importar traducción...</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => {
+                            setIsSettingsOpen(false)
+                            setIsBibleManagerModalOpen(true)
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <BookOpen size={14} />
+                          <span>Administrar traducciones instaladas</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* =========================================================
+                    8. TECLADO
+                    ========================================================= */}
+                {settingsCategory === 'keyboard' && (
+                  <div className="settings-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <div>
+                        <h3>Atajos de Teclado y Perfiles</h3>
+                        <p className="section-note" style={{ margin: 0 }}>
+                          Configure las teclas para las acciones primarias de la iglesia o seleccione el perfil por defecto de ProPresenter.
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <label style={{ fontSize: 12, color: '#94a3b8' }}>Perfil:</label>
+                        <select
+                          value={tempShortcuts.profile || 'propresenter'}
+                          onChange={(e) => {
+                            const prof = e.target.value as ShortcutProfile
+                            if (prof === 'propresenter') {
+                              setTempShortcuts({ ...DEFAULT_SHORTCUTS, profile: 'propresenter' })
+                            } else {
+                              setTempShortcuts({ ...tempShortcuts, profile: 'custom' })
+                            }
+                          }}
+                          style={{
+                            backgroundColor: 'var(--bg-input)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 3,
+                            padding: '3px 8px',
+                            fontSize: 12
+                          }}
+                        >
+                          <option value="propresenter">ProPresenter por Defecto</option>
+                          <option value="custom">Personalizado</option>
+                        </select>
+                        <button
+                          className="secondary-action-btn"
+                          style={{ fontSize: 11, padding: '3px 8px' }}
+                          onClick={() => setTempShortcuts(DEFAULT_SHORTCUTS)}
+                          title="Restablecer todos los atajos al perfil original de ProPresenter"
+                        >
+                          Restablecer
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="shortcuts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
+                      <div className="shortcut-field">
+                        <label>Siguiente Diapositiva:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.nextSlide || 'ArrowRight'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, nextSlide: e.target.value, profile: 'custom' })
+                          }
                         />
                       </div>
+                      <div className="shortcut-field">
+                        <label>Anterior Diapositiva:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.prevSlide || 'ArrowLeft'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, prevSlide: e.target.value, profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Siguiente Ítem Playlist:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.nextPlaylistItem || 'ArrowDown'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, nextPlaylistItem: e.target.value, profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Anterior Ítem Playlist:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.prevPlaylistItem || 'ArrowUp'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, prevPlaylistItem: e.target.value, profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Pantalla a Negro (Black):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.black || 'F1'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, black: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Todo (Clear All):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearAll || tempShortcuts.clear || 'F2'}
+                          onChange={(e) =>
+                            setTempShortcuts({
+                              ...tempShortcuts,
+                              clearAll: e.target.value.toUpperCase(),
+                              clear: e.target.value.toUpperCase(),
+                              profile: 'custom'
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Mostrar Logo:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.logo || 'F3'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, logo: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Congelar Salidas (Freeze):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.freeze || 'F4'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, freeze: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Capa Audio:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearAudio || 'F5'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, clearAudio: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Fondo (Fondo):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearBackground || 'F6'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, clearBackground: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Diapo (Slide):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearSlide || 'F7'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, clearSlide: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Mensaje:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearMessage || 'F8'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, clearMessage: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Limpiar Medios (Media):</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.clearMedia || 'F9'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, clearMedia: e.target.value.toUpperCase(), profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Alternar Cajón Medios:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.toggleMedia || 'Ctrl+M'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, toggleMedia: e.target.value, profile: 'custom' })
+                          }
+                        />
+                      </div>
+                      <div className="shortcut-field">
+                        <label>Foco a Búsqueda:</label>
+                        <input
+                          type="text"
+                          value={tempShortcuts.focusSearch || 'Ctrl+F'}
+                          onChange={(e) =>
+                            setTempShortcuts({ ...tempShortcuts, focusSearch: e.target.value, profile: 'custom' })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>PIN de Acceso:</label>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                          <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: '#f97316', backgroundColor: '#1a1a1a', border: '1px solid #333', padding: '6px 10px', borderRadius: 6, flex: 1, textAlign: 'center' }}>
-                            {remoteConfig.pin || '------'}
-                          </span>
+                {/* =========================================================
+                    9. DATOS Y RESPALDO
+                    ========================================================= */}
+                {settingsCategory === 'data' && (
+                  <>
+                    {/* User Workspace & Auto-created Category Folders */}
+                    <div className="settings-section">
+                      <h3>Carpeta de Medios y Biblioteca (Workspace)</h3>
+                      <p className="section-note">
+                        ChurchPresenter crea y organiza automáticamente las subcarpetas de todas las secciones (Videos, Imágenes, Audios, Cuentas Regresivas, Presentaciones, Documentos PDF, Canciones, Biblias, Cultos y Copias de Seguridad). Puede colocar esta carpeta en sus Documentos o en cualquier otra unidad de disco de su preferencia.
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="text"
+                            readOnly
+                            value={workspacePath || 'Cargando ubicación...'}
+                            style={{
+                              flex: 1,
+                              padding: '7px 10px',
+                              background: '#1e2229',
+                              border: '1px solid #334155',
+                              borderRadius: 4,
+                              color: '#f8fafc',
+                              fontSize: 12,
+                              fontFamily: 'monospace'
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           <button
-                            type="button"
-                            onClick={handleRegeneratePin}
                             className="secondary-action-btn"
-                            title="Regenerar PIN numérico de 6 dígitos"
-                            style={{ padding: '6px 8px', fontSize: 11 }}
+                            onClick={async () => {
+                              const res = await window.churchPresenterApi.chooseWorkspaceFolder?.()
+                              if (res) {
+                                setWorkspacePath(res.rootPath)
+                              }
+                            }}
                           >
-                            ↻
+                            <span>Cambiar Carpeta...</span>
+                          </button>
+                          <button
+                            className="secondary-action-btn"
+                            onClick={() => {
+                              window.churchPresenterApi.openWorkspaceFolder?.()
+                            }}
+                          >
+                            <span>Abrir en Explorador de Windows</span>
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    {/* QR Code and URLs: Operator & Stage */}
-                    {remoteStatus?.addresses && remoteStatus.addresses.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        {/* Operator Remote Card */}
-                        <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
-                          {remoteStatus.addresses[0].qrDataUrl && (
-                            <img
-                              src={remoteStatus.addresses[0].qrDataUrl}
-                              alt="Código QR de Conexión Remota Operador"
-                              style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
-                            />
-                          )}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', textTransform: 'uppercase', marginBottom: 4 }}>
-                              📱 Control Remoto (Operador)
-                            </div>
-                            {remoteStatus.addresses.map((addr) => (
-                              <div key={addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
-                                  {addr.url}
-                                </span>
-                              </div>
-                            ))}
-                            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-                              Permite operar diapositivas, playlist y temporizadores (requiere PIN).
-                            </div>
-                          </div>
+                    {/* Copias de Seguridad Automáticas */}
+                    <div className="settings-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <h3>Copias de Seguridad y Respaldo</h3>
+                          <p className="section-note" style={{ margin: 0 }}>
+                            El sistema genera copias de seguridad de la base de datos SQLite rotativas y periódicas con verificación SHA-256.
+                          </p>
                         </div>
-
-                        {/* Stage Viewer Card */}
-                        <div style={{ display: 'flex', gap: 14, backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 8, padding: 14, alignItems: 'center' }}>
-                          {remoteStatus.addresses[0].stageQrDataUrl && (
-                            <img
-                              src={remoteStatus.addresses[0].stageQrDataUrl}
-                              alt="Código QR para Pantalla de Escenario"
-                              style={{ width: 100, height: 100, borderRadius: 6, border: '1px solid #444', backgroundColor: '#fff', padding: 4 }}
-                            />
-                          )}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', marginBottom: 4 }}>
-                              🎭 Pantalla de Escenario (Tablets)
-                            </div>
-                            {remoteStatus.addresses.map((addr) => (
-                              <div key={addr.stageUrl || addr.url} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace' }}>
-                                  {addr.stageUrl || `${addr.url}/stage`}
-                                </span>
-                              </div>
-                            ))}
-                            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-                              Visor de escenario para músicos y orador (QR incluye token de solo lectura).
-                            </div>
-                          </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            className="secondary-action-btn"
+                            onClick={() => window.churchPresenterApi.openBackupsFolder()}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                          >
+                            <FolderOpen size={14} />
+                            <span>Abrir Carpeta de Backups</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action-btn"
+                            onClick={() => setIsSecondaryBackupModalOpen(true)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                          >
+                            <HardDrive size={14} />
+                            <span>Respaldos en USB / Disco Externo...</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action-btn"
+                            onClick={() => setIsLibrarySyncModalOpen(true)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                          >
+                            <Database size={14} />
+                            <span>Sincronización de Biblioteca...</span>
+                          </button>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Stage Without PIN option */}
-                    <div style={{ padding: '10px 12px', backgroundColor: '#181818', border: '1px solid #282828', borderRadius: 6 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(remoteConfig?.allowReadOnlyWithoutPin)}
-                          onChange={async (e) => {
-                            const updated = await window.churchPresenterApi.saveRemoteConfig({ allowReadOnlyWithoutPin: e.target.checked })
-                            setRemoteConfig(updated)
-                            const status = await window.churchPresenterApi.getRemoteStatus()
-                            setRemoteStatus(status)
-                          }}
-                        />
-                        <span style={{ color: '#fff', fontWeight: 600 }}>Permitir visor de Escenario (/stage) sin código PIN</span>
-                      </label>
-                      <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
-                        ⚠️ <strong>Advertencia:</strong> Si se activa, cualquier dispositivo en la red local podrá ver la pantalla de retorno sin ingresar el PIN. Manténgalo desactivado si desea exigir autorización por PIN o código QR.
                       </div>
                     </div>
 
-                    {/* Connected Devices Table */}
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 6 }}>
-                        Dispositivos Conectados ({remoteStatus?.connectedClients?.length || 0}):
+                    {/* Demo Data Management */}
+                    <div className="settings-section">
+                      <h3>Datos de Demostración</h3>
+                      <p className="section-note">
+                        Cargue o elimine los himnos y cultos de demostración de dominio público (Martín Lutero, John Newton, Isaac Watts, etc.) sin afectar los datos reales de su iglesia.
+                      </p>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                          className="secondary-action-btn"
+                          onClick={async () => {
+                            const res = await window.churchPresenterApi.loadDemoData()
+                            alert(`Se cargaron ${res.songsCount} canciones de demostración de dominio público y 1 plantilla.`)
+                            loadAllData()
+                          }}
+                        >
+                          <span>Cargar datos de demostración</span>
+                        </button>
+                        <button
+                          className="secondary-action-btn"
+                          style={{ borderColor: '#ef4444', color: '#f87171' }}
+                          onClick={async () => {
+                            if (confirm('¿Desea borrar todos los datos de demostración? Los datos reales no serán afectados.')) {
+                              const res = await window.churchPresenterApi.clearDemoData()
+                              alert(`Se eliminaron ${res.deletedSongs} canciones de demostración.`)
+                              loadAllData()
+                            }
+                          }}
+                        >
+                          <span>Borrar datos de demostración</span>
+                        </button>
                       </div>
-                      {(remoteStatus?.connectedClients?.length || 0) === 0 ? (
-                        <div style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', padding: '6px 0' }}>
-                          No hay dispositivos remotos conectados actualmente.
+                    </div>
+                  </>
+                )}
+
+                {/* =========================================================
+                    10. APARIENCIA
+                    ========================================================= */}
+                {settingsCategory === 'appearance' && (
+                  <div className="settings-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <div>
+                        <h3>Apariencia y Paleta ProPresenter</h3>
+                        <p className="section-note" style={{ margin: 0 }}>
+                          Paleta oscura profesional con contraste WCAG AA. Personalice los colores de acento principales del operador.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-action-btn"
+                        style={{ fontSize: 11, padding: '3px 8px' }}
+                        onClick={() => {
+                          setAccentPrimary('#FF7A00')
+                          setAccentLive('#22C55E')
+                          setAccentPreview('#2D9CFF')
+                          setAccentDanger('#EF4444')
+                        }}
+                        title="Restablecer paleta a valores predeterminados de ProPresenter"
+                      >
+                        Restablecer Colores
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 10 }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600 }}>Acento Primario (Naranja Pro):</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <input
+                            type="color"
+                            value={accentPrimary}
+                            onChange={(e) => setAccentPrimary(e.target.value)}
+                            style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPrimary}</span>
                         </div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {remoteStatus?.connectedClients.map((client) => (
-                            <div
-                              key={client.id}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                backgroundColor: '#1a1a1a',
-                                border: '1px solid #2e2e2e',
-                                borderRadius: 6,
-                                padding: '8px 12px'
-                              }}
-                            >
-                              <div>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{client.name}</span>
-                                <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>({client.ip})</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: client.role === 'operator' ? '#f97316' : '#38bdf8', color: '#000', padding: '2px 6px', borderRadius: 4, marginLeft: 8 }}>
-                                  {client.role === 'operator' ? 'CONTROL TOTAL' : 'SOLO LECTURA'}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleKickClient(client.id)}
-                                style={{ backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
-                              >
-                                Expulsar
-                              </button>
-                            </div>
-                          ))}
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600 }}>En Vivo (Verde Pro):</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <input
+                            type="color"
+                            value={accentLive}
+                            onChange={(e) => setAccentLive(e.target.value)}
+                            style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentLive}</span>
                         </div>
-                      )}
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600 }}>Vista Previa (Azul Pro):</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <input
+                            type="color"
+                            value={accentPreview}
+                            onChange={(e) => setAccentPreview(e.target.value)}
+                            style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentPreview}</span>
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600 }}>Peligro / Salida Desconectada:</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <input
+                            type="color"
+                            value={accentDanger}
+                            onChange={(e) => setAccentDanger(e.target.value)}
+                            style={{ width: 36, height: 28, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{accentDanger}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Phase 6: Diseño de Pantalla de Escenario */}
-              <div className="settings-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3>Diseño de Pantalla de Escenario (Stage Monitor)</h3>
-                    <p className="section-note" style={{ margin: 0 }}>
-                      Personalice los elementos visibles para los predicadores y músicos (diapositiva actual, siguiente, reloj, notas, temporizadores).
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsStageLayoutModalOpen(true)}
-                    className="secondary-action-btn"
-                    style={{ borderColor: '#38bdf8', color: '#38bdf8', fontSize: 12 }}
-                  >
-                    Editar Diseños de Escenario...
-                  </button>
-                </div>
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 12, color: '#9ca3af' }}>Diseño activo asignado:</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', backgroundColor: '#1a1a1a', padding: '4px 10px', borderRadius: 6, border: '1px solid #333' }}>
-                    {assignedStageLayout?.name || 'Escenario - Clásico Pro'}
-                  </span>
-                </div>
+                {/* =========================================================
+                    11. AVANZADO
+                    ========================================================= */}
+                {settingsCategory === 'advanced' && (
+                  <>
+                    {/* Requirement 1: YouTube Session & Privacy */}
+                    <div className="settings-section">
+                      <h3>Sesión y Privacidad de YouTube</h3>
+                      <p className="section-note">
+                        La sesión de YouTube se almacena de forma aislada en la partición persistente <code>persist:youtube</code>. La aplicación nunca lee ni guarda sus contraseñas.
+                      </p>
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          className="secondary-action-btn"
+                          style={{ borderColor: '#f59e0b', color: '#fbbf24' }}
+                          onClick={async () => {
+                            if (confirm('¿Desea cerrar la sesión y borrar todas las cookies y almacenamiento de YouTube?')) {
+                              await window.churchPresenterApi.clearYouTubeSession()
+                              alert('Sesión de YouTube cerrada y datos borrados con éxito.')
+                            }
+                          }}
+                        >
+                          <span>Cerrar sesión / borrar datos de YouTube</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Requirement A.6: Información del Entorno y Copia de Biblioteca */}
+                    <div className="settings-section">
+                      <h3>Entorno de Desarrollo y Datos</h3>
+                      <p className="section-note">
+                        Herramientas avanzadas para pruebas seguras con datos reales sin alterar la producción.
+                      </p>
+                      {isDev ? (
+                        <div style={{ marginTop: 8 }}>
+                          <button
+                            className="secondary-action-btn"
+                            id="copy-prod-btn"
+                            onClick={async () => {
+                              if (
+                                confirm(
+                                  '¿Copiar la biblioteca real de producción a este entorno de desarrollo?\n\n' +
+                                  'Esta acción reemplazará la base de datos y archivos de prueba locales con los datos reales para depuración segura. Los datos reales nunca serán modificados.'
+                                )
+                              ) {
+                                try {
+                                  const res = await window.churchPresenterApi.copyProdLibraryToDev()
+                                  if (res.success) {
+                                    alert(res.message)
+                                    loadAllData()
+                                  } else {
+                                    alert(`No se pudo copiar: ${res.message}`)
+                                  }
+                                } catch (err: any) {
+                                  alert(`Error: ${err.message}`)
+                                }
+                              }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                          >
+                            <Copy size={13} />
+                            <span>Copiar Biblioteca Real a Desarrollo</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                          Modo Producción activo. Las herramientas de clonación de desarrollo están restringidas.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Diagnóstico y Herramientas del Sistema */}
+                    <div className="settings-section">
+                      <h3>Diagnóstico y Herramientas del Sistema</h3>
+                      <p className="section-note">
+                        Verifique el rendimiento de hardware, logs de depuración, checklists de culto y ensayos.
+                      </p>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsDiagnosticsModalOpen(true)}
+                          style={{ fontSize: 12 }}
+                        >
+                          <span>Diagnóstico del Sistema y Logs...</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsChecklistModalOpen(true)}
+                          style={{ fontSize: 12 }}
+                        >
+                          <span>Lista de Verificación (Checklist)...</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsRehearsalSummaryModalOpen(true)}
+                          style={{ fontSize: 12 }}
+                        >
+                          <span>Resumen de Ensayo...</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

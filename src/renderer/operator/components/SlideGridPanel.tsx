@@ -222,19 +222,73 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                               : theme.background?.value || '#181818')
                     }}
                   >
-                    {slide.mediaUrl && slide.mediaType === 'image' && (
-                      <img src={toMediaUrl(slide.mediaUrl)} alt="" className="pro-slide-thumb-img" />
+                    {/* Image / Thumbnail / Video Poster Preview */}
+                    {(slide.thumbnailUrl || (slide.mediaUrl && (slide.mediaType === 'image' || slide.sourceType === 'image' || slide.sourceType === 'powerpoint'))) && (
+                      <img
+                        src={toMediaUrl(slide.thumbnailUrl || slide.mediaUrl)}
+                        alt=""
+                        className="pro-slide-thumb-img"
+                        style={{ objectFit: 'cover', opacity: 0.9 }}
+                      />
                     )}
-                    <div
-                      className="pro-slide-text-preview"
-                      style={{
-                        fontFamily: theme.fontFamily || 'sans-serif',
-                        color: theme.color || '#ffffff',
-                        textAlign: (theme.alignment || 'center') as any
-                      }}
-                    >
-                      {slide.body}
-                    </div>
+
+                    {!slide.thumbnailUrl && slide.mediaUrl && (slide.mediaType === 'video' || slide.sourceType === 'video') && (
+                      <video
+                        src={`${toMediaUrl(slide.mediaUrl)}#t=0.5`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="pro-slide-thumb-img"
+                        style={{ objectFit: 'cover', opacity: 0.9, pointerEvents: 'none' }}
+                      />
+                    )}
+
+                    {slide.youtubeId && (
+                      <img
+                        src={`https://i.ytimg.com/vi/${slide.youtubeId}/hqdefault.jpg`}
+                        alt=""
+                        className="pro-slide-thumb-img"
+                        style={{ objectFit: 'cover', opacity: 0.9 }}
+                      />
+                    )}
+
+                    {/* Slide Text Preview (or compact file info badge if video) */}
+                    {(slide.mediaType === 'video' || slide.sourceType === 'video') ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 6,
+                          left: 6,
+                          backgroundColor: 'rgba(0,0,0,0.75)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 10,
+                          color: '#e2e8f0',
+                          zIndex: 2,
+                          fontFamily: 'monospace',
+                          pointerEvents: 'none',
+                          maxWidth: '75%',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                        title={slide.body}
+                      >
+                        {slide.body}
+                      </div>
+                    ) : (
+                      <div
+                        className="pro-slide-text-preview"
+                        style={{
+                          fontFamily: theme.fontFamily || 'sans-serif',
+                          color: theme.color || '#ffffff',
+                          textAlign: (theme.alignment || 'center') as any
+                        }}
+                      >
+                        {slide.body}
+                      </div>
+                    )}
 
                     {isLive && (
                       <div className="pro-slide-live-overlay">

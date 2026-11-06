@@ -17,6 +17,126 @@ import { safeStorageService } from '../security/safe-storage-service'
 import { BroadcastSettings, BroadcastStatus } from '../../shared/types'
 import { logger } from '../logger'
 
+export interface BroadcastFfmpegArgOptions {
+  resolution: string
+  fps: number
+  videoBitrate: string
+  minBitrate?: string
+  maxBitrate: string
+  bufSize: string
+  audioBitrate: string
+  useNvenc: boolean
+  rtmpDestination?: string
+  localRecordDestination?: string
+  recordingFormat?: string
+  audioDevice?: string
+}
+
+export function buildBroadcastFfmpegArgs(options: BroadcastFfmpegArgOptions): string[] {
+  const args: string[] = [
+    '-hide_banner',
+    '-loglevel',
+    'info',
+    // Input 0: Raw RGBA video from stdin
+    '-f',
+    'rawvideo',
+    '-pix_fmt',
+    'rgba',
+    '-s',
+    options.resolution,
+    '-r',
+    String(options.fps),
+    '-i',
+    'pipe:0'
+  ]
+
+  // Input 1: Audio track
+  if (options.audioDevice) {
+    args.push('-f', 'dshow', '-i', `audio=${options.audioDevice}`)
+  } else {
+    args.push('-re', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000')
+  }
+
+  // Stream mapping: video from input 0, audio from input 1
+  args.push('-map', '0:v:0', '-map', '1:a:0')
+
+  // Video Codec flags
+  if (options.useNvenc) {
+    args.push(
+      '-c:v',
+      'h264_nvenc',
+      '-preset',
+      'p4',
+      '-tune',
+      'll',
+      '-rc',
+      'cbr',
+      '-b:v',
+      options.videoBitrate,
+      '-minrate',
+      options.minBitrate || '1500k',
+      '-maxrate',
+      options.maxBitrate,
+      '-bufsize',
+      options.bufSize,
+      '-r',
+      String(options.fps),
+      '-g',
+      String(options.fps * 2),
+      '-pix_fmt',
+      'yuv420p'
+    )
+  } else {
+    args.push(
+      '-c:v',
+      'libx264',
+      '-preset',
+      'veryfast',
+      '-tune',
+      'zerolatency',
+      '-b:v',
+      options.videoBitrate,
+      '-minrate',
+      options.minBitrate || '1500k',
+      '-maxrate',
+      options.maxBitrate,
+      '-bufsize',
+      options.bufSize,
+      '-r',
+      String(options.fps),
+      '-g',
+      String(options.fps * 2),
+      '-pix_fmt',
+      'yuv420p'
+    )
+  }
+
+  // Audio Codec flags
+  args.push('-c:a', 'aac', '-b:a', options.audioBitrate, '-ar', '48000', '-ac', '2')
+
+  // Outputs
+  if (options.rtmpDestination) {
+    args.push('-f', 'flv', options.rtmpDestination)
+  }
+
+  if (options.localRecordDestination) {
+    const isMkv = options.recordingFormat === 'mkv'
+    if (isMkv) {
+      args.push('-f', 'matroska', options.localRecordDestination)
+    } else {
+      args.push(
+        '-movflags',
+        '+frag_keyframe+empty_moov+default_base_moof',
+        '-f',
+        'mp4',
+        options.localRecordDestination
+      )
+    }
+  }
+
+  return args
+}
+
 export class BroadcastEngine extends EventEmitter {
   private ffmpegProc: ChildProcess | null = null
   private status: BroadcastStatus = {
@@ -39,6 +159,9 @@ export class BroadcastEngine extends EventEmitter {
   private reconnectTimer: NodeJS.Timeout | null = null
   private targetRtmpUrl = ''
   private targetRecordingPath = ''
+  private recentStderr: string[] = []
+  private targetBitrateKbps = 3500
+  private lowBitrateSeconds = 0
 
   constructor() {
     super()
@@ -52,13 +175,27 @@ export class BroadcastEngine extends EventEmitter {
     this.emit('status-changed', this.getStatus())
   }
 
+  public updateDiskFree(): void {
+    try {
+      const dir = this.targetRecordingPath
+        ? path.dirname(this.targetRecordingPath)
+        : app.getPath('userData')
+      if (fs.existsSync(dir)) {
+        const stats = fs.statfsSync(dir)
+        const freeGb = (stats.bsize * stats.bavail) / (1024 * 1024 * 1024)
+        this.status.diskFreeFormatted = `${freeGb.toFixed(1)} GB Libres`
+      }
+    } catch {
+      this.status.diskFreeFormatted = undefined
+    }
+  }
+
   public async start(options?: {
     stream?: boolean
     record?: boolean
     overrideSettings?: Partial<BroadcastSettings>
   }): Promise<{ success: boolean; error?: string }> {
     if (this.ffmpegProc) {
-      // Already running; if only stream or record was requested, update flags
       if (options?.stream) this.status.isStreaming = true
       if (options?.record) this.status.isRecording = true
       this.notifyStatus()
@@ -72,7 +209,8 @@ export class BroadcastEngine extends EventEmitter {
 
     const ffmpegStatus = await ffmpegService.detectFfmpeg()
     if (!ffmpegStatus.available || !ffmpegStatus.path) {
-      const err = 'FFmpeg no está instalado en el sistema o no fue detectado. Instale FFmpeg o configure su ruta en Ajustes.'
+      const err =
+        'FFmpeg no está instalado en el sistema o no fue detectado. Instale FFmpeg o configure su ruta en Ajustes.'
       this.status.connectionState = 'error'
       this.status.errorMessage = err
       this.notifyStatus()
@@ -92,7 +230,10 @@ export class BroadcastEngine extends EventEmitter {
       if (!settings.rtmpUrl) {
         return { success: false, error: 'URL de transmisión RTMP no configurada.' }
       }
-      const rawKey = settings.rtmpKeyEncrypted ? safeStorageService.decrypt(settings.rtmpKeyEncrypted) : ''
+      const rawKey = (
+        settings.rtmpKey ||
+        (settings.rtmpKeyEncrypted ? safeStorageService.decrypt(settings.rtmpKeyEncrypted) : '')
+      ).trim()
       const baseUrl = settings.rtmpUrl.trim().replace(/\/$/, '')
       rtmpDestination = rawKey ? `${baseUrl}/${rawKey}` : baseUrl
       this.targetRtmpUrl = rtmpDestination
@@ -126,110 +267,57 @@ export class BroadcastEngine extends EventEmitter {
     this.status.encoderUsed = useNvenc ? 'nvenc' : 'x264'
     this.status.activePreset = settings.qualityPreset
 
-    let resolution = '1920x1080'
+    let resolution = '1280x720'
     let fps = 30
-    let videoBitrate = '6000k'
-    let maxBitrate = '6500k'
-    let bufSize = '12000k'
-    let audioBitrate = '160k'
+    let videoBitrate = '3000k'
+    let minBitrate = '1500k'
+    let maxBitrate = '4000k'
+    let bufSize = '8000k'
+    let audioBitrate = '128k'
+    this.targetBitrateKbps = 3000
 
-    if (settings.qualityPreset === '720p30') {
-      resolution = '1280x720'
+    if (settings.qualityPreset === '1080p30') {
+      resolution = '1920x1080'
       fps = 30
-      videoBitrate = '3500k'
-      maxBitrate = '4000k'
-      bufSize = '7000k'
-      audioBitrate = '128k'
+      videoBitrate = '6000k'
+      minBitrate = '3000k'
+      maxBitrate = '6500k'
+      bufSize = '12000k'
+      audioBitrate = '160k'
+      this.targetBitrateKbps = 6000
     } else if (settings.qualityPreset === '1080p60') {
       resolution = '1920x1080'
       fps = 60
       videoBitrate = '9000k'
+      minBitrate = '4500k'
       maxBitrate = '10000k'
       bufSize = '18000k'
       audioBitrate = '192k'
+      this.targetBitrateKbps = 9000
     }
 
-    const ffmpegArgs: string[] = [
-      '-hide_banner',
-      '-loglevel',
-      'info',
-      // Input: WebM / Matroska or raw stdin
-      '-re',
-      '-f',
-      'matroska',
-      '-i',
-      'pipe:0'
-    ]
-
-    // Video codec flags
-    if (useNvenc) {
-      ffmpegArgs.push(
-        '-c:v',
-        'h264_nvenc',
-        '-preset',
-        'p4',
-        '-tune',
-        'll',
-        '-rc',
-        'cbr',
-        '-b:v',
-        videoBitrate,
-        '-maxrate',
-        maxBitrate,
-        '-bufsize',
-        bufSize,
-        '-g',
-        String(fps * 2),
-        '-pix_fmt',
-        'yuv420p',
-        '-s',
-        resolution
-      )
-    } else {
-      ffmpegArgs.push(
-        '-c:v',
-        'libx264',
-        '-preset',
-        'veryfast',
-        '-tune',
-        'zerolatency',
-        '-b:v',
-        videoBitrate,
-        '-maxrate',
-        maxBitrate,
-        '-bufsize',
-        bufSize,
-        '-g',
-        String(fps * 2),
-        '-pix_fmt',
-        'yuv420p',
-        '-s',
-        resolution
-      )
-    }
-
-    // Audio codec flags
-    ffmpegArgs.push('-c:a', 'aac', '-b:a', audioBitrate, '-ar', '48000', '-ac', '2')
-
-    // Outputs
-    if (shouldStream && rtmpDestination) {
-      ffmpegArgs.push('-f', 'flv', rtmpDestination)
-    }
-
-    if (shouldRecord && localRecordDestination) {
-      const containerFormat = settings.recordingFormat === 'mkv' ? 'matroska' : 'mp4'
-      if (containerFormat === 'mp4') {
-        ffmpegArgs.push('-movflags', '+frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', localRecordDestination)
-      } else {
-        ffmpegArgs.push('-f', 'matroska', localRecordDestination)
-      }
-    }
+    const ffmpegArgs = buildBroadcastFfmpegArgs({
+      resolution,
+      fps,
+      videoBitrate,
+      minBitrate,
+      maxBitrate,
+      bufSize,
+      audioBitrate,
+      useNvenc,
+      rtmpDestination: shouldStream ? rtmpDestination : undefined,
+      localRecordDestination: shouldRecord ? localRecordDestination : undefined,
+      recordingFormat: settings.recordingFormat
+    })
 
     try {
+      this.recentStderr = []
       this.status.connectionState = 'connecting'
       this.status.isStreaming = shouldStream
       this.status.isRecording = shouldRecord
       this.status.errorMessage = undefined
+      this.status.qualityWarning = undefined
+      this.updateDiskFree()
       this.notifyStatus()
 
       // Spawn FFmpeg with stdin pipe
@@ -238,11 +326,21 @@ export class BroadcastEngine extends EventEmitter {
         stdio: ['pipe', 'pipe', 'pipe']
       })
 
+      this.ffmpegProc.stdin?.on('error', (err) => {
+        logger.warn('[BroadcastEngine] Stdin write error:', err)
+      })
+
       this.startDurationTimer()
 
       this.ffmpegProc.stderr?.on('data', (data) => {
         const text = data.toString()
-        this.parseFfmpegStderr(text)
+        const lines = text.split(/[\r\n]+/)
+        for (const line of lines) {
+          if (!line.trim()) continue
+          this.recentStderr.push(line.trim())
+          if (this.recentStderr.length > 50) this.recentStderr.shift()
+          this.parseFfmpegStderr(line)
+        }
       })
 
       this.ffmpegProc.on('error', (err) => {
@@ -255,7 +353,6 @@ export class BroadcastEngine extends EventEmitter {
         this.handleProcessClose(code)
       })
 
-      // Update state to connected after spawn
       this.status.connectionState = 'connected'
       this.reconnectAttempts = 0
       this.notifyStatus()
@@ -289,7 +386,6 @@ export class BroadcastEngine extends EventEmitter {
     if (stopStream) this.status.isStreaming = false
     if (stopRecord) this.status.isRecording = false
 
-    // If both stopped, terminate process
     if (!this.status.isStreaming && !this.status.isRecording) {
       this.stopDurationTimer()
       if (this.reconnectTimer) {
@@ -305,13 +401,12 @@ export class BroadcastEngine extends EventEmitter {
         // stdin already closed
       }
 
-      // Graceful timeout then force kill
       setTimeout(() => {
         if (this.ffmpegProc) {
           try {
             this.ffmpegProc.kill('SIGINT')
           } catch {
-            // Process may already be terminated
+            // Process terminated
           }
           setTimeout(() => {
             if (this.ffmpegProc) {
@@ -336,6 +431,7 @@ export class BroadcastEngine extends EventEmitter {
   private startDurationTimer(): void {
     this.stopDurationTimer()
     this.status.durationSeconds = 0
+    this.lowBitrateSeconds = 0
     this.timerInterval = setInterval(() => {
       this.status.durationSeconds++
       const secs = this.status.durationSeconds
@@ -343,8 +439,34 @@ export class BroadcastEngine extends EventEmitter {
       const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0')
       const s = String(secs % 60).padStart(2, '0')
       this.status.formattedTime = `${h}:${m}:${s}`
+
+      this.checkBitrateHealth()
+      if (secs % 5 === 0) {
+        this.updateDiskFree()
+      }
       this.notifyStatus()
     }, 1000)
+  }
+
+  private checkBitrateHealth(): void {
+    if (this.status.durationSeconds < 15 || !this.status.isStreaming) {
+      this.lowBitrateSeconds = 0
+      this.status.qualityWarning = undefined
+      return
+    }
+
+    const targetKbps = this.targetBitrateKbps || 3500
+    const threshold = targetKbps * 0.7
+
+    if (this.status.bitrateKbps > 0 && this.status.bitrateKbps < threshold) {
+      this.lowBitrateSeconds++
+      if (this.lowBitrateSeconds >= 10) {
+        this.status.qualityWarning = `Alerta de Calidad: Caída de Bitrate detectada (>30% por más de 10s: ${Math.round(this.status.bitrateKbps)} kbps).`
+      }
+    } else {
+      this.lowBitrateSeconds = 0
+      this.status.qualityWarning = undefined
+    }
   }
 
   private stopDurationTimer(): void {
@@ -362,11 +484,11 @@ export class BroadcastEngine extends EventEmitter {
     this.status.fps = 0
     this.status.durationSeconds = 0
     this.status.formattedTime = '00:00:00'
+    this.status.qualityWarning = undefined
     this.stopDurationTimer()
   }
 
   private parseFfmpegStderr(line: string): void {
-    // Matches: frame= 1234 fps= 30 q=28.0 size= 12500kB time=00:00:41.20 bitrate=2480.0kbits/s speed=1.0x drop=0
     const fpsMatch = line.match(/fps=\s*([\d.]+)/)
     if (fpsMatch) this.status.fps = parseFloat(fpsMatch[1])
 
@@ -387,29 +509,67 @@ export class BroadcastEngine extends EventEmitter {
 
   private handleProcessFailure(errorMessage: string): void {
     logger.warn('[BroadcastEngine] Failure event:', errorMessage)
+    this.stopDurationTimer()
+    this.status.isStreaming = false
     this.status.connectionState = 'error'
     this.status.errorMessage = errorMessage
     this.notifyStatus()
   }
 
   private handleProcessClose(code: number | null): void {
+    const fullStderr = this.recentStderr.join('\n')
     this.ffmpegProc = null
     const wasStreaming = this.status.isStreaming
     const settings = databaseService.getBroadcastSettings()
 
-    if (wasStreaming && code !== 0 && settings.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      this.status.connectionState = 'reconnecting'
-      this.status.errorMessage = `Reconectando transmisión (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
-      this.notifyStatus()
+    if (code !== 0 && code !== null) {
+      let friendlyError = `Transmisión detenida por error de codificador (código ${code}).`
+      if (
+        fullStderr.includes('Connection refused') ||
+        fullStderr.includes('Cannot open connection') ||
+        fullStderr.includes('Error number -138') ||
+        fullStderr.includes('Connection timed out')
+      ) {
+        friendlyError =
+          'Error de conexión: No se pudo conectar al servidor RTMP. Compruebe la URL y el acceso a internet.'
+      } else if (
+        fullStderr.includes('Authentication failed') ||
+        fullStderr.includes('Publish failed') ||
+        fullStderr.includes('Server error')
+      ) {
+        friendlyError = 'Clave de transmisión incorrecta o rechazada por el servidor RTMP.'
+      } else if (
+        fullStderr.includes('Unknown encoder') ||
+        fullStderr.includes('nvcuda.dll') ||
+        fullStderr.includes('nvenc')
+      ) {
+        friendlyError =
+          'El codificador NVIDIA NVENC no está disponible o requiere actualizar controladores.'
+      } else if (fullStderr.includes('Invalid data found')) {
+        friendlyError =
+          'Error de formato en flujo de video de entrada (AVERROR_INVALIDDATA).'
+      }
 
-      this.reconnectTimer = setTimeout(() => {
-        this.start({ stream: true })
-      }, 2500)
-    } else {
-      this.resetStatus()
-      this.notifyStatus()
+      logger.error(`[BroadcastEngine] FFmpeg process closed with code ${code}. Stderr:\n${fullStderr}`)
+
+      if (wasStreaming && settings.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++
+        this.status.connectionState = 'reconnecting'
+        this.status.errorMessage = `Reconectando transmisión (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
+        this.notifyStatus()
+
+        this.reconnectTimer = setTimeout(() => {
+          this.start({ stream: true })
+        }, 2500)
+        return
+      }
+
+      this.handleProcessFailure(friendlyError)
+      return
     }
+
+    this.resetStatus()
+    this.notifyStatus()
   }
 }
 

@@ -736,6 +736,7 @@ export interface SlideItem {
   themeId?: string
   theme?: ThemeConfig
   mediaUrl?: string
+  thumbnailUrl?: string
   mediaType?: string
   youtubeId?: string
   youtubeDuration?: number
@@ -869,6 +870,12 @@ export interface PresenterState {
   activeSubtitle?: LiveSubtitleMessage | null
   subtitlesConfig?: LiveSubtitlesConfig | null
   churchBranding?: ChurchBrandingConfig
+  activeStudioProgramSceneId?: string
+  activeStudioPreviewSceneId?: string
+  activeBroadcastStatus?: BroadcastStatus
+  activePlaylistItemId?: string
+  activePlaylistItemTitle?: string
+  activePlaylistItems?: Array<{ id: string; title: string; type: string; isLive?: boolean }>
   updatedAt: number
 }
 
@@ -936,16 +943,22 @@ export interface RemoteServerConfig {
   port: number
   selectedIp: string // '0.0.0.0' or specific IP
   pin: string
+  remoteOperatorPin?: string
+  remoteOperatorSessionHours?: number
   allowReadOnlyWithoutPin: boolean
 }
 
 export interface RemoteClientSession {
   id: string
   name: string
-  role: 'operator' | 'stage-viewer'
+  role: 'operator' | 'stage-viewer' | 'camera' | 'remote-operator'
   ip: string
   connectedAt: string
   lastActiveAt: string
+  tokenExpiresAt?: string
+  quality?: string
+  battery?: number | null
+  isStreaming?: boolean
 }
 
 export interface RemoteNetworkInterface {
@@ -1297,7 +1310,10 @@ export interface ChurchPresenterApi {
   stopBroadcastStream: () => Promise<{ success: boolean; error?: string }>
   startBroadcastRecord: () => Promise<{ success: boolean; error?: string }>
   stopBroadcastRecord: () => Promise<{ success: boolean; error?: string }>
+  feedBroadcastChunk?: (chunk: Uint8Array) => Promise<boolean> | void
   onBroadcastStatusChanged?: (callback: (status: BroadcastStatus) => void) => () => void
+  onBroadcastSetActiveScene?: (callback: (data: { sceneId?: string; target?: 'program' | 'preview'; transition?: 'cut' | 'fade'; duration?: number }) => void) => () => void
+  regenerateRemoteOperatorPin?: () => Promise<string>
   listDesktopSources: () => Promise<DesktopCaptureSource[]>
 
   // =========================================================================
@@ -1344,6 +1360,23 @@ export interface ChurchPresenterApi {
   saveChurchBranding: (branding: Partial<ChurchBrandingConfig>) => Promise<ChurchBrandingConfig>
   uploadChurchLogo: (sourcePath?: string) => Promise<{ success: boolean; filePath?: string; url?: string; error?: string }>
   uploadChurchBackground: (sourcePath?: string) => Promise<{ success: boolean; filePath?: string; url?: string; fileType?: 'image' | 'video'; error?: string }>
+
+  // Phase 11: Wi-Fi Phone Cameras (PWA + WebRTC)
+  getCameraSettings: () => Promise<CameraSettingsConfig>
+  saveCameraSettings: (settings: Partial<CameraSettingsConfig> & { cloudflareToken?: string }) => Promise<CameraSettingsConfig>
+  renewCameraCertificate: () => Promise<{ success: boolean; error?: string; certStatus: CameraCertStatus }>
+  getConnectedPhoneCameras: () => Promise<PhoneCameraDevice[]>
+  revokePhoneCamera: (cameraId: string) => Promise<boolean>
+  togglePhoneCameraAudio: (cameraId: string, muted: boolean) => Promise<boolean>
+  getCameraQrInfo: () => Promise<CameraQrInfo>
+  onPhoneCameraUpdated?: (callback: (devices: PhoneCameraDevice[]) => void) => () => void
+  onCameraSignal?: (callback: (signal: CameraSignalMessage) => void) => () => void
+  sendCameraSignal?: (signal: CameraSignalMessage) => Promise<boolean>
+  startOctoStreamSlot: (slotId: string) => Promise<{ success: boolean; error?: string }>
+  stopOctoStreamSlot: (slotId: string) => Promise<{ success: boolean; error?: string }>
+  getOctoStreamSlots: () => Promise<OctoStreamSlot[]>
+  saveOctoStreamSlot: (slot: Partial<OctoStreamSlot>) => Promise<{ success: boolean; slots: OctoStreamSlot[] }>
+  onCameraFrame?: (callback: (data: { cameraId: string; frame: string; timestamp: number }) => void) => () => void
 }
 
 // =========================================================================
@@ -1672,6 +1705,7 @@ export type BroadcastSourceType =
   | 'presentation'
   | 'media_file'
   | 'color'
+  | 'phone_camera'
 
 export interface BroadcastLayer {
   id: string
@@ -1679,7 +1713,10 @@ export interface BroadcastLayer {
   type: BroadcastSourceType
   deviceId?: string
   sourceId?: string
+  phoneCameraId?: string
   mediaPath?: string
+  mediaUrl?: string
+  mediaType?: 'video' | 'image' | 'audio'
   color?: string
   x: number
   y: number
@@ -1747,6 +1784,8 @@ export interface BroadcastStatus {
   activePreset: string
   encoderUsed: 'nvenc' | 'x264' | 'none'
   recordingFilePath?: string
+  qualityWarning?: string
+  diskFreeFormatted?: string
 }
 
 export interface DesktopCaptureSource {
@@ -1898,6 +1937,105 @@ export interface SecondaryBackupStatus {
   verified: boolean
   success: boolean
   errorMessage?: string
+}
+
+// =========================================================================
+// PHASE 11: Wi-Fi Phone Cameras (PWA + WebRTC)
+// =========================================================================
+
+export interface PhoneCameraDevice {
+  id: string
+  token?: string
+  name: string
+  ip: string
+  connectedAt: string
+  lastSeenAt: string
+  isStreaming: boolean
+  isOnline: boolean
+  batteryLevel: number | null
+  isCharging?: boolean
+  resolution: string
+  targetFps: number
+  actualFps: number
+  bitrateKbps: number
+  packetLossPercent: number
+  audioMuted: boolean
+  facingMode: 'user' | 'environment'
+  qualityRating: 'excelente' | 'buena' | 'degradada' | 'sin_senal'
+}
+
+export interface CameraCertStatus {
+  status: 'unconfigured' | 'pending' | 'valid' | 'expiring' | 'expired' | 'error'
+  expiresAt?: string
+  domain?: string
+  issuer?: string
+  errorMessage?: string
+  daysUntilExpiry?: number
+}
+
+export interface CameraSettingsConfig {
+  domain: string
+  hasCloudflareToken: boolean
+  cloudflareTokenEncrypted?: string
+  tailscaleIp: string
+  maxCameras: number
+  tokenExpiryDays: number
+  httpsPort: number
+  httpPort: number
+  lastKnownLocalIp: string
+  certStatus: CameraCertStatus
+}
+
+export interface CameraSignalMessage {
+  type: 'offer' | 'answer' | 'candidate' | 'telemetry' | 'control' | 'join' | 'leave' | 'ping' | 'pong'
+  cameraId?: string
+  role?: 'camera'
+  sdp?: any
+  candidate?: any
+  telemetry?: {
+    batteryLevel?: number | null
+    isCharging?: boolean
+    actualFps?: number
+    bitrateKbps?: number
+    resolution?: string
+    packetLossPercent?: number
+  }
+  control?: {
+    audioMuted?: boolean
+    requestKeyframe?: boolean
+  }
+  name?: string
+  facingMode?: 'user' | 'environment'
+}
+
+export interface CameraQrInfo {
+  url: string
+  qrDataUrl: string
+  localIp: string
+  tailscaleIp: string
+  domain: string
+  ipChanged: boolean
+}
+
+export interface OctoStreamSlot {
+  id: string
+  name: string
+  mode: 'rtmp' | 'rtsp'
+  rtmpPort: number
+  rtmpStreamKey: string
+  rtspUrl: string
+  enabled: boolean
+  isStreaming: boolean
+  rtmpServerBase?: string
+  tailscaleServerBase?: string
+  rtmpUrl?: string
+  tailscaleRtmpUrl?: string
+  setupWebUrl?: string
+  qrDataUrl?: string
+  actualFps?: number
+  bitrateKbps?: number
+  resolution?: string
+  error?: string
 }
 
 declare global {

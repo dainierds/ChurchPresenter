@@ -757,6 +757,9 @@ const api: ChurchPresenterApi = {
   regenerateRemotePin: (): Promise<string> => {
     return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_REGENERATE_PIN)
   },
+  regenerateRemoteOperatorPin: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_REGENERATE_OPERATOR_PIN)
+  },
   remoteRegeneratePin: (): Promise<string> => {
     return ipcRenderer.invoke(IPC_CHANNELS.REMOTE_REGENERATE_PIN)
   },
@@ -1009,12 +1012,18 @@ const api: ChurchPresenterApi = {
   stopBroadcastStream: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_STOP_STREAM),
   startBroadcastRecord: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_START_RECORD),
   stopBroadcastRecord: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_STOP_RECORD),
+  feedBroadcastChunk: (chunk: Uint8Array) => ipcRenderer.send(IPC_CHANNELS.BROADCAST_FEED_CHUNK, chunk),
   onBroadcastStatusChanged: (callback: (status: any) => void) => {
     const handler = (_event: any, status: any) => callback(status)
     ipcRenderer.on(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.BROADCAST_STATUS_CHANGED, handler)
   },
   listDesktopSources: () => ipcRenderer.invoke(IPC_CHANNELS.BROADCAST_LIST_DESKTOP_SOURCES),
+  onBroadcastSetActiveScene: (callback: (data: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.BROADCAST_SET_ACTIVE_SCENE, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.BROADCAST_SET_ACTIVE_SCENE, handler)
+  },
 
   // Phase 10: Extras (Sync, Song Importers, CCLI Reports, Subtitles, AI, Backups)
   // 1. Multi-PC Sync
@@ -1058,7 +1067,42 @@ const api: ChurchPresenterApi = {
   getChurchBranding: () => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_GET),
   saveChurchBranding: (branding: Partial<ChurchBrandingConfig>) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_SAVE, branding),
   uploadChurchLogo: (sourcePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_LOGO, sourcePath),
-  uploadChurchBackground: (sourcePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_BACKGROUND, sourcePath)
+  uploadChurchBackground: (sourcePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_BACKGROUND, sourcePath),
+
+  // Phase 11: Wi-Fi Phone Cameras (PWA + WebRTC)
+  getCameraSettings: () => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_GET_SETTINGS),
+  saveCameraSettings: (settings: any) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_SAVE_SETTINGS, settings),
+  renewCameraCertificate: () => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_RENEW_CERTIFICATE),
+  getConnectedPhoneCameras: () => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_GET_DEVICES),
+  revokePhoneCamera: (cameraId: string) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_REVOKE_DEVICE, cameraId),
+  togglePhoneCameraAudio: (cameraId: string, muted: boolean) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_MUTE_DEVICE, cameraId, muted),
+  getCameraQrInfo: () => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_GET_QR),
+  sendCameraSignal: (signal: any) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_SIGNAL_SEND, signal),
+  startOctoStreamSlot: (slotId: string) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_START_OCTOSTREAM, slotId),
+  stopOctoStreamSlot: (slotId: string) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_STOP_OCTOSTREAM, slotId),
+  getOctoStreamSlots: () => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_GET_OCTOSTREAM_SLOTS),
+  saveOctoStreamSlot: (slot: any) => ipcRenderer.invoke(IPC_CHANNELS.CAMERA_SAVE_OCTOSTREAM_SLOT, slot),
+  onCameraFrame: (callback: (data: { cameraId: string; frame: string; timestamp: number }) => void) => {
+    const sub = (_evt: any, d: any) => callback(d)
+    ipcRenderer.on(IPC_CHANNELS.CAMERA_FRAME, sub)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.CAMERA_FRAME, sub)
+    }
+  },
+  onPhoneCameraUpdated: (callback: (devices: any[]) => void) => {
+    const sub = (_evt: any, d: any[]) => callback(d)
+    ipcRenderer.on(IPC_CHANNELS.CAMERA_DEVICE_UPDATED, sub)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.CAMERA_DEVICE_UPDATED, sub)
+    }
+  },
+  onCameraSignal: (callback: (signal: any) => void) => {
+    const sub = (_evt: any, s: any) => callback(s)
+    ipcRenderer.on(IPC_CHANNELS.CAMERA_SIGNAL_RECEIVED, sub)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.CAMERA_SIGNAL_RECEIVED, sub)
+    }
+  }
 }
 
 try {

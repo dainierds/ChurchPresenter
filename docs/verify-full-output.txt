@@ -1,4 +1,4 @@
-=== ChurchPresenter verify:full Execution [2026-10-30T00:55:16.926Z] ===
+=== ChurchPresenter verify:full Execution [2026-11-03T01:51:29.359Z] ===
 
 
 >>> RUNNING: npx tsc --noEmit -p tsconfig.json
@@ -13,7 +13,7 @@
 
 >>> RUNNING: node scripts/verify-test-assertions.js
 
-[TEST INTEGRITY SUCCESS]: Verified 52 test files and 236 test blocks. All contain verified expect() assertions.
+[TEST INTEGRITY SUCCESS]: Verified 56 test files and 262 test blocks. All contain verified expect() assertions.
 
 >>> SUCCESS: node scripts/verify-test-assertions.js
 
@@ -23,69 +23,72 @@
 
 [1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/daini/Videos/TEST2[39m
 
+ [32m✓[39m tests/display-reconnection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
  [32m✓[39m tests/youtube-utils.test.ts [2m([22m[2m18 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/display-reconnection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
- [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 41[2mms[22m[39m
- [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/song-importers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 16[2mms[22m[39m
- [32m✓[39m tests/session-recovery.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 15[2mms[22m[39m
- [32m✓[39m tests/broadcast-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 227[2mms[22m[39m
- [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 112[2mms[22m[39m
- [32m✓[39m tests/ai-assistant.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 292[2mms[22m[39m
- [32m✓[39m tests/obs-bridge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 373[2mms[22m[39m
- [32m✓[39m tests/display-assignment.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/library-sync.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 430[2mms[22m[39m
- [32m✓[39m tests/state-transitions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 2[2mms[22m[39m
-[90mstderr[2m | tests/powerpoint-user-session.test.ts[2m > [22m[2mPowerPoint User Session Preservation[2m > [22m[2mdoes NOT close or alter an existing open user presentation during import
-[22m[39mPowerPoint is not installed on this environment; skipping user session test
-
- [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 601[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m601[2mms[22m[39m
- [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 681[2mms[22m[39m
- [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 432[2mms[22m[39m
- [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 274[2mms[22m[39m
- [32m✓[39m tests/youtube-projection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 487[2mms[22m[39m
- [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 319[2mms[22m[39m
- [32m✓[39m tests/ccli-usage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 445[2mms[22m[39m
+ [32m✓[39m tests/song-parser.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/bible-reference-parser.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/bible-importers.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/video-continuity-and-bible.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/song-importers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/broadcast-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 146[2mms[22m[39m
+ [32m✓[39m tests/obs-bridge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 203[2mms[22m[39m
+ [32m✓[39m tests/macro-engine.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 115[2mms[22m[39m
+ [32m✓[39m tests/library-sync.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 262[2mms[22m[39m
 [90mstdout[2m | tests/remote-auth.test.ts[2m > [22m[2mRemoteAuthService (PIN, Sessions, Rate Limiting & Lockout)[2m > [22m[2mmeasures remote control token verification empirical latencies (p50 and p95)
 [22m[39m
 ======================================================================
    REMOTE CONTROL EMPIRICAL LATENCY BENCHMARK (200 SAMPLES)          
 ======================================================================
 -> Muestras Analizadas:  200
--> Latencia Media:       0.002 ms
+-> Latencia Media:       0.001 ms
 -> Latencia p50:         0.001 ms
--> Latencia p95:         0.004 ms
+-> Latencia p95:         0.002 ms
 ======================================================================
 
 
- [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 840[2mms[22m[39m
- [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 977[2mms[22m[39m
- [32m✓[39m tests/search-utils.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 17[2mms[22m[39m
- [32m✓[39m tests/library-backup.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 255[2mms[22m[39m
- [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 274[2mms[22m[39m
- [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 469[2mms[22m[39m
- [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/prop-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 667[2mms[22m[39m
- [32m✓[39m tests/media-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/remote-auth.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 351[2mms[22m[39m
+ [32m✓[39m tests/ai-assistant.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 147[2mms[22m[39m
+ [32m✓[39m tests/session-recovery.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/church-branding.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 144[2mms[22m[39m
+ [32m✓[39m tests/bible-slide-generator.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/e2e-all-modes.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 472[2mms[22m[39m
+[90mstderr[2m | tests/powerpoint-user-session.test.ts[2m > [22m[2mPowerPoint User Session Preservation[2m > [22m[2mdoes NOT close or alter an existing open user presentation during import
+[22m[39mPowerPoint is not installed on this environment; skipping user session test
+
+ [32m✓[39m tests/powerpoint-user-session.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 504[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint User Session Preservation[2m > [22mdoes NOT close or alter an existing open user presentation during import [33m503[2mms[22m[39m
+ [32m✓[39m tests/theme-service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 599[2mms[22m[39m
+ [32m✓[39m tests/media-service.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 237[2mms[22m[39m
+ [32m✓[39m tests/display-assignment.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/time-backup-policy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 178[2mms[22m[39m
+ [32m✓[39m tests/ccli-usage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 212[2mms[22m[39m
+ [32m✓[39m tests/state-transitions.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/migration-safety.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 124[2mms[22m[39m
+ [32m✓[39m tests/stage-layouts.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 149[2mms[22m[39m
+ [32m✓[39m tests/youtube-projection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/search-utils.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-process-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/workspace-service.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 189[2mms[22m[39m
+ [32m✓[39m tests/library-backup.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/camera-hub-and-webrtc.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 503[2mms[22m[39m
+ [32m✓[39m tests/shortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/messages.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 188[2mms[22m[39m
+ [32m✓[39m tests/database-resilience.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 291[2mms[22m[39m
+ [32m✓[39m tests/prop-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m tests/role-bible-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 167[2mms[22m[39m
  [32m✓[39m tests/live-subtitles.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/presentation-loop.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 3[2mms[22m[39m
- [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 106[2mms[22m[39m
- [32m✓[39m tests/secondary-backup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 176[2mms[22m[39m
+ [32m✓[39m tests/secondary-backup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 211[2mms[22m[39m
+ [32m✓[39m tests/service-templates.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/media-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/presentation-loop.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/theme-migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 77[2mms[22m[39m
  [32m✓[39m tests/youtube-mirror.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/remote-operator.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 402[2mms[22m[39m
  [32m✓[39m tests/output-health.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 2[2mms[22m[39m
- [32m✓[39m tests/system-monitor.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
- [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 181[2mms[22m[39m
  [32m✓[39m tests/rehearsal-mode.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/system-monitor.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
  [32m✓[39m tests/safe-storage.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m tests/bible-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 629[2mms[22m[39m
 [90mstdout[2m | tests/ffmpeg-detection.test.ts[2m > [22m[2mFFmpeg & NVENC Detection on Windows 11 Host[2m > [22m[2mdetects system FFmpeg, ffprobe, and checks NVENC hardware encoder
 [22m[39mDetected FFmpeg Status: {
   available: [33mtrue[39m,
@@ -95,48 +98,49 @@
   ffprobePath: [32m'C:\\Users\\daini\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.2-full_build\\bin\\ffprobe.exe'[39m
 }
 
- [32m✓[39m tests/ffmpeg-detection.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 67[2mms[22m[39m
- [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 2856[2mms[22m[39m
-   [33m[2m✓[22m[39m YouTube Playlist Pre-Service Verification (Fase 5C)[2m > [22mverifies a playlist with mixed items accurately [33m392[2mms[22m[39m
-   [33m[2m✓[22m[39m YouTube yt-dlp Integration & Progress Tracking[2m > [22mnotifies download progress callback with initial status [33m2461[2mms[22m[39m
- [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2672[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m2659[2mms[22m[39m
+ [32m✓[39m tests/ffmpeg-detection.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 90[2mms[22m[39m
+ [32m✓[39m tests/database-service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 118[2mms[22m[39m
+ [32m✓[39m tests/youtube-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 2603[2mms[22m[39m
+   [33m[2m✓[22m[39m YouTube Playlist Pre-Service Verification (Fase 5C)[2m > [22mverifies a playlist with mixed items accurately [33m409[2mms[22m[39m
+   [33m[2m✓[22m[39m YouTube yt-dlp Integration & Progress Tracking[2m > [22mnotifies download progress callback with initial status [33m2192[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-service.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2253[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint Engine & Fidelity Analysis (Phase 5B)[2m > [22mconverts presentation via PowerPoint COM, attaches notes, and caches results [33m2242[2mms[22m[39m
 [90mstdout[2m | tests/pipeline-benchmark.test.ts[2m > [22m[2mPipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22m[2mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements
 [22m[39m
 ======================================================================
    PIPELINE BENCHMARK RESULTS (ETAPA D)                              
 ======================================================================
-Pipeline A (Container Remux): 0.91% CPU | Mem: 67.7 MB | Time: 3.41s
-Pipeline B (Raw YUV Pipe):    12.39% CPU | Mem: 70.8 MB | Time: 0.64s
+Pipeline A (Container Remux): 0.48% CPU | Mem: 68.0 MB | Time: 3.15s
+Pipeline B (Raw YUV Pipe):    13.55% CPU | Mem: 71.1 MB | Time: 0.47s
 Encoder Used: h264_nvenc (NVIDIA RTX)
 ======================================================================
 
 
- [32m✓[39m tests/pipeline-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 4174[2mms[22m[39m
-   [33m[2m✓[22m[39m Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements [33m4173[2mms[22m[39m
+ [32m✓[39m tests/pipeline-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 3679[2mms[22m[39m
+   [33m[2m✓[22m[39m Pipeline Evaluation: MediaRecorder Stream vs Raw Frame Buffer (Stage D)[2m > [22mbenchmarks Pipeline A (Container remux) vs Pipeline B (Raw Pipe) with real measurements [33m3679[2mms[22m[39m
 [90mstdout[2m | tests/powerpoint-benchmark.test.ts[2m > [22m[2mPowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22m[2mconverts an 80-slide presentation via PowerPoint COM and measures real throughput
 [22m[39m
 [80-Slide PowerPoint Benchmark Results]: {
-  "testDate": "2026-10-30T00:55:32.330Z",
-  "startMemMb": 69.7,
+  "testDate": "2026-11-03T01:51:43.919Z",
+  "startMemMb": 69.8,
   "platform": "win32 10.0.26300 (x64)",
   "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
   "cpuCores": 20,
   "converterUsed": "powerpoint_com",
   "slideCount": 80,
   "targetResolution": "1920x1080",
-  "totalDurationSeconds": 5.39,
-  "slidesPerSecond": 14.8,
-  "memoryRssMb": 75.7
+  "totalDurationSeconds": 5.08,
+  "slidesPerSecond": 15.7,
+  "memoryRssMb": 75.6
 }
 
- [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 5404[2mms[22m[39m
-   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m5403[2mms[22m[39m
+ [32m✓[39m tests/powerpoint-benchmark.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 5094[2mms[22m[39m
+   [33m[2m✓[22m[39m PowerPoint 80-Slide Performance Benchmark (Requirement B.7)[2m > [22mconverts an 80-slide presentation via PowerPoint COM and measures real throughput [33m5093[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m52 passed[39m[22m[90m (52)[39m
-[2m      Tests [22m [1m[32m235 passed[39m[22m[90m (235)[39m
-[2m   Start at [22m 20:55:25
-[2m   Duration [22m 7.29s[2m (transform 3.62s, setup 0ms, collect 7.52s, tests 23.95s, environment 9ms, prepare 3.91s)[22m
+[2m Test Files [22m [1m[32m56 passed[39m[22m[90m (56)[39m
+[2m      Tests [22m [1m[32m261 passed[39m[22m[90m (261)[39m
+[2m   Start at [22m 20:51:37
+[2m   Duration [22m 6.72s[2m (transform 2.64s, setup 0ms, collect 8.22s, tests 20.47s, environment 7ms, prepare 4.99s)[22m
 
 
 >>> SUCCESS: npx vitest run
@@ -145,25 +149,25 @@ Encoder Used: h264_nvenc (NVIDIA RTX)
 
 [36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
 transforming...
-[32m✓[39m 60 modules transformed.
+[32m✓[39m 66 modules transformed.
 rendering chunks...
-[2mout/main/[22m[36mindex.js  [39m[1m[33m643.87 kB[39m[22m
-[32m✓ built in 399ms[39m
+[2mout/main/[22m[36mindex.js  [39m[1m[33m796.71 kB[39m[22m
+[32m✓ built in 391ms[39m
 [36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
 transforming...
 [32m✓[39m 2 modules transformed.
 rendering chunks...
-[2mout/preload/[22m[36mindex.js  [39m[1m[2m44.99 kB[22m[1m[22m
-[32m✓ built in 19ms[39m
+[2mout/preload/[22m[36mindex.js  [39m[1m[2m49.35 kB[22m[1m[22m
+[32m✓ built in 17ms[39m
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
 transforming...
-[32m✓[39m 1636 modules transformed.
+[32m✓[39m 1640 modules transformed.
 rendering chunks...
-[2m../../out/renderer/[22m[32mindex.html                          [39m[1m[2m    1.30 kB[22m[1m[22m
+[2m../../out/renderer/[22m[32mindex.html                          [39m[1m[2m    1.49 kB[22m[1m[22m
 [2m../../out/renderer/[22m[32massets/pdf.worker.min-CjEcRF4W.mjs  [39m[1m[2m1,264.34 kB[22m[1m[22m
-[2m../../out/renderer/[22m[35massets/index-FHnysvI4.css           [39m[1m[2m  115.41 kB[22m[1m[22m
-[2m../../out/renderer/[22m[36massets/index-BhvElNDG.js            [39m[1m[33m2,382.38 kB[39m[22m
-[32m✓ built in 2.21s[39m
+[2m../../out/renderer/[22m[35massets/index-BIeQXN1l.css           [39m[1m[2m  117.01 kB[22m[1m[22m
+[2m../../out/renderer/[22m[36massets/index-CsfH9Zol.js            [39m[1m[33m2,529.58 kB[39m[22m
+[32m✓ built in 2.04s[39m
 
 >>> SUCCESS: npx electron-vite build
 
@@ -172,7 +176,7 @@ rendering chunks...
 ======================================================================
    CHURCHPRESENTER - REAL ELECTRON E2E VERIFICATION SUITE (FASE 6)   
 ======================================================================
-[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793321736332
+[E2E] Isolated Test UserData: C:\Users\daini\AppData\Local\Temp\cp-e2e-real-1793670707652
 [E2E] Launching real Electron application...
 [E2E] Operator window loaded successfully.
 
@@ -193,29 +197,28 @@ rendering chunks...
 
 [Paso 0.B] Testing Real MP4 Video Playback with continuous currentTime >= 10s...
   -> Initializing playback of C:\Users\daini\Videos\TEST2\tests\fixtures\test_video.mp4...
-  [Video Progress] Second 1: currentTime = 0.89s
-  [Video Progress] Second 2: currentTime = 1.90s
-  [Video Progress] Second 3: currentTime = 2.91s
-  [Video Progress] Second 4: currentTime = 3.93s
-  [Video Progress] Second 5: currentTime = 4.94s
-  [Video Progress] Second 6: currentTime = 5.95s
-  [Video Progress] Second 7: currentTime = 6.96s
-  [Video Progress] Second 8: currentTime = 7.98s
-  [Video Progress] Second 9: currentTime = 8.99s
-  [Video Progress] Second 10: currentTime = 10.01s
-  [Video Progress] Second 11: currentTime = 11.02s
+  [Video Progress] Second 1: currentTime = 0.92s
+  [Video Progress] Second 2: currentTime = 1.93s
+  [Video Progress] Second 3: currentTime = 2.94s
+  [Video Progress] Second 4: currentTime = 3.95s
+  [Video Progress] Second 5: currentTime = 4.96s
+  [Video Progress] Second 6: currentTime = 5.98s
+  [Video Progress] Second 7: currentTime = 7.00s
+  [Video Progress] Second 8: currentTime = 8.00s
+  [Video Progress] Second 9: currentTime = 9.02s
+  [Video Progress] Second 10: currentTime = 10.03s
+  [Video Progress] Second 11: currentTime = 11.04s
   -> Output Captured: 00_video_real_10s_output_main.png
   -> Output Captured: 00_video_real_10s_output_stage.png
   -> Output Captured: 00_video_real_10s_output_lobby.png
-[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 11.02s >= 10s en todas las salidas activas)
+[TEST AUDIT]: Video REAL -> APROBADA (currentTime avanzó continuamente a 11.04s >= 10s en todas las salidas activas)
 
 [Paso 0.C] Testing Real YouTube Playback on Output Displays (Option B: Watch Page)...
   -> Internet connection available. Testing 3 public open-license videos on outputs (120s continuous playback each)...
 
   --- [Video 1/3]: Blender - Big Buck Bunny (aqz-KE-bpKQ) ---
-  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:55845/embed?v=aqz-KE-bpKQ&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:56262/embed?v=aqz-KE-bpKQ&muted=0&start=0
   [MAIN PROC]: [YT PAGE CONSOLE main]: Unrecognized feature: 'web-share'.
-  [MAIN PROC]: [YT VIEW MEDIA] Role main media-started-playing
   [MAIN PROC]: [YT PAGE CONSOLE main]: The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127
   [MAIN PROC]: [YT PAGE CONSOLE main]: Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
   Policy set or a policy with "unsafe-eval" enabled. This exposes users of
@@ -225,18 +228,19 @@ For more information and help, consult
 https://electronjs.org/docs/tutorial/security.
 This warning will not show up
 once the app is packaged.
-    -> Playback progress for big_buck_bunny: 10s elapsed, video time: 7.36s (hasError: false) Diag: {"pState":1,"pTime":7.358989141143799,"pLoaded":0.04727537460546075}
-    -> Playback progress for big_buck_bunny: 20s elapsed, video time: 17.64s (hasError: false) Diag: {"pState":1,"pTime":17.635201005722045,"pLoaded":0.08209882902800342}
-    -> Playback progress for big_buck_bunny: 30s elapsed, video time: 27.39s (hasError: false) Diag: {"pState":1,"pTime":27.389086122070314,"pLoaded":0.10746910105719973}
-    -> Playback progress for big_buck_bunny: 40s elapsed, video time: 37.67s (hasError: false) Diag: {"pState":1,"pTime":37.66522704959107,"pLoaded":0.11928755076024149}
-    -> Playback progress for big_buck_bunny: 50s elapsed, video time: 47.40s (hasError: false) Diag: {"pState":1,"pTime":47.402905083923336,"pLoaded":0.14392245206042853}
-    -> Playback progress for big_buck_bunny: 60s elapsed, video time: 57.66s (hasError: false) Diag: {"pState":1,"pTime":57.66108710108948,"pLoaded":0.15096099596439339}
-    -> Playback progress for big_buck_bunny: 70s elapsed, video time: 67.40s (hasError: false) Diag: {"pState":1,"pTime":67.40113689509583,"pLoaded":0.16409260622028643}
-    -> Playback progress for big_buck_bunny: 80s elapsed, video time: 77.68s (hasError: false) Diag: {"pState":1,"pTime":77.6792530591278,"pLoaded":0.1837900223920227}
-    -> Playback progress for big_buck_bunny: 90s elapsed, video time: 87.44s (hasError: false) Diag: {"pState":1,"pTime":87.43703195613098,"pLoaded":0.20149143477555187}
-    -> Playback progress for big_buck_bunny: 100s elapsed, video time: 97.69s (hasError: false) Diag: {"pState":1,"pTime":97.69312003623962,"pLoaded":0.21787968503043642}
-    -> Playback progress for big_buck_bunny: 110s elapsed, video time: 107.46s (hasError: false) Diag: {"pState":1,"pTime":107.45524291607666,"pLoaded":0.2331123524860503}
-    -> Playback progress for big_buck_bunny: 120s elapsed, video time: 117.21s (hasError: false) Diag: {"pState":1,"pTime":117.2139680743866,"pLoaded":0.25275724273992634}
+  [MAIN PROC]: [YT VIEW MEDIA] Role main media-started-playing
+    -> Playback progress for big_buck_bunny: 10s elapsed, video time: 7.46s (hasError: false) Diag: {"pState":1,"pTime":7.463084112533569,"pLoaded":0.054259813646685084}
+    -> Playback progress for big_buck_bunny: 20s elapsed, video time: 17.71s (hasError: false) Diag: {"pState":1,"pTime":17.7057730705719,"pLoaded":0.07574312993518761}
+    -> Playback progress for big_buck_bunny: 30s elapsed, video time: 27.42s (hasError: false) Diag: {"pState":1,"pTime":27.417582061035155,"pLoaded":0.10746910105719973}
+    -> Playback progress for big_buck_bunny: 40s elapsed, video time: 37.68s (hasError: false) Diag: {"pState":1,"pTime":37.67924207247925,"pLoaded":0.11928755076024149}
+    -> Playback progress for big_buck_bunny: 50s elapsed, video time: 47.42s (hasError: false) Diag: {"pState":1,"pTime":47.41527603242493,"pLoaded":0.1329444264979097}
+    -> Playback progress for big_buck_bunny: 60s elapsed, video time: 57.68s (hasError: false) Diag: {"pState":1,"pTime":57.676705003814696,"pLoaded":0.15096099596439339}
+    -> Playback progress for big_buck_bunny: 70s elapsed, video time: 67.41s (hasError: false) Diag: {"pState":1,"pTime":67.41457001525879,"pLoaded":0.17065841213612964}
+    -> Playback progress for big_buck_bunny: 80s elapsed, video time: 77.64s (hasError: false) Diag: {"pState":1,"pTime":77.6364521373291,"pLoaded":0.1837900223920227}
+    -> Playback progress for big_buck_bunny: 90s elapsed, video time: 87.37s (hasError: false) Diag: {"pState":1,"pTime":87.37374500572204,"pLoaded":0.20149143477555187}
+    -> Playback progress for big_buck_bunny: 100s elapsed, video time: 97.60s (hasError: false) Diag: {"pState":1,"pTime":97.60146986076354,"pLoaded":0.21787968503043642}
+    -> Playback progress for big_buck_bunny: 110s elapsed, video time: 107.84s (hasError: false) Diag: {"pState":1,"pTime":107.84332896376037,"pLoaded":0.2331123524860503}
+    -> Playback progress for big_buck_bunny: 120s elapsed, video time: 117.56s (hasError: false) Diag: {"pState":1,"pTime":117.55967792370606,"pLoaded":0.25275724273992634}
   -> Output Captured: 00_youtube_big_buck_bunny_output_main.png
   -> Output Captured: 00_youtube_big_buck_bunny_output_stage.png
   -> Output Captured: 00_youtube_big_buck_bunny_output_lobby.png
@@ -244,7 +248,7 @@ once the app is packaged.
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-paused
 
   --- [Video 2/3]: Blender - Sintel (eRsGyueVLvQ) ---
-  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:55845/embed?v=eRsGyueVLvQ&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:56262/embed?v=eRsGyueVLvQ&muted=0&start=0
   [MAIN PROC]: [YT PAGE CONSOLE main]: Unrecognized feature: 'web-share'.
   [MAIN PROC]: [YT PAGE CONSOLE main]: Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
   Policy set or a policy with "unsafe-eval" enabled. This exposes users of
@@ -256,18 +260,18 @@ This warning will not show up
 once the app is packaged.
   [MAIN PROC]: [YT PAGE CONSOLE main]: The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-started-playing
-    -> Playback progress for sintel: 10s elapsed, video time: 9.12s (hasError: false) Diag: {"pState":1,"pTime":9.120922898910523,"pLoaded":0.03532977914805402}
-    -> Playback progress for sintel: 20s elapsed, video time: 19.37s (hasError: false) Diag: {"pState":1,"pTime":19.37381584550476,"pLoaded":0.060947388749196287}
-    -> Playback progress for sintel: 30s elapsed, video time: 29.13s (hasError: false) Diag: {"pState":1,"pTime":29.131217020980834,"pLoaded":0.08342144514847516}
-    -> Playback progress for sintel: 40s elapsed, video time: 39.40s (hasError: false) Diag: {"pState":1,"pTime":39.401250200271605,"pLoaded":0.09899845393503375}
-    -> Playback progress for sintel: 50s elapsed, video time: 49.15s (hasError: false) Diag: {"pState":1,"pTime":49.15133305722046,"pLoaded":0.10688079535076983}
-    -> Playback progress for sintel: 60s elapsed, video time: 59.41s (hasError: false) Diag: {"pState":1,"pTime":59.405038148773194,"pLoaded":0.11663988397193435}
-    -> Playback progress for sintel: 70s elapsed, video time: 69.18s (hasError: false) Diag: {"pState":1,"pTime":69.18026095803833,"pLoaded":0.1304809005237253}
-    -> Playback progress for sintel: 80s elapsed, video time: 78.94s (hasError: false) Diag: {"pState":1,"pTime":78.93813110490417,"pLoaded":0.1423044126473294}
-    -> Playback progress for sintel: 90s elapsed, video time: 89.18s (hasError: false) Diag: {"pState":1,"pTime":89.18116802861023,"pLoaded":0.15098437156907016}
-    -> Playback progress for sintel: 100s elapsed, video time: 99.45s (hasError: false) Diag: {"pState":1,"pTime":99.45092300953674,"pLoaded":0.16552916860440892}
-    -> Playback progress for sintel: 110s elapsed, video time: 109.17s (hasError: false) Diag: {"pState":1,"pTime":109.17319198855591,"pLoaded":0.1755228514707886}
-    -> Playback progress for sintel: 120s elapsed, video time: 119.43s (hasError: false) Diag: {"pState":1,"pTime":119.43323788365173,"pLoaded":0.19044299772200332}
+    -> Playback progress for sintel: 10s elapsed, video time: 9.14s (hasError: false) Diag: {"pState":1,"pTime":9.143011858856202,"pLoaded":0.03532977914805402}
+    -> Playback progress for sintel: 20s elapsed, video time: 19.38s (hasError: false) Diag: {"pState":1,"pTime":19.377258866485597,"pLoaded":0.060947388749196287}
+    -> Playback progress for sintel: 30s elapsed, video time: 29.09s (hasError: false) Diag: {"pState":1,"pTime":29.09133489891052,"pLoaded":0.08342144514847516}
+    -> Playback progress for sintel: 40s elapsed, video time: 39.33s (hasError: false) Diag: {"pState":1,"pTime":39.333364866485596,"pLoaded":0.09899845393503375}
+    -> Playback progress for sintel: 50s elapsed, video time: 49.05s (hasError: false) Diag: {"pState":1,"pTime":49.046331959945675,"pLoaded":0.10688079535076983}
+    -> Playback progress for sintel: 60s elapsed, video time: 59.28s (hasError: false) Diag: {"pState":1,"pTime":59.28224384550476,"pLoaded":0.11663988397193435}
+    -> Playback progress for sintel: 70s elapsed, video time: 69.02s (hasError: false) Diag: {"pState":1,"pTime":69.01951695231628,"pLoaded":0.1304809005237253}
+    -> Playback progress for sintel: 80s elapsed, video time: 79.27s (hasError: false) Diag: {"pState":1,"pTime":79.26809595422364,"pLoaded":0.1423044126473294}
+    -> Playback progress for sintel: 90s elapsed, video time: 89.50s (hasError: false) Diag: {"pState":1,"pTime":89.49884290081788,"pLoaded":0.15098437156907016}
+    -> Playback progress for sintel: 100s elapsed, video time: 99.22s (hasError: false) Diag: {"pState":1,"pTime":99.22423394850159,"pLoaded":0.16552916860440892}
+    -> Playback progress for sintel: 110s elapsed, video time: 109.46s (hasError: false) Diag: {"pState":1,"pTime":109.46187386457825,"pLoaded":0.1755228514707886}
+    -> Playback progress for sintel: 120s elapsed, video time: 119.16s (hasError: false) Diag: {"pState":1,"pTime":119.16232901144409,"pLoaded":0.19044299772200332}
   -> Output Captured: 00_youtube_sintel_output_main.png
   -> Output Captured: 00_youtube_sintel_output_stage.png
   -> Output Captured: 00_youtube_sintel_output_lobby.png
@@ -275,7 +279,7 @@ once the app is packaged.
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-paused
 
   --- [Video 3/3]: Blender - Charge (UXqq0ZvbOnk) ---
-  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:55845/embed?v=UXqq0ZvbOnk&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:56262/embed?v=UXqq0ZvbOnk&muted=0&start=0
   [MAIN PROC]: [YT PAGE CONSOLE main]: Unrecognized feature: 'web-share'.
   [MAIN PROC]: [YT PAGE CONSOLE main]: Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
   Policy set or a policy with "unsafe-eval" enabled. This exposes users of
@@ -287,18 +291,18 @@ This warning will not show up
 once the app is packaged.
   [MAIN PROC]: [YT PAGE CONSOLE main]: The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-started-playing
-    -> Playback progress for charge: 10s elapsed, video time: 9.24s (hasError: false) Diag: {"pState":1,"pTime":9.237276032424926,"pLoaded":0.1498738167105028}
-    -> Playback progress for charge: 20s elapsed, video time: 19.51s (hasError: false) Diag: {"pState":1,"pTime":19.51009083596802,"pLoaded":0.2015763186041466}
-    -> Playback progress for charge: 30s elapsed, video time: 29.27s (hasError: false) Diag: {"pState":1,"pTime":29.266928076293944,"pLoaded":0.29990623513156545}
-    -> Playback progress for charge: 40s elapsed, video time: 39.04s (hasError: false) Diag: {"pState":1,"pTime":39.041090080108646,"pLoaded":0.3530361067444171}
-    -> Playback progress for charge: 50s elapsed, video time: 49.29s (hasError: false) Diag: {"pState":1,"pTime":49.288808879837035,"pLoaded":0.40711755817007395}
-    -> Playback progress for charge: 60s elapsed, video time: 59.04s (hasError: false) Diag: {"pState":1,"pTime":59.0410689256134,"pLoaded":0.4932355312289463}
-    -> Playback progress for charge: 70s elapsed, video time: 69.30s (hasError: false) Diag: {"pState":1,"pTime":69.29810090272522,"pLoaded":0.543352069305461}
-    -> Playback progress for charge: 80s elapsed, video time: 79.56s (hasError: false) Diag: {"pState":1,"pTime":79.55714903814697,"pLoaded":0.5921998317606891}
-    -> Playback progress for charge: 90s elapsed, video time: 89.33s (hasError: false) Diag: {"pState":1,"pTime":89.325103,"pLoaded":0.6185268745170732}
-    -> Playback progress for charge: 100s elapsed, video time: 99.09s (hasError: false) Diag: {"pState":1,"pTime":99.08909111825561,"pLoaded":0.6684848146893473}
-    -> Playback progress for charge: 110s elapsed, video time: 109.34s (hasError: false) Diag: {"pState":1,"pTime":109.33894596376038,"pLoaded":0.6914813281009131}
-    -> Playback progress for charge: 120s elapsed, video time: 119.10s (hasError: false) Diag: {"pState":1,"pTime":119.09740112207031,"pLoaded":0.7347782095835506}
+    -> Playback progress for charge: 10s elapsed, video time: 9.10s (hasError: false) Diag: {"pState":1,"pTime":9.100050032424926,"pLoaded":0.1498738167105028}
+    -> Playback progress for charge: 20s elapsed, video time: 19.34s (hasError: false) Diag: {"pState":1,"pTime":19.342906990463256,"pLoaded":0.2015763186041466}
+    -> Playback progress for charge: 30s elapsed, video time: 29.03s (hasError: false) Diag: {"pState":1,"pTime":29.033024,"pLoaded":0.29990623513156545}
+    -> Playback progress for charge: 40s elapsed, video time: 39.29s (hasError: false) Diag: {"pState":1,"pTime":39.2858758664856,"pLoaded":0.3530361067444171}
+    -> Playback progress for charge: 50s elapsed, video time: 49.00s (hasError: false) Diag: {"pState":1,"pTime":48.996947868392944,"pLoaded":0.40569018845086613}
+    -> Playback progress for charge: 60s elapsed, video time: 59.23s (hasError: false) Diag: {"pState":1,"pTime":59.230141931335446,"pLoaded":0.4932355312289463}
+    -> Playback progress for charge: 70s elapsed, video time: 68.96s (hasError: false) Diag: {"pState":1,"pTime":68.95719388174439,"pLoaded":0.543352069305461}
+    -> Playback progress for charge: 80s elapsed, video time: 79.18s (hasError: false) Diag: {"pState":1,"pTime":79.18430290272522,"pLoaded":0.5921998317606891}
+    -> Playback progress for charge: 90s elapsed, video time: 89.40s (hasError: false) Diag: {"pState":1,"pTime":89.40430496376038,"pLoaded":0.6185268745170732}
+    -> Playback progress for charge: 100s elapsed, video time: 99.14s (hasError: false) Diag: {"pState":1,"pTime":99.13896882833862,"pLoaded":0.6684848146893473}
+    -> Playback progress for charge: 110s elapsed, video time: 109.37s (hasError: false) Diag: {"pState":1,"pTime":109.37399305722046,"pLoaded":0.6914813281009131}
+    -> Playback progress for charge: 120s elapsed, video time: 119.09s (hasError: false) Diag: {"pState":1,"pTime":119.0872511373291,"pLoaded":0.7347782095835506}
   -> Output Captured: 00_youtube_charge_output_main.png
   -> Output Captured: 00_youtube_charge_output_stage.png
   -> Output Captured: 00_youtube_charge_output_lobby.png
@@ -306,8 +310,8 @@ once the app is packaged.
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-paused
 
   --- [Error Protection Test]: Simulating Nonexistent Video (invalid_yt_id_99999) ---
-  [MAIN PROC]: [YT NAV] Role lobby navigated to: http://127.0.0.1:55845/embed?v=invalid_yt_id_99999&muted=1&start=0
-  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:55845/embed?v=invalid_yt_id_99999&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:56262/embed?v=invalid_yt_id_99999&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role lobby navigated to: http://127.0.0.1:56262/embed?v=invalid_yt_id_99999&muted=1&start=0
   [MAIN PROC]: [YT PAGE CONSOLE lobby]: Unrecognized feature: 'web-share'.
   [MAIN PROC]: [YT PAGE CONSOLE lobby]: Uncaught Error: Invalid video id
   [MAIN PROC]: [YT PAGE CONSOLE lobby]: Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
@@ -398,7 +402,7 @@ once the app is packaged.
 
 [Step 11.B] Testing YouTube Preview Tab Switching & Continuous Output Sync...
   -> Waiting 15 seconds for playback to advance...
-  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:55845/embed?v=aqz-KE-bpKQ&muted=0&start=0
+  [MAIN PROC]: [YT NAV] Role main navigated to: http://127.0.0.1:56262/embed?v=aqz-KE-bpKQ&muted=0&start=0
   [MAIN PROC]: [YT PAGE CONSOLE main]: Unrecognized feature: 'web-share'.
   [MAIN PROC]: [YT PAGE CONSOLE main]: Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
   Policy set or a policy with "unsafe-eval" enabled. This exposes users of
@@ -412,8 +416,8 @@ once the app is packaged.
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-started-playing
   -> Switched preview tab to Escenario. Captured: 17_youtube_preview_tab_switch_stage.png
   -> Switched preview tab back to Audiencia. Captured: 17_youtube_preview_tab_switch_restored.png
-  -> Output currentTime after tabs: 18.95s (was: 14.35s)
-  -> Preview currentTime: 18.95s (drift: 0.00s, allowed <= 1.5s)
+  -> Output currentTime after tabs: 18.92s (was: 14.33s)
+  -> Preview currentTime: 18.92s (drift: 0.00s, allowed <= 1.5s)
   -> Preview strictly muted: true
   -> Output commands sent during tab switches: 0
 [TEST AUDIT]: YouTube Preview Tab Switching -> APROBADA (salidas continuas sin reiniciar, vista previa <= 1.5s, estrictamente silenciada, 0 órdenes a salidas)
@@ -430,7 +434,7 @@ once the app is packaged.
 [Step 15/16] Testing Remote Control Server, Real E2E Latency & Security Suite...
   -> Initial Remote Server Enabled State: false
   -> Remote Server Status: running=true, port=8080, conflict=none
-  -> Connecting to LAN IP: 10.0.0.122:8080
+  -> Connecting to LAN IP: 100.73.59.102:8080
   -> Security Test: Unauthenticated requests rejected...
   -> Security Test: Invalid token rejected...
   -> Security Test: Disallowed HTTP methods return 405 Method Not Allowed...
@@ -441,7 +445,7 @@ once the app is packaged.
   -> 5th attempt status: 429, data: {"success":false,"error":"PIN incorrecto. Acceso bloqueado temporalmente por 300 segundos.","remainingLockSeconds":300}
   -> Operator desktop app confirmed immune to remote IP lockout.
   -> Authenticating with valid PIN via HTTP POST...
-  -> Auth token generated: e33e**** (sanitized)
+  -> Auth token generated: b1f8**** (sanitized)
   -> Verifying minimum privilege: control token blocked from admin actions...
   -> Minimum privilege confirmed: all administrative actions returned HTTP 403.
 
@@ -449,10 +453,10 @@ once the app is packaged.
   [MAIN PROC]: [YT VIEW MEDIA] Role main media-paused
   ==============================================================
   [LATENCIA E2E REAL] 50 Muestras Completadas:
-  -> Host de prueba: 10.0.0.122:8080 (Conexión LAN)
-  -> Mediana (p50): 15.50 ms
-  -> Percentil 95 (p95): 17.32 ms
-  -> Mínimo: 2.00 ms | Máximo: 21.80 ms
+  -> Host de prueba: 100.73.59.102:8080 (Conexión LAN)
+  -> Mediana (p50): 15.40 ms
+  -> Percentil 95 (p95): 16.40 ms
+  -> Mínimo: 1.52 ms | Máximo: 16.63 ms
   ==============================================================
   -> Testing full remote controls integrity (navigation, clear-layer, emergency, timers, video, messages)...
   -> Output Captured: 16_remote_message_output_main.png
@@ -481,7 +485,7 @@ once the app is packaged.
   -> Rehearsal mode started (badge active).
   -> Rehearsal Summary modal successfully displayed.
   -> Output health reported roles: main, stage, lobby
-  -> System metrics: CPU 21%, RAM 72%, Disk Free 223.8 GB
+  -> System metrics: CPU 5%, RAM 52%, Disk Free 213.1 GB
 [TEST AUDIT]: Estabilidad y Operación Segura (Fase 7) -> APROBADA (Checklist de culto, Modo Emergencia con capturas, Modo Ensayo con auditoría, Salud de salidas y Métricas de sistema)
 
 [Step 17/18] Testing Phase 8: Automatización, Macros, Props, Bucle y Transiciones...

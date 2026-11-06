@@ -604,6 +604,21 @@ export class WindowManager {
     }
   }
 
+  public async captureProgramJpeg(width: number = 320, height: number = 180): Promise<Buffer | null> {
+    const win =
+      this.outputWindows.get('audience') ||
+      this.outputWindows.get('main') ||
+      this.outputWindows.values().next().value ||
+      this.operatorWindow
+    if (!win || win.isDestroyed()) return null
+    try {
+      const img = await win.capturePage()
+      return img.resize({ width, height, quality: 'good' }).toJPEG(60)
+    } catch {
+      return null
+    }
+  }
+
   public closeAllOutputWindows(): void {
     this.closeFloatingPreviewWindow()
     for (const [role, win] of this.outputWindows.entries()) {

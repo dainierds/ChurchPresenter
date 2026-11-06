@@ -23,8 +23,11 @@ import {
   AiAssistantConfig,
   SecondaryBackupConfig,
   ChurchBrandingConfig,
-  DEFAULT_CHURCH_BRANDING
+  DEFAULT_CHURCH_BRANDING,
+  CameraSettingsConfig,
+  PhoneCameraDevice
 } from '../../shared/types'
+import { safeStorageService } from '../security/safe-storage-service'
 
 export interface Migration {
   version: number
@@ -2133,7 +2136,8 @@ export class DatabaseService {
   public getBroadcastSettings(): BroadcastSettings {
     const url = this.getConfig('broadcast_rtmp_url') || ''
     const keyEnc = this.getConfig('broadcast_rtmp_key_enc') || ''
-    const preset = (this.getConfig('broadcast_quality_preset') as any) || '1080p30'
+    const rawKey = keyEnc ? safeStorageService.decrypt(keyEnc) : ''
+    const preset = (this.getConfig('broadcast_quality_preset') as any) || '720p30'
     const recordLocal = this.getConfig('broadcast_record_local') !== '0'
     const recordingFormat = (this.getConfig('broadcast_recording_format') as any) || 'mp4'
     const recordingPath = this.getConfig('broadcast_recording_path') || ''
@@ -2144,6 +2148,7 @@ export class DatabaseService {
     return {
       rtmpUrl: url,
       rtmpKeyEncrypted: keyEnc,
+      rtmpKey: rawKey,
       qualityPreset: preset,
       recordLocal,
       recordingFormat,
@@ -2156,7 +2161,12 @@ export class DatabaseService {
 
   public saveBroadcastSettings(settings: Partial<BroadcastSettings>): BroadcastSettings {
     if (settings.rtmpUrl !== undefined) this.setConfig('broadcast_rtmp_url', settings.rtmpUrl)
-    if (settings.rtmpKeyEncrypted !== undefined) this.setConfig('broadcast_rtmp_key_enc', settings.rtmpKeyEncrypted)
+    if (settings.rtmpKey !== undefined) {
+      const encrypted = settings.rtmpKey ? safeStorageService.encrypt(settings.rtmpKey.trim()) : ''
+      this.setConfig('broadcast_rtmp_key_enc', encrypted)
+    } else if (settings.rtmpKeyEncrypted !== undefined) {
+      this.setConfig('broadcast_rtmp_key_enc', settings.rtmpKeyEncrypted)
+    }
     if (settings.qualityPreset !== undefined) this.setConfig('broadcast_quality_preset', settings.qualityPreset)
     if (settings.recordLocal !== undefined) this.setConfig('broadcast_record_local', settings.recordLocal ? '1' : '0')
     if (settings.recordingFormat !== undefined) this.setConfig('broadcast_recording_format', settings.recordingFormat)
@@ -2507,6 +2517,88 @@ export class DatabaseService {
       logger.error(`Failed to restore SQLite database from ${backupPath}:`, err)
       return false
     }
+  }
+
+  // Phase 11: Phone Cameras Config & Paired Devices
+  public getCameraSettings(): CameraSettingsConfig {
+    const domain = this.getConfig('camera_domain') || ''
+    const cloudflareTokenEncrypted = this.getConfig('camera_cloudflare_token_enc') || ''
+    const tailscaleIp = this.getConfig('camera_tailscale_ip') || ''
+    const maxCameras = Math.min(4, Math.max(1, this.getConfigNumber('camera_max_cameras', 4)))
+    const tokenExpiryDays = this.getConfigNumber('camera_token_expiry_days', 7)
+    const httpsPort = this.getConfigNumber('camera_https_port', 8443)
+    const httpPort = this.getConfigNumber('camera_http_port', 8080)
+    const lastKnownLocalIp = this.getConfig('camera_last_known_local_ip') || ''
+
+    return {
+      domain,
+      hasCloudflareToken: Boolean(cloudflareTokenEncrypted),
+      cloudflareTokenEncrypted: cloudflareTokenEncrypted || undefined,
+      tailscaleIp,
+      maxCameras,
+      tokenExpiryDays,
+      httpsPort,
+      httpPort,
+      lastKnownLocalIp,
+      certStatus: {
+        status: !domain || !cloudflareTokenEncrypted ? 'unconfigured' : 'pending',
+        domain: domain || undefined
+      }
+    }
+  }
+
+  public saveCameraSettings(
+    settings: Partial<CameraSettingsConfig> & { cloudflareToken?: string }
+  ): CameraSettingsConfig {
+    if (settings.domain !== undefined) {
+      this.setConfig('camera_domain', settings.domain.trim())
+    }
+    if (settings.cloudflareToken !== undefined) {
+      if (settings.cloudflareToken.trim()) {
+        const encrypted = safeStorageService.encrypt(settings.cloudflareToken.trim())
+        this.setConfig('camera_cloudflare_token_enc', encrypted)
+      } else {
+        this.setConfig('camera_cloudflare_token_enc', '')
+      }
+    }
+    if (settings.tailscaleIp !== undefined) {
+      this.setConfig('camera_tailscale_ip', settings.tailscaleIp.trim())
+    }
+    if (settings.maxCameras !== undefined) {
+      const clamped = Math.min(4, Math.max(1, settings.maxCameras))
+      this.setConfig('camera_max_cameras', String(clamped))
+    }
+    if (settings.tokenExpiryDays !== undefined) {
+      this.setConfig('camera_token_expiry_days', String(Math.max(1, settings.tokenExpiryDays)))
+    }
+    if (settings.httpsPort !== undefined) {
+      this.setConfig('camera_https_port', String(settings.httpsPort))
+    }
+    if (settings.httpPort !== undefined) {
+      this.setConfig('camera_http_port', String(settings.httpPort))
+    }
+    if (settings.lastKnownLocalIp !== undefined) {
+      this.setConfig('camera_last_known_local_ip', settings.lastKnownLocalIp)
+    }
+
+    return this.getCameraSettings()
+  }
+
+  public getKnownPhoneCameras(): PhoneCameraDevice[] {
+    const raw = this.getConfig('camera_known_devices_json')
+    if (raw) {
+      try {
+        const list = JSON.parse(raw)
+        if (Array.isArray(list)) return list
+      } catch (err) {
+        logger.warn('Failed to parse camera_known_devices_json:', err)
+      }
+    }
+    return []
+  }
+
+  public saveKnownPhoneCameras(devices: PhoneCameraDevice[]): void {
+    this.setConfig('camera_known_devices_json', JSON.stringify(devices))
   }
 
   private schedulePersist(): void {

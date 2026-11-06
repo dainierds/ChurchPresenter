@@ -182,6 +182,7 @@ export const IPC_CHANNELS = {
   REMOTE_SAVE_CONFIG: 'remote:save-config',
   REMOTE_GET_STATUS: 'remote:get-status',
   REMOTE_REGENERATE_PIN: 'remote:regenerate-pin',
+  REMOTE_REGENERATE_OPERATOR_PIN: 'remote:regenerate-operator-pin',
   REMOTE_KICK_CLIENT: 'remote:kick-client',
   REMOTE_GET_NETWORK_INTERFACES: 'remote:get-network-interfaces',
   REMOTE_ACTION_DISPATCH: 'remote:action-dispatch',
@@ -275,6 +276,8 @@ export const IPC_CHANNELS = {
   BROADCAST_GET_AUDIO_MIXER: 'broadcast:get-audio-mixer',
   BROADCAST_SAVE_AUDIO_MIXER: 'broadcast:save-audio-mixer',
   BROADCAST_LIST_DESKTOP_SOURCES: 'broadcast:list-desktop-sources',
+  BROADCAST_SET_ACTIVE_SCENE: 'broadcast:set-active-scene',
+  BROADCAST_FEED_CHUNK: 'broadcast:feed-chunk',
 
   // Phase 10: Extras (Sync, Song Importers, CCLI Reports, Subtitles, AI, Backups)
   // 1. Multi-PC Sync
@@ -318,5 +321,22 @@ export const IPC_CHANNELS = {
   CHURCH_BRANDING_GET: 'church-branding:get',
   CHURCH_BRANDING_SAVE: 'church-branding:save',
   CHURCH_BRANDING_UPLOAD_LOGO: 'church-branding:upload-logo',
-  CHURCH_BRANDING_UPLOAD_BACKGROUND: 'church-branding:upload-background'
+  CHURCH_BRANDING_UPLOAD_BACKGROUND: 'church-branding:upload-background',
+
+  // Phase 11: Wi-Fi Phone Cameras (PWA + WebRTC)
+  CAMERA_GET_SETTINGS: 'camera:get-settings',
+  CAMERA_SAVE_SETTINGS: 'camera:save-settings',
+  CAMERA_RENEW_CERTIFICATE: 'camera:renew-certificate',
+  CAMERA_GET_DEVICES: 'camera:get-devices',
+  CAMERA_REVOKE_DEVICE: 'camera:revoke-device',
+  CAMERA_DEVICE_UPDATED: 'camera:device-updated',
+  CAMERA_MUTE_DEVICE: 'camera:mute-device',
+  CAMERA_GET_QR: 'camera:get-qr',
+  CAMERA_SIGNAL_SEND: 'camera:signal-send',
+  CAMERA_SIGNAL_RECEIVED: 'camera:signal-received',
+  CAMERA_START_OCTOSTREAM: 'camera:start-octostream',
+  CAMERA_STOP_OCTOSTREAM: 'camera:stop-octostream',
+  CAMERA_GET_OCTOSTREAM_SLOTS: 'camera:get-octostream-slots',
+  CAMERA_SAVE_OCTOSTREAM_SLOT: 'camera:save-octostream-slot',
+  CAMERA_FRAME: 'camera:frame'
 } as const

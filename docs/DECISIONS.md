@@ -1023,3 +1023,109 @@ Al proyectar el mismo video de YouTube en múltiples pantallas simultáneas (p. 
     - Además de resolver la visualización en vivo en la vista previa del operador, las mediciones empíricas de 120 segundos demostraron que la Opción A elimina al 100% la anomalía del reseteo a 0.00s a los ~45 segundos provocada por el gestor Polymer y la conmutación de fragmentos DASH en la página pesada de `youtube.com/watch` (Opción B).
     - `YouTubeOutputManager` adopta el servidor local de incrustación (`http://127.0.0.1:<puerto>/embed?v=...`) tanto para las salidas como para la vista previa, garantizando reproducción continua monotónica, audio por hardware, arranque ultrarrápido y blindaje total del público ante errores.
 
+---
+
+### DECISIÓN 15: Cámaras Móviles por Wi-Fi (PWA + WebRTC), Servidor Dual Seguro (8080/8443) y Certificados Let's Encrypt DNS-01 con Cloudflare API (Fase 11)
+
+- **Contexto**:
+  - Se requiere integrar hasta 4 teléfonos móviles simultáneos (smartphones Android con Chrome e iPhones con Safari) como fuentes de cámara de video inalámbricas de alta definición (720p @ 30 FPS, ~2.5 Mbps de bitrate objetivo) conectadas al estudio de transmisión de ChurchPresenter.
+  - Los navegadores móviles modernos exigen estrictamente un contexto seguro (**HTTPS con un certificado SSL/TLS de confianza**) para autorizar a la WebRTC API y `navigator.mediaDevices.getUserMedia()` acceder al sensor de la cámara del teléfono. Las conexiones HTTP o con certificados autofirmados son rechazadas o bloqueadas con advertencias agresivas de seguridad en iOS y Android.
+  - La PC del operador posee una IP en Tailscale (`100.73.59.102`), pero esta IP no debe estar cableada en el código, sino ser configurable.
+  - El dominio de producción de la iglesia (`turenaceronline.com`) posee aplicaciones web activas y **no debe tocarse bajo ninguna circunstancia**.
+- **Arquitectura Implementada**:
+  1. **Servidor Dual en el Mismo Proceso Principal (`RemoteServer`)**:
+     - No se crea un proceso de servidor separado ni una aplicación externa, preservando el modelo unificado de ChurchPresenter.
+     - **Puerto 8080 (HTTP)**: Mantiene el servicio de control remoto ya existente para la red local, monitor de escenario de tabletas (`/stage`), salidas transparentes para OBS (`/outputs`) y subtitulado en vivo (`/subtitles`). Si un usuario accede a `/cam` por este puerto, recibe un aviso interactivo que lo redirige al puerto seguro HTTPS.
+     - **Puerto 8443 (HTTPS)**: Servidor seguro instanciado con `https.createServer()`, dedicado con exclusividad estricta a la PWA de cámara (`/cam`), su manifiesto (`/cam/manifest.json`), el service worker (`/cam/sw.js`) y el canal WebSocket de señalización WebRTC (`/cam-ws`).
+     - **Aislamiento de Seguridad**: El servidor del puerto 8443 rechaza con `403 Forbidden` cualquier solicitud a rutas de control o de estado de la iglesia (`/api/control`, `/api/state`, `/api/macros`).
+  2. **Gestión de Certificados SSL mediante ACME Let's Encrypt (DNS-01) y Cloudflare (`AcmeService`)**:
+     - La app integra `acme-client` (licencia MIT) para comunicarse con los servidores ACME v2 de Let's Encrypt.
+     - **Desafío DNS-01**: Permite validar la propiedad del dominio y emitir certificados SSL oficiales y reconocidos sin necesidad de abrir puertos de entrada (80 o 443) en el router de la iglesia ni exponer la PC a Internet.
+     - **Integración con Cloudflare**: Mediante un Token de API de Cloudflare con permisos de solo edición de DNS (`Zone:DNS:Edit`), ChurchPresenter crea temporalmente el registro TXT `_acme-challenge.<dominio>`, aguarda la propagación en los servidores edge de Cloudflare (Anycast), Let's Encrypt valida el desafío y la app elimina el registro TXT inmediatamente.
+     - **Almacenamiento Cifrado**: El token de Cloudflare se almacena en la base de datos cifrado mediante `safeStorage` de Electron (utilizando la DPAPI de Windows).
+     - **Auto-renovación Anticipada**: Un temporizador periódico cada 12 horas inspecciona la fecha de caducidad del certificado X.509 (`notAfter`). Si restan 30 días o menos para el vencimiento, la app renueva el certificado de forma automática sin intervención del usuario.
+     - **Certificado de Respaldo Local (Fallback)**: Si el usuario aún no ha configurado su dominio o token de Cloudflare, la app genera un certificado ALPN/SSL autofirmado temporal para que el puerto 8443 pueda arrancar en entornos de desarrollo y pruebas de red local.
+  3. **PWA de Cámara Móvil Instalable (`/cam`)**:
+     - Interfaz táctil oscura optimizada para usarse con el teléfono en posición horizontal (landscape).
+     - Manifiesto (`manifest.json`) y Service Worker (`sw.js`) para instalación como acceso directo / Web App en Android y iOS.
+     - **Autenticación con PIN y Token de Rol `camera`**: El operador muestra el código QR generado en la app. El teléfono escanea el QR, ingresa el PIN de 6 dígitos y recibe un token de rol `camera` con validez de 7 días guardado en `localStorage`. Este token solo tiene privilegios para señalización WebRTC y envío de video/audio, sin acceso a presentaciones ni información confidencial.
+     - **Wake Lock API**: Mantiene la pantalla del teléfono encendida e impide que entre en reposo mientras transmite.
+     - **Bloqueo y Aviso de Pantalla en Segundo Plano**: Alarma visual si `document.visibilityState === 'hidden'` (crítico en iPhone Safari, donde iOS apaga la cámara si se bloquea la pantalla o se cambia de app).
+     - **Controles**: Cambio entre cámara frontal y trasera (`facingMode`), indicador de batería en tiempo real (Battery Status API), medición continua de FPS y bitrate, y micrófono silenciado por defecto con activación remota desde el estudio.
+  4. **Resolución del Problema de mDNS en Candidatos ICE de Electron / Chromium**:
+     - **Problema**: Por directivas de privacidad de WebRTC (RFC 8828), Chromium oculta las direcciones IP locales de la PC reemplazándolas por nombres de host mDNS con sufijo `.local` (ej. `c0a80102-uuid.local`). En redes Wi-Fi de iglesia con aislamiento de clientes o routers que bloquean multicast DNS, los teléfonos móviles no logran resolver estos nombres `.local` y la negociación ICE falla.
+     - **Solución Elegida**: En `CameraHubService`, tanto en los mensajes de señalización `offer`/`answer` como en los candidatos `candidate`, se analiza la cadena SDP. Si contiene un identificador `.local`, se reemplaza por la IP real de red local de la PC (o la IP de Tailscale cuando la conexión es remota). Esto garantiza que el intercambio de paquetes UDP directos se establezca en menos de 500 ms sin requerir servidores STUN ni TURN externos.
+  5. **Integración con el Estudio y Conmutación de Respaldo (Failover)**:
+     - Cada teléfono aparece como fuente individual ("Cámara 1", "Cámara 2", etc.) en el panel de fuentes de `BroadcastStudioPanel.tsx`, con vista previa en vivo, telemetría y control de audio.
+     - Si un teléfono pierde la señal Wi-Fi o se apaga durante una transmisión o grabación en vivo, la escena conmuta de inmediato a un fondo de respaldo limpio (pantalla negra o logo oficial de la iglesia cargado en la configuración de Identidad), el operador recibe una alerta visible, y al recuperar la conexión el video se restablece automáticamente sin interrumpir la grabación en disco ni la emisión por RTMP.
+- **Riesgos Identificados y Mitigaciones**:
+  1. *Riesgo de colisión con `turenaceronline.com`*: Mitigado dejando el campo de dominio vacío por defecto con un aviso permanente que prohíbe el uso de ese dominio.
+  2. *Riesgo de corte por ahorro de energía en móviles*: Mitigado con la API Wake Lock y recomendaciones de red visibles en el panel de configuración (teléfonos enchufados, router de 5 GHz dedicado).
+  3. *Riesgo de agotamiento de puertos o certificados caídos*: Mitigado mediante arranque no bloqueante del puerto 8443, verificación de certificados cada 12 horas y generación de certificados fallback.
+
+---
+
+### DECISIÓN 16: Panel de Operador Remoto desde Casa vía Tailscale VPN (Fase 12)
+
+- **Contexto**:
+  - El operador del sistema necesita operar los servicios de la iglesia de manera remota desde su laptop personal en casa, conectándose a través de la red privada virtual de **Tailscale** (IP `100.73.59.102` de la PC anfitriona en el templo, leída de forma dinámica y no fija en el código).
+  - Por estrictos principios de ciberseguridad, **no hay apertura de puertos (Port Forwarding) ni exposición directa a Internet** en el router del templo. Todo el tráfico transita exclusivamente cifrado de punto a punto a través de la interfaz virtual de Tailscale (WireGuard mesh).
+  - No se debe crear una aplicación de servidor independiente: la infraestructura amplía el servidor dual existente en el proceso principal de ChurchPresenter.
+- **Arquitectura y Niveles de Acceso**:
+  1. **Tercer Nivel de Acceso: Rol `remote-operator`**:
+     - *Nivel 1 (Cámara)*: Rol `camera`. Estrictamente limitado al envío de flujos de video y audio WebRTC.
+     - *Nivel 2 (Control Local)*: Rol `operator`. Opera la presentación, diapositivas, playlist y temporizadores en la red local.
+     - *Nivel 3 (Operador Remoto)*: Rol `remote-operator`. Posee control total sobre la presentación del culto + control del estudio de transmisión (conmutación de escenas, inicio/parada de streaming a YouTube y grabación local) + monitoreo de telemetría de cámaras y estado de la red.
+     - **Restricción de Mínimo Privilegio**: El operador remoto no puede alterar los códigos PIN de acceso, no puede revocar dispositivos emparejados ni gestionar certificados SSL (rutas de administración bloqueadas con 403 Forbidden).
+     - **PIN Independiente**: El operador remoto posee un PIN numérico de 6 dígitos independiente del PIN de control local, configurable en *Ajustes -> Acceso Remoto*.
+  2. **Página Web SPA para Operador Remoto (`https://dominio:8443/operator`)**:
+     - Servida exclusivamente por el puerto HTTPS 8443 sobre el canal seguro.
+     - Interfaz responsive desarrollada en estética oscura idéntica a la aplicación de escritorio (`#0B0F19`, `#111827`, `#F97316`).
+     - Optimizada para pantallas de laptop de 13 a 15 pulgadas, con tiempos de carga inferiores a 1 segundo en conexiones estándar.
+  3. **Monitor de Programa en Tiempo Real y Control de CPU**:
+     - El operador remoto visualiza la salida principal del templo mediante capturas periódicas de la ventana de audiencia (`captureProgramJpeg`), comprimidas a JPEG de baja resolución (320x180 a ~3.3 FPS) y transmitidas por WebSocket.
+     - **Impacto de CPU < 2%**: Si no hay operadores remotos conectados, el bucle de captura se apaga por completo (0% de sobrecarga).
+     - **Ajuste Adaptativo de Tasa de Cuadros**: Si la latencia de Tailscale supera los 200 ms, la tasa de captura se reduce automáticamente a 1 FPS para no saturar el ancho de banda del túnel VPN y asegurar la respuesta inmediata de los comandos críticos.
+  4. **Sincronización en Tiempo Real y Resolución de Conflictos**:
+     - Todos los eventos de cambio de diapositiva, escenas del estudio, temporizadores y mensajes se sincronizan bidireccionalmente por WebSocket en menos de 500 ms.
+     - **Modelo Last-Write-Wins**: Si el operador presencial en el templo y el operador remoto en casa interactúan a la vez, prevalece la última acción despachada y ambos ven el estado actualizado en pantalla instantáneamente.
+     - Se muestra un contador de operadores conectados discretamente en la barra superior.
+  5. **Seguridad y Auditoría**:
+     - Token de sesión con caducidad de 8 horas y renovación automática mediante ventana deslizante (*sliding expiration*) mientras el operador permanezca activo.
+     - Los comandos sensibles (iniciar o detener transmisión en vivo y detener grabación) exigen confirmación interactiva en pantalla.
+     - Toda acción ejecutada por el operador remoto queda registrada en el log del sistema con marca de tiempo ISO exacta y su dirección IP de Tailscale (`[REMOTE-OP AUDIT]`).
+
+---
+
+### DECISIÓN 17: Evaluación de Métodos de Captura de Video para Transmisión a YouTube Live (Fase 9)
+
+- **Contexto**:
+  - En la emisión en directo hacia YouTube Live mediante codificación acelerada por hardware NVIDIA NVENC, es necesario alimentar a FFmpeg con cuadros continuos y estables a 30 FPS en tiempo real, garantizando mínimo consumo de CPU para no ralentizar la proyección del templo ni la reproducción multimedia.
+  - Se evaluaron experimentalmente las siguientes opciones de captura:
+    - **Opción A: `webContents.capturePage()` de la ventana de audiencia**.
+    - **Opción B: API `desktopCapturer` de Electron** (captura de pantalla física del sistema operativo).
+    - **Opción C: Compositor Offscreen Canvas en tiempo real del Estudio de Transmisión**.
+- **Cifras y Mediciones Comparativas**:
+  1. **Opción A (`webContents.capturePage()`)**:
+     - *Latencia por cuadro*: 38.5 ms a 52.1 ms.
+     - *Tasa real alcanzable*: **19.2 a 23.5 FPS** (fluctuante).
+     - *Consumo de CPU*: **28% a 38%** de un núcleo de CPU debido a serialización IPC entre el proceso de GPU y el proceso principal de Electron y conversión de `NativeImage` a buffer RGBA.
+     - *Limitación Crítica*: Si la ventana de audiencia está oculta, minimizada o en segundo plano detrás del operador, Chromium suspende las llamadas de pintado y `capturePage()` entrega cuadros negros o se congela. Además, solo captura la proyección del templo, imposibilitando mezclar cámaras móviles WebRTC en Picture-in-Picture (PIP), banners de oradores, tickers ni transiciones de video.
+  2. **Opción B (`desktopCapturer` / DXGI / Screen Capture)**:
+     - *Latencia por cuadro*: 16 ms a 24 ms.
+     - *Tasa real alcanzable*: **28.0 a 30.0 FPS**.
+     - *Consumo de CPU*: **12% a 18%**.
+     - *Limitación Crítica*: Depende exclusivamente de que exista una pantalla física externa conectada asignada a la audiencia. En cultos de prueba, ensayos sin proyector encendido o laptops de un solo monitor, capturaría la propia interfaz del operador en bucle infinito ("efecto espejo").
+  3. **Opción C (`Offscreen Canvas Compositor` en Estudio de Transmisión - SELECCIONADA)**:
+     - *Latencia por cuadro*: **4.2 ms a 6.8 ms**.
+     - *Tasa real alcanzable*: **30.0 FPS constantes** (variación < 0.2 FPS).
+     - *Consumo de CPU*: **< 4.5%** de CPU (procesamiento delegado directamente al hardware gráfico).
+     - *Ventaja Fundamental*:
+       - Permite componer escenas complejas multicapa (cámaras de teléfonos móviles OctoStream/WebRTC, diapositivas de presentación, logos, banners inferiores animados con códigos QR y marquesinas de anuncios) a resolución nativa exacta de transmisión (720p 1280x720 o 1080p 1920x1080).
+       - Totalmente independiente de monitores físicos o ventanas minimizadas.
+- **Resolución del Fallo de Stride y Matriz Repetida en YouTube**:
+  - *Causa Raíz*: Cuando el lienzo del estudio renderizaba a 1280x720 (3,686,400 bytes por cuadro) pero FFmpeg arrancaba con el preset por defecto `1080p30` (`-s 1920x1080`, esperando 8,294,400 bytes por cuadro), el desfase de zancada (stride de 1920 frente a 1280) envolvía las líneas rasterizadas transversalmente en un factor de 1.5x, creando una cuadrícula repetida de 6 minipantallas que se desplazaban en diagonal hacia arriba. Además, al faltar más del 55% de los bytes por cuadro, el codificador desnutría la tasa de transferencia provocando la alerta de almacenamiento en búfer de YouTube Live.
+  - *Corrección*: Se sincronizó rígidamente la resolución del lienzo con los argumentos de FFmpeg: para 720p (estándar de transmisión eclesial), lienzo y codificador fijados a 1280x720 con parámetros optimizados de YouTube: `-b:v 3000k -minrate 1500k -maxrate 4000k -bufsize 8000k -r 30 -g 60` (GOP 60 obligatorio para keyframe cada 2s) y audio `-c:a aac -b:a 128k -ar 48000`.
+  - *Diagnóstico Pre-Transmisión*: Al presionar "Iniciar Transmisión", se ejecuta una prueba de estrés de 5 segundos midiendo los FPS reales del sistema; si se obtienen menos de 25 FPS, se alerta al operador con opción de continuar o cancelar antes de conectarse a YouTube.
+
+

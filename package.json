@@ -1,6 +1,6 @@
 {
   "name": "church-presenter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Church presentation software for Windows",
   "main": "./out/main/index.js",
   "author": "ChurchPresenter Team",
@@ -21,6 +21,7 @@
     "dist:win": "electron-vite build && electron-builder --win --x64"
   },
   "dependencies": {
+    "acme-client": "^5.4.0",
     "adm-zip": "^0.6.1",
     "electron-log": "^5.2.4",
     "lucide-react": "^0.469.0",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/acme-client": "^3.0.0",
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.6",

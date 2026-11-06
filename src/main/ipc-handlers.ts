@@ -63,6 +63,9 @@ import { ccliService } from './extras/ccli-service'
 import { liveSubtitlesService } from './extras/live-subtitles-service'
 import { aiAssistantService } from './extras/ai-assistant-service'
 import { secondaryBackupService } from './extras/secondary-backup-service'
+import { cameraHubService } from './camera/camera-hub-service'
+import { octoStreamService } from './camera/octostream-service'
+import { acmeService } from './camera/acme-service'
 import fs from 'fs'
 import path from 'path'
 import { parseBibleReference } from '../shared/bible-reference-parser'
@@ -1034,6 +1037,12 @@ export function registerIpcHandlers(): void {
     return newPin
   })
 
+  ipcMain.handle(IPC_CHANNELS.REMOTE_REGENERATE_OPERATOR_PIN, async () => {
+    const newPin = remoteAuthService.regenerateRemoteOperatorPin()
+    await remoteServer.saveConfig({ remoteOperatorPin: newPin })
+    return newPin
+  })
+
   ipcMain.handle(IPC_CHANNELS.REMOTE_KICK_CLIENT, async (_event, clientId: string) => {
     return remoteServer.kickClient(clientId)
   })
@@ -1416,6 +1425,25 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.on(IPC_CHANNELS.BROADCAST_FEED_CHUNK, (_event, chunk: Uint8Array | number[]) => {
+    try {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      broadcastEngine.feedChunk(buffer)
+    } catch {
+      // ignore
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROADCAST_FEED_CHUNK, async (_event, chunk: Uint8Array | number[]) => {
+    try {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      broadcastEngine.feedChunk(buffer)
+      return true
+    } catch {
+      return false
+    }
+  })
+
   // =========================================================================
   // Phase 10: Extras (Sync, Importers, CCLI Reports, Subtitles, AI, Backups)
   // =========================================================================
@@ -1559,6 +1587,62 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.CHURCH_BRANDING_UPLOAD_BACKGROUND, async (_event, sourcePath?: string) => {
     return await workspaceService.saveChurchBackgroundFile(sourcePath)
+  })
+
+  // Phase 11: Wi-Fi Phone Cameras (PWA + WebRTC)
+  ipcMain.handle(IPC_CHANNELS.CAMERA_GET_SETTINGS, async () => {
+    const settings = cameraHubService.getSettings()
+    const certStatus = await acmeService.getCertificateStatus()
+    return {
+      ...settings,
+      certStatus
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_SAVE_SETTINGS, async (_event, settings: any) => {
+    return await cameraHubService.saveSettings(settings)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_RENEW_CERTIFICATE, async () => {
+    return await acmeService.renewCertificate()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_GET_DEVICES, () => {
+    return cameraHubService.getConnectedDevices()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_REVOKE_DEVICE, (_event, cameraId: string) => {
+    return cameraHubService.revokeDevice(cameraId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_MUTE_DEVICE, (_event, cameraId: string, muted: boolean) => {
+    return cameraHubService.toggleAudio(cameraId, muted)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_GET_QR, async () => {
+    return await cameraHubService.getCameraQrInfo()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_SIGNAL_SEND, (_event, signal: any) => {
+    if (!signal || !signal.cameraId) return false
+    return cameraHubService.sendSignalToCamera(signal.cameraId, signal)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_START_OCTOSTREAM, async (_event, slotId: string) => {
+    return await octoStreamService.startSlot(slotId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_STOP_OCTOSTREAM, async (_event, slotId: string) => {
+    return await octoStreamService.stopSlot(slotId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_GET_OCTOSTREAM_SLOTS, async () => {
+    return await octoStreamService.getSlotsWithUrls()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.CAMERA_SAVE_OCTOSTREAM_SLOT, async (_event, slot: any) => {
+    const slots = await octoStreamService.saveSlot(slot)
+    return { success: true, slots }
   })
 
   broadcastEngine.on('status-changed', (st) => {

@@ -9,3 +9,7 @@ Thumbs.db
 .idea/
 *.sqlite*
 !tests/fixtures/*.sqlite
+scratch/
+certs/
+*.mp4
+output-test.mp4

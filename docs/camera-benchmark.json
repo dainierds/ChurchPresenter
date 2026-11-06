@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-11-03T01:03:00.277Z",
+  "hardware": {
+    "platform": "win32",
+    "release": "10.0.26300",
+    "cpus": 20,
+    "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
+    "gpu": {
+      "available": true,
+      "name": "NVIDIA GeForce RTX 5060 Ti",
+      "gpuUtilPercent": 0,
+      "memoryUtilPercent": 1,
+      "memoryUsedMb": 2235,
+      "memoryTotalMb": 16311,
+      "temperatureC": 41,
+      "powerDrawWatts": 16.51
+    }
+  },
+  "config": {
+    "targetResolution": "1280x720",
+    "targetFps": 30,
+    "targetBitrateKbps": 2500,
+    "codec": "H.264",
+    "simultaneousCameras": 4,
+    "testDurationSeconds": 15
+  },
+  "status": "COMPLETED",
+  "summary": {
+    "totalDurationSeconds": 15,
+    "simultaneousCamerasCount": 4,
+    "averageCpuPercent": 24,
+    "averageGpuPercent": 4,
+    "averageRamMb": 16228,
+    "endToEndLatencyMs": {
+      "average": 56,
+      "minimum": 0,
+      "maximum": 61
+    },
+    "gpuAcceleration": "NVIDIA NVENC / CUDA Active",
+    "stability": "PASS (0 frames dropped, 0 crashes, uninterrupted streaming)"
+  },
+  "cameraMetrics": [
+    {
+      "id": "Cámara 1",
+      "targetFps": 30,
+      "actualFpsAvg": 30,
+      "targetBitrateKbps": 2500,
+      "actualBitrateKbpsAvg": 2513,
+      "packetLossPercentAvg": 0,
+      "status": "OPTIMAL"
+    },
+    {
+      "id": "Cámara 2",
+      "targetFps": 30,
+      "actualFpsAvg": 30,
+      "targetBitrateKbps": 2500,
+      "actualBitrateKbpsAvg": 2510,
+      "packetLossPercentAvg": 0,
+      "status": "OPTIMAL"
+    },
+    {
+      "id": "Cámara 3",
+      "targetFps": 30,
+      "actualFpsAvg": 30.1,
+      "targetBitrateKbps": 2500,
+      "actualBitrateKbpsAvg": 2493,
+      "packetLossPercentAvg": 0,
+      "status": "OPTIMAL"
+    },
+    {
+      "id": "Cámara 4",
+      "targetFps": 30,
+      "actualFpsAvg": 30,
+      "targetBitrateKbps": 2500,
+      "actualBitrateKbpsAvg": 2486,
+      "packetLossPercentAvg": 0.02,
+      "status": "OPTIMAL"
+    }
+  ],
+  "samples": [
+    {
+      "elapsedSec": 5,
+      "systemCpuPercent": 22,
+      "systemRamUsedMb": 16215,
+      "gpuUtilPercent": 5,
+      "gpuMemoryUsedMb": 2113,
+      "gpuTempC": 41,
+      "cameras": [
+        {
+          "id": "cam_1",
+          "fps": 29.8,
+          "bitrateKbps": 2545,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_2",
+          "fps": 29.8,
+          "bitrateKbps": 2481,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_3",
+          "fps": 30.1,
+          "bitrateKbps": 2453,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_4",
+          "fps": 29.9,
+          "bitrateKbps": 2472,
+          "packetLossPercent": 0
+        }
+      ]
+    },
+    {
+      "elapsedSec": 10,
+      "systemCpuPercent": 22,
+      "systemRamUsedMb": 16229,
+      "gpuUtilPercent": 5,
+      "gpuMemoryUsedMb": 2111,
+      "gpuTempC": 41,
+      "cameras": [
+        {
+          "id": "cam_1",
+          "fps": 30.1,
+          "bitrateKbps": 2478,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_2",
+          "fps": 30.1,
+          "bitrateKbps": 2525,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_3",
+          "fps": 30.1,
+          "bitrateKbps": 2559,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_4",
+          "fps": 30,
+          "bitrateKbps": 2524,
+          "packetLossPercent": 0.05
+        }
+      ]
+    },
+    {
+      "elapsedSec": 15,
+      "systemCpuPercent": 28,
+      "systemRamUsedMb": 16239,
+      "gpuUtilPercent": 1,
+      "gpuMemoryUsedMb": 2099,
+      "gpuTempC": 41,
+      "cameras": [
+        {
+          "id": "cam_1",
+          "fps": 30,
+          "bitrateKbps": 2515,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_2",
+          "fps": 30.2,
+          "bitrateKbps": 2525,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_3",
+          "fps": 30,
+          "bitrateKbps": 2467,
+          "packetLossPercent": 0
+        },
+        {
+          "id": "cam_4",
+          "fps": 30.2,
+          "bitrateKbps": 2463,
+          "packetLossPercent": 0
+        }
+      ]
+    }
+  ]
+}
