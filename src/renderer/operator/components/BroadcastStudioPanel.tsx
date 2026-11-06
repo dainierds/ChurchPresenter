@@ -467,6 +467,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
   const [churchBranding, setChurchBranding] = useState<ChurchBrandingConfig | null>(null)
   const [sourcesTab, setSourcesTab] = useState<StudioTab>('layers')
   const [selectedTransition, setSelectedTransition] = useState<TransitionType>('fade')
+  const [programScene, setProgramScene] = useState<BroadcastScene | null>(null)
   const [outgoingScene, setOutgoingScene] = useState<BroadcastScene | null>(null)
   const [overlays, setOverlays] = useState<BroadcastOverlaysConfig>(() => {
     try {
@@ -727,6 +728,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
         setScenes(dbScenes)
         setPreviewSceneId(dbScenes[0].id)
         setProgramSceneId(dbScenes[0].id)
+        setProgramScene(JSON.parse(JSON.stringify(dbScenes[0])))
       }
       const mixerState = await window.churchPresenterApi.getAudioMixerConfig()
       if (mixerState) {
@@ -1047,25 +1049,32 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       : [])
   ]
 
-  // Scene Switching & Transitions
+  // Scene Switching & Transitions (Preview vs Program Isolation)
   const activePreviewScene = scenes.find((s) => s.id === previewSceneId) || scenes[0]
-  const activeProgramScene = scenes.find((s) => s.id === programSceneId) || scenes[0]
+  const activeProgramScene = programScene || scenes.find((s) => s.id === programSceneId) || scenes[0]
 
   const handleCutTransition = useCallback(() => {
-    if (isTransitioning) return
-    setProgramSceneId(previewSceneId)
-  }, [isTransitioning, previewSceneId])
+    if (isTransitioning || !activePreviewScene) return
+    setProgramSceneId(activePreviewScene.id)
+    setProgramScene(JSON.parse(JSON.stringify(activePreviewScene)))
+  }, [isTransitioning, activePreviewScene])
 
   const handleExecuteTransition = useCallback(() => {
-    if (isTransitioning || previewSceneId === programSceneId) return
-    setOutgoingScene(activeProgramScene)
-    setProgramSceneId(previewSceneId)
+    if (isTransitioning || !activePreviewScene) return
+    const prevOnAir = programScene
+      ? JSON.parse(JSON.stringify(programScene))
+      : activeProgramScene
+        ? JSON.parse(JSON.stringify(activeProgramScene))
+        : null
+    setOutgoingScene(prevOnAir)
+    setProgramSceneId(activePreviewScene.id)
+    setProgramScene(JSON.parse(JSON.stringify(activePreviewScene)))
     setIsTransitioning(true)
     setTimeout(() => {
       setIsTransitioning(false)
       setOutgoingScene(null)
     }, transitionDuration)
-  }, [isTransitioning, previewSceneId, programSceneId, activeProgramScene, transitionDuration])
+  }, [isTransitioning, activePreviewScene, programScene, activeProgramScene, transitionDuration])
 
   // Sync scene transitions initiated by Remote Operator
   useEffect(() => {
@@ -1076,6 +1085,8 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             setPreviewSceneId(data.sceneId)
           } else {
             setProgramSceneId(data.sceneId)
+            const target = scenes.find((s) => s.id === data.sceneId)
+            if (target) setProgramScene(JSON.parse(JSON.stringify(target)))
           }
         }
         if (data.transition === 'cut') {
@@ -1087,7 +1098,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       return () => unsub()
     }
     return undefined
-  }, [handleCutTransition, handleExecuteTransition])
+  }, [scenes, handleCutTransition, handleExecuteTransition])
 
   // Scene Management
   const handleCreateScene = async () => {
@@ -1136,6 +1147,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     setPreviewSceneId(filtered[0].id)
     if (programSceneId === activePreviewScene.id) {
       setProgramSceneId(filtered[0].id)
+      setProgramScene(JSON.parse(JSON.stringify(filtered[0])))
     }
   }
 

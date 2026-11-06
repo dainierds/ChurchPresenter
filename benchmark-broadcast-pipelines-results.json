@@ -1,5 +1,5 @@
 {
-  "testDate": "2026-11-06T04:00:44.882Z",
+  "testDate": "2026-11-06T04:12:45.383Z",
   "platform": "win32 10.0.26300 (x64)",
   "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
   "gpuEncoder": "h264_nvenc (NVIDIA RTX)",
@@ -7,8 +7,8 @@
   "testDurationSec": 6,
   "pipelineA_ContainerRemux": {
     "name": "MediaRecorder Container Stream (Matroska/WebM -> FFmpeg stdin)",
-    "durationSeconds": 3.32,
-    "cpuPercent": 1.42,
+    "durationSeconds": 3.34,
+    "cpuPercent": 2.81,
     "memoryRssMb": 68.3,
     "outputSizeBytes": 936819,
     "droppedFrames": 0,
@@ -17,7 +17,7 @@
   "pipelineB_RawPipe": {
     "name": "Raw YUV420p Frame Buffer Pipe (stdin rawvideo)",
     "durationSeconds": 0.48,
-    "cpuPercent": 9.84,
+    "cpuPercent": 16.08,
     "memoryRssMb": 71.4,
     "outputSizeBytes": 75695,
     "droppedFrames": 0,
