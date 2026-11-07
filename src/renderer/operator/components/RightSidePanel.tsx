@@ -216,7 +216,18 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const isVideo =
     !isYouTube &&
     (activeMediaType === 'video' ||
+      (roleContent as any)?.sourceType === 'video' ||
+      roleContent?.mediaType === 'video' ||
+      (liveSlide as any)?.sourceType === 'video' ||
+      liveSlide?.mediaType === 'video' ||
       (Boolean(activeMediaUrl) && /\.(mp4|webm|mkv|mov)$/i.test(activeMediaUrl || '')))
+
+  const isSlideVideo =
+    isVideo ||
+    (roleContent as any)?.sourceType === 'video' ||
+    roleContent?.mediaType === 'video' ||
+    (liveSlide as any)?.sourceType === 'video' ||
+    liveSlide?.mediaType === 'video'
 
   const isContentHidden = isCleared || showLogo || isBlack
 
@@ -461,7 +472,11 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 >
                   <div style={{ fontSize: 8, color: '#fbbf24', fontWeight: 700, marginBottom: 2 }}>ACTUAL</div>
                   <div style={{ fontSize: 10, color: '#fef08a', lineHeight: 1.2 }}>
-                    {isCleared ? '' : roleContent?.body || '(Sin diapositiva)'}
+                    {isCleared
+                      ? ''
+                      : isSlideVideo
+                        ? `🎬 ${roleContent?.title || liveSlide?.title || 'Video en reproducción'}`
+                        : roleContent?.body || '(Sin diapositiva)'}
                   </div>
                 </div>
 
@@ -707,8 +722,8 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 />
               )}
 
-              {/* 4. Slide Text Content Layer */}
-              {!isContentHidden && !isYouTube && (roleContent?.body || liveSlide?.body) && (
+              {/* 4. Slide Text Content Layer (Strictly matching presentation output: never render slide text/metadata over video or youtube) */}
+              {!isContentHidden && !isYouTube && !isSlideVideo && (roleContent?.body || liveSlide?.body) && (
                 <div
                   style={{
                     position: 'relative',
