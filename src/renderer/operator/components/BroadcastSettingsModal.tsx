@@ -8,13 +8,15 @@ import {
   Eye,
   EyeOff,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  Video
 } from 'lucide-react'
 import { BroadcastSettings } from '../../../shared/types'
 
 interface BroadcastSettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  onOpenObsBridge?: () => void
 }
 
 const RTMP_PRESETS = [
@@ -26,7 +28,8 @@ const RTMP_PRESETS = [
 
 export const BroadcastSettingsModal: React.FC<BroadcastSettingsModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  onOpenObsBridge
 }) => {
   const [settings, setSettings] = useState<BroadcastSettings>({
     rtmpUrl: 'rtmp://a.rtmp.youtube.com/live2',
@@ -370,6 +373,62 @@ export const BroadcastSettingsModal: React.FC<BroadcastSettingsModalProps> = ({
                   <option value="mkv">MKV (Tolerante a apagones)</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Section: Puente con OBS Studio */}
+          <div
+            style={{
+              backgroundColor: '#161616',
+              border: '1px solid #282828',
+              borderRadius: 8,
+              padding: '14px 16px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: '#38BDF8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    marginBottom: 4
+                  }}
+                >
+                  <Video size={16} /> Puente con OBS Studio (obs-websocket v5)
+                </div>
+                <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Conecte ChurchPresenter con OBS Studio y use fuentes de navegador transparentes para tercios inferiores.
+                </div>
+              </div>
+              {onOpenObsBridge && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onOpenObsBridge()
+                  }}
+                  style={{
+                    backgroundColor: '#1E1E1E',
+                    border: '1px solid #38BDF8',
+                    color: '#38BDF8',
+                    borderRadius: 6,
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Video size={13} /> Configurar Puente OBS
+                </button>
+              )}
             </div>
           </div>
 

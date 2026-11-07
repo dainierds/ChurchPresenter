@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Radio,
-  Video,
   Volume2,
   VolumeX,
   Layers,
@@ -52,7 +51,7 @@ import { EpsBannerImporter } from '../services/eps-banner-importer'
 
 interface BroadcastStudioPanelProps {
   onOpenSettings: () => void
-  onOpenObsBridge: () => void
+  onOpenObsBridge?: () => void
 }
 
 export type StudioTab = 'layers' | 'phone_cameras' | 'transitions' | 'overlays'
@@ -2821,27 +2820,6 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               Grabar Local
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={onOpenObsBridge}
-            title="Abrir Puente y Control de OBS Studio"
-            style={{
-              backgroundColor: '#1E1E1E',
-              color: '#38BDF8',
-              border: '1px solid #2E2E2E',
-              borderRadius: 6,
-              padding: '6px 12px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Video size={13} color="#38BDF8" /> Puente OBS
-          </button>
 
           <button
             type="button"

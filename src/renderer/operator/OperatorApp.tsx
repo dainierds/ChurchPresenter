@@ -7734,6 +7734,7 @@ export const OperatorApp: React.FC = () => {
       <BroadcastSettingsModal
         isOpen={isBroadcastSettingsOpen}
         onClose={() => setIsBroadcastSettingsOpen(false)}
+        onOpenObsBridge={() => setIsObsBridgeOpen(true)}
       />
 
       <ObsBridgeModal
