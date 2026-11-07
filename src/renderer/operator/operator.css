@@ -2677,24 +2677,38 @@ body {
 }
 
 /* 2. ProPresenter Toolbar */
+/* 2. ProPresenter Toolbar - Modern Sleek Redesign */
 .pro-toolbar {
-  height: 44px;
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
+  height: 48px;
+  background-color: #0e0f12;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
-  gap: 10px;
+  padding: 0 14px;
+  gap: 8px;
   flex-shrink: 0;
   z-index: 40;
+}
+
+.pro-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.12);
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .pro-toolbar-search-box {
   position: relative;
   display: flex;
   align-items: center;
-  width: 200px;
+  width: 130px;
+  transition: width 0.2s ease;
+}
+
+.pro-toolbar-search-box:focus-within {
+  width: 180px;
 }
 
 .pro-search-icon {
@@ -2706,17 +2720,18 @@ body {
 
 .pro-search-input {
   width: 100%;
-  background-color: var(--bg-input) !important;
-  border: 1px solid var(--border-color) !important;
+  background-color: #17181d !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: var(--text-main) !important;
-  padding: 4px 24px 4px 28px !important;
-  border-radius: var(--radius-sm) !important;
-  font-size: 12px;
+  padding: 4px 22px 4px 26px !important;
+  border-radius: 6px !important;
+  font-size: 11px;
   outline: none;
+  transition: border-color 0.15s ease;
 }
 
 .pro-search-input:focus {
-  border-color: var(--accent-primary) !important;
+  border-color: #FF7A00 !important;
 }
 
 .pro-search-clear {
@@ -2738,60 +2753,70 @@ body {
 .pro-tool-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-body);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
+  gap: 6px;
+  background-color: #17181d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+  padding: 5px 12px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .pro-tool-btn:hover {
-  background-color: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: #2F333E;
+  background-color: #22242b;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 /* Mode Switcher Segmented Control */
 .pro-mode-segmented-control {
   display: flex;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  gap: 2px;
+  align-items: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 4px;
 }
 
 .pro-mode-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  padding: 4px 10px;
-  border-radius: 2px;
+  gap: 6px;
+  background-color: #17181d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  padding: 5px 12px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .pro-mode-btn:hover {
-  color: var(--text-main);
+  background-color: #22242b;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
+/* Activo en naranja */
 .pro-mode-btn.active {
-  background-color: var(--bg-card);
-  color: var(--text-main);
-  border-color: var(--border-color);
+  background-color: rgba(255, 122, 0, 0.14) !important;
+  color: #FF7A00 !important;
+  border-color: #FF7A00 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 10px rgba(255, 122, 0, 0.2);
 }
 
-/* Screen Status Buttons & Media Drawer Button (Requirement 4) */
+.pro-mode-btn.active svg {
+  color: #FF7A00 !important;
+  stroke: #FF7A00 !important;
+}
+
+/* Screen Status Buttons & Chips - Semantic Colors */
 .pro-screen-status-pills {
   display: flex;
   align-items: center;
@@ -2802,53 +2827,92 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-body);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .pro-status-pill-btn:hover {
-  background-color: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: #2F333E;
-}
-
-.pro-status-pill-btn.active,
-.pro-status-pill-btn.drawer-open {
-  background-color: var(--bg-card-selected);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
 }
 
 .pro-status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+  background-color: #6b7280;
 }
 
-.pro-status-dot.dot-green,
-.pro-status-pill-btn.connected .pro-status-dot {
-  background-color: var(--accent-live);
+/* Semantic connected state (green) */
+.pro-status-pill-btn.connected {
+  border-color: rgba(34, 197, 94, 0.5);
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
 }
 
-.pro-status-dot.dot-red,
-.pro-status-pill-btn.disconnected .pro-status-dot {
-  background-color: var(--accent-danger);
+.pro-status-pill-btn.connected .pro-status-dot,
+.pro-status-dot.dot-green {
+  background-color: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
 }
 
-.pro-status-dot.dot-gray,
-.pro-status-pill-btn.unassigned .pro-status-dot {
-  background-color: var(--text-dim);
+/* Semantic disconnected state (red) */
+.pro-status-pill-btn.disconnected {
+  border-color: rgba(239, 68, 68, 0.5);
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #f87171;
 }
 
-/* Global Actions (F1 - F4) */
+.pro-status-pill-btn.disconnected .pro-status-dot,
+.pro-status-dot.dot-red {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* Semantic unassigned state */
+.pro-status-pill-btn.unassigned {
+  border-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: #6b7280;
+}
+
+/* EN VIVO semantic chip */
+.pro-status-pill-btn.pro-live-pill {
+  border-color: rgba(239, 68, 68, 0.65);
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.pro-status-pill-btn.pro-live-pill .pro-status-dot {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+}
+
+/* CPU Health Chip */
+.pro-status-pill-btn.pro-cpu-pill {
+  border-color: rgba(56, 189, 248, 0.35);
+  background-color: rgba(56, 189, 248, 0.08);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.pro-status-pill-btn.pro-cpu-pill:hover {
+  background-color: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+/* Global Actions: Logo y Mensaje */
 .pro-global-actions {
   display: flex;
   align-items: center;
@@ -2858,52 +2922,58 @@ body {
 .pro-action-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-body);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 700;
+  gap: 6px;
+  background-color: #17181d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
+  padding: 5px 13px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .pro-action-btn:hover {
-  background-color: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: #2F333E;
-}
-
-.pro-action-btn.active-black {
-  background-color: var(--accent-danger);
-  border-color: var(--accent-danger);
+  background-color: #22242b;
   color: #ffffff;
-}
-
-.pro-action-btn.active-clear {
-  background-color: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.26);
 }
 
 .pro-action-btn.active-logo {
-  background-color: var(--accent-preview);
-  border-color: var(--accent-preview);
+  background-color: #0284c7;
+  border-color: #38bdf8;
   color: #ffffff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+/* Botón principal destacado: Mensaje */
+.pro-action-btn.pro-action-btn-message {
+  background-color: #1c1e25;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.pro-action-btn.pro-action-btn-message:hover {
+  background-color: #252832;
+  border-color: rgba(255, 255, 255, 0.38);
 }
 
 .pro-action-btn.active-message {
-  background-color: #ea580c;
-  border-color: #f97316;
-  color: #ffffff;
+  background-color: rgba(249, 115, 22, 0.2) !important;
+  border-color: #f97316 !important;
+  color: #f97316 !important;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
 }
 
-.pro-action-btn.active-freeze {
-  background-color: #06b6d4;
-  border-color: #0891b2;
-  color: #ffffff;
+.pro-message-live-indicator {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #f97316;
 }
 
 /* 3. Main Workspace Layout Without Overlapping (Requirement 1 & 2) */
