@@ -63,7 +63,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   onAddToService,
   onToggleFavorite
 }) => {
-  const [searchMode, setSearchMode] = useState<'reference' | 'text' | 'picker'>('reference')
+  const [searchMode, setSearchMode] = useState<'reference' | 'text' | 'picker'>('picker')
   const [refInput, setRefInput] = useState<string>(currentReference || 'Juan 3:16')
   const [textQuery, setTextQuery] = useState<string>('')
   const [testamentFilter, setTestamentFilter] = useState<'ALL' | 'OT' | 'NT'>('ALL')
@@ -212,12 +212,50 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
           <div
             style={{
               display: 'flex',
+              alignItems: 'center',
               backgroundColor: '#121212',
               borderRadius: '6px',
-              padding: '2px',
-              border: '1px solid #333333'
+              padding: '3px',
+              border: '1px solid #333333',
+              gap: '4px'
             }}
           >
+            {/* 1º SELECTOR DE LIBROS (Principal, llamativo y prioritario) */}
+            <button
+              type="button"
+              className="bible-mode-picker-btn"
+              onClick={() => setSearchMode('picker')}
+              style={{
+                background:
+                  searchMode === 'picker'
+                    ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                    : 'rgba(56, 189, 248, 0.15)',
+                color: searchMode === 'picker' ? '#FFFFFF' : '#38BDF8',
+                border:
+                  searchMode === 'picker'
+                    ? '1px solid #38BDF8'
+                    : '1px solid rgba(56, 189, 248, 0.45)',
+                borderRadius: '5px',
+                padding: '5px 12px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow:
+                  searchMode === 'picker'
+                    ? '0 0 12px rgba(56, 189, 248, 0.5)'
+                    : 'none',
+                transition: 'all 0.15s ease'
+              }}
+              title="Seleccionar visualmente Libro, Capítulo y Versículo"
+            >
+              <Grid size={13} color={searchMode === 'picker' ? '#FFFFFF' : '#38BDF8'} />
+              <span>Selector de Libros</span>
+            </button>
+
+            {/* 2º IR A REFERENCIA */}
             <button
               type="button"
               className="bible-mode-ref-btn"
@@ -225,7 +263,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               style={{
                 background: searchMode === 'reference' ? '#2A2A2A' : 'transparent',
                 color: searchMode === 'reference' ? '#FFFFFF' : '#888888',
-                border: 'none',
+                border: searchMode === 'reference' ? '1px solid #3F3F46' : '1px solid transparent',
                 borderRadius: '4px',
                 padding: '4px 10px',
                 fontSize: '12px',
@@ -235,6 +273,8 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             >
               Ir a Referencia
             </button>
+
+            {/* 3º BÚSQUEDA DE TEXTO */}
             <button
               type="button"
               className="bible-mode-text-btn"
@@ -242,7 +282,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               style={{
                 background: searchMode === 'text' ? '#2A2A2A' : 'transparent',
                 color: searchMode === 'text' ? '#FFFFFF' : '#888888',
-                border: 'none',
+                border: searchMode === 'text' ? '1px solid #3F3F46' : '1px solid transparent',
                 borderRadius: '4px',
                 padding: '4px 10px',
                 fontSize: '12px',
@@ -255,28 +295,6 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             >
               <Search size={12} />
               <span>Búsqueda de Texto</span>
-            </button>
-            <button
-              type="button"
-              className="bible-mode-picker-btn"
-              onClick={() => setSearchMode('picker')}
-              style={{
-                background: searchMode === 'picker' ? '#2A2A2A' : 'transparent',
-                color: searchMode === 'picker' ? '#38BDF8' : '#888888',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 10px',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-              title="Seleccionar visualmente Libro, Capítulo y Versículo"
-            >
-              <Grid size={12} />
-              <span>Selector de Libros</span>
             </button>
           </div>
         </div>
