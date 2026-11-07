@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import appLogo from '../../assets/icon.png'
 
 interface TopMenuBarProps {
   onNewService: () => void
@@ -97,7 +98,12 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   return (
     <div className="pro-top-menubar" ref={menuBarRef}>
       <div className="pro-menu-left">
-        <span className="pro-app-logo-badge">CP</span>
+        <img
+          src={appLogo}
+          alt="ChurchPresenter"
+          title="ChurchPresenter v1.2"
+          style={{ width: 18, height: 18, borderRadius: 4, marginRight: 8, display: 'inline-block', verticalAlign: 'middle', objectFit: 'contain' }}
+        />
 
         {/* Archivo */}
         <div className="pro-menu-item-wrapper">

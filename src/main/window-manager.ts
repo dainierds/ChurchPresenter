@@ -1,5 +1,6 @@
-import { BrowserWindow, screen, shell } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { DisplayInfo, AppNotification } from '../shared/types'
 import { reconcileRoleAssignments, matchDisplayByStableId } from '../shared/display-utils'
 import { databaseService } from './db/database-service'
@@ -21,6 +22,18 @@ export class WindowManager {
 
   private getPreloadPath(): string {
     return path.join(__dirname, '../preload/index.js')
+  }
+
+  private getAppIconPath(): string {
+    const icoPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'icon.ico')
+      : path.join(__dirname, '../../resources/icon.ico')
+    if (fs.existsSync(icoPath)) return icoPath
+
+    const pngPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'icon.png')
+      : path.join(__dirname, '../../resources/icon.png')
+    return pngPath
   }
 
   private getRendererUrl(route: string): string {
@@ -76,6 +89,7 @@ export class WindowManager {
 
     this.operatorWindow = new BrowserWindow({
       title: 'ChurchPresenter - Panel del Operador',
+      icon: this.getAppIconPath(),
       width,
       height,
       x,
@@ -239,6 +253,7 @@ export class WindowManager {
     // Dedicated output window options
     // Crucial: strictly positioned on target display bounds; never covers operator window
     const win = new BrowserWindow({
+      icon: this.getAppIconPath(),
       x: targetDisplay.bounds.x,
       y: targetDisplay.bounds.y,
       width: targetDisplay.bounds.width,
@@ -528,6 +543,7 @@ export class WindowManager {
 
     this.floatingPreviewWindow = new BrowserWindow({
       title: 'ChurchPresenter - Vista Previa Flotante',
+      icon: this.getAppIconPath(),
       width,
       height,
       x,

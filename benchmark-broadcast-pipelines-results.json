@@ -1,5 +1,5 @@
 {
-  "testDate": "2026-11-06T04:12:45.383Z",
+  "testDate": "2026-11-07T00:47:15.448Z",
   "platform": "win32 10.0.26300 (x64)",
   "cpuModel": "Intel(R) Core(TM) Ultra 7 265KF",
   "gpuEncoder": "h264_nvenc (NVIDIA RTX)",
@@ -7,8 +7,8 @@
   "testDurationSec": 6,
   "pipelineA_ContainerRemux": {
     "name": "MediaRecorder Container Stream (Matroska/WebM -> FFmpeg stdin)",
-    "durationSeconds": 3.34,
-    "cpuPercent": 2.81,
+    "durationSeconds": 3.04,
+    "cpuPercent": 0,
     "memoryRssMb": 68.3,
     "outputSizeBytes": 936819,
     "droppedFrames": 0,
@@ -16,9 +16,9 @@
   },
   "pipelineB_RawPipe": {
     "name": "Raw YUV420p Frame Buffer Pipe (stdin rawvideo)",
-    "durationSeconds": 0.48,
-    "cpuPercent": 16.08,
-    "memoryRssMb": 71.4,
+    "durationSeconds": 0.47,
+    "cpuPercent": 6.79,
+    "memoryRssMb": 71.3,
     "outputSizeBytes": 75695,
     "droppedFrames": 0,
     "verdict": "ALTO CONSUMO (Requiere transferir 93.3 MB/s por tubería stdin saturando el event loop de Node.js)"

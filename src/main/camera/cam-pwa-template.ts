@@ -22,15 +22,9 @@ export function getCamManifestJson(): string {
     theme_color: '#0a0e17',
     icons: [
       {
-        src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="%230a0e17"/><circle cx="96" cy="96" r="54" fill="%231e293b" stroke="%2300D2FF" stroke-width="8"/><circle cx="96" cy="96" r="28" fill="%2300D2FF"/><circle cx="132" cy="62" r="10" fill="%23FF7A00"/></svg>',
-        sizes: '192x192',
-        type: 'image/svg+xml',
-        purpose: 'any maskable'
-      },
-      {
-        src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="%230a0e17"/><circle cx="256" cy="256" r="144" fill="%231e293b" stroke="%2300D2FF" stroke-width="20"/><circle cx="256" cy="256" r="72" fill="%2300D2FF"/><circle cx="352" cy="160" r="26" fill="%23FF7A00"/></svg>',
-        sizes: '512x512',
-        type: 'image/svg+xml',
+        src: '/icon.png',
+        sizes: '192x192 512x512',
+        type: 'image/png',
         purpose: 'any maskable'
       }
     ]
@@ -87,6 +81,8 @@ export function getCamPwaHtml(): string {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0a0e17">
   <title>ChurchPresenter Cámara</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <link rel="manifest" href="/cam/manifest.json">
   <style>
     :root {

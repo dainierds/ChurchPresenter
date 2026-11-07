@@ -1,8 +1,11 @@
 import http from 'http'
 import https from 'https'
+import fs from 'fs'
+import path from 'path'
 import os from 'os'
 import { URL } from 'url'
 import { spawn } from 'child_process'
+import { app } from 'electron'
 import { WebSocketServer, WebSocket } from 'ws'
 import QRCode from 'qrcode'
 import {
@@ -618,6 +621,18 @@ export class RemoteServer {
       res.writeHead(204)
       res.end()
       return
+    }
+
+    // Serve Official App Icon
+    if (pathname === '/icon.png' || pathname === '/favicon.ico' || pathname === '/app-icon.png') {
+      const iconPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'icon.png')
+        : path.join(__dirname, '../../resources/icon.png')
+      if (fs.existsSync(iconPath)) {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' })
+        fs.createReadStream(iconPath).pipe(res)
+        return
+      }
     }
 
     // OctoStream Mobile Setup Route (/setup-cam or /cam-setup)
@@ -1308,6 +1323,18 @@ export class RemoteServer {
       res.writeHead(204)
       res.end()
       return
+    }
+
+    // Serve Official App Icon
+    if (pathname === '/icon.png' || pathname === '/favicon.ico' || pathname === '/app-icon.png') {
+      const iconPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'icon.png')
+        : path.join(__dirname, '../../resources/icon.png')
+      if (fs.existsSync(iconPath)) {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' })
+        fs.createReadStream(iconPath).pipe(res)
+        return
+      }
     }
 
     // 1. Remote Operator HTML (/operator)

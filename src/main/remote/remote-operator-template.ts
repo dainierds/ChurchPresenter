@@ -15,6 +15,8 @@ export function getRemoteOperatorHtml(options?: { churchIp?: string; tailscaleIp
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ChurchPresenter - Operador Remoto (Tailscale)</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <style>
     :root {
       --bg-dark: #0B0F19;
@@ -455,6 +457,7 @@ export function getRemoteOperatorHtml(options?: { churchIp?: string; tailscaleIp
   <!-- Top Bar -->
   <header>
     <div class="brand">
+      <img src="/icon.png" style="width:24px;height:24px;border-radius:4px;vertical-align:middle;margin-right:8px;" alt="Logo" />
       <span style="color: var(--accent);">ChurchPresenter</span>
       <span>Operador Remoto</span>
       <span class="brand-badge">Tailscale</span>

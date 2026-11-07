@@ -11,6 +11,8 @@ export function getCamSetupHtml(slot: OctoStreamSlot, localIp: string, tailscale
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Configurar ${slot.name} - ChurchPresenter</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
@@ -187,6 +189,7 @@ export function getCamSetupHtml(slot: OctoStreamSlot, localIp: string, tailscale
 <body>
   <div class="container">
     <div class="header">
+      <img src="/icon.png" style="width: 48px; height: 48px; border-radius: 10px; margin-bottom: 8px; display: inline-block;" alt="ChurchPresenter" />
       <div class="badge">ChurchPresenter Conexión Directa</div>
       <h1>${slot.name}</h1>
       <p class="subtitle">Copia estos parámetros y pégalos en la app <strong>OctoStream</strong> en tu iPhone.</p>

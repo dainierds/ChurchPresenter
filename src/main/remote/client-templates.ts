@@ -10,6 +10,8 @@ export function getRemoteControlHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <title>ChurchPresenter Remote</title>
   <style>
     :root {
@@ -647,6 +649,8 @@ export function getStageViewerHtml(options?: { requirePin?: boolean }): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <title>ChurchPresenter Stage Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -925,6 +929,7 @@ export function getObsBrowserSourceHtml(options: {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/icon.png">
   <title>ChurchPresenter - OBS Browser Source (${role})</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1208,6 +1213,8 @@ export function getSubtitlesSenderHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <title>Transcriptor en Vivo - ChurchPresenter</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
