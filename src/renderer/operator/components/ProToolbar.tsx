@@ -11,7 +11,6 @@ import {
   Monitor,
   MessageSquare,
   Smartphone,
-  CheckCircle2,
   Activity,
   RotateCcw,
   Radio
@@ -50,6 +49,7 @@ interface ProToolbarProps {
     media: string
     audience: string
     stage: string
+    lobby?: string
   }
   isMediaDrawerOpen?: boolean
   onToggleMediaDrawer?: () => void
@@ -108,6 +108,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   const stageStatusClass = !isStageAssigned
     ? 'unassigned'
     : isStageConnected
+    ? 'connected'
+    : 'disconnected'
+
+  const isLobbyAssigned = Boolean(assignments.lobby)
+  const isLobbyConnected =
+    isLobbyAssigned &&
+    displays.some((d) => d.stableId === assignments.lobby || String(d.id) === assignments.lobby)
+  const lobbyStatusClass = !isLobbyAssigned
+    ? 'unassigned'
+    : isLobbyConnected
     ? 'connected'
     : 'disconnected'
 
@@ -231,15 +241,6 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         )}
         <button
           type="button"
-          className={`pro-status-pill-btn ${isMediaDrawerOpen ? 'active drawer-open' : ''}`}
-          onClick={onToggleMediaDrawer}
-          title="Abrir o cerrar el cajón inferior de medios"
-        >
-          <span className={`pro-status-dot ${isMediaActive ? 'dot-green' : 'dot-gray'}`} />
-          <span>{panelLabels?.media || 'Media'}</span>
-        </button>
-        <button
-          type="button"
           className={`pro-status-pill-btn ${audienceStatusClass}`}
           onClick={() => {
             if (!isMainAssigned && onOpenDisplaysModal) {
@@ -265,7 +266,7 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
                 : 'dot-gray'
             }`}
           />
-          <span>{panelLabels?.audience || 'Audience'}</span>
+          <span>Audiencia</span>
         </button>
         <button
           type="button"
@@ -294,7 +295,36 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
                 : 'dot-gray'
             }`}
           />
-          <span>{panelLabels?.stage || 'Stage'}</span>
+          <span>Escenario</span>
+        </button>
+        <button
+          type="button"
+          className={`pro-status-pill-btn ${lobbyStatusClass}`}
+          onClick={() => {
+            if (!isLobbyAssigned && onOpenDisplaysModal) {
+              onOpenDisplaysModal()
+            } else {
+              onOpenOutputPreviewOrSettings?.('lobby')
+            }
+          }}
+          title={
+            !isLobbyAssigned
+              ? 'Vestíbulo: No asignado (clic para configurar pantallas)'
+              : isLobbyConnected
+              ? 'Vestíbulo: Asignado y conectado (clic para vista previa)'
+              : 'Vestíbulo: Asignado pero desconectado (clic para configurar)'
+          }
+        >
+          <span
+            className={`pro-status-dot ${
+              lobbyStatusClass === 'connected'
+                ? 'dot-green'
+                : lobbyStatusClass === 'disconnected'
+                ? 'dot-red'
+                : 'dot-gray'
+            }`}
+          />
+          <span>Vestíbulo</span>
         </button>
 
         {/* Remote Server Active Status Pill (Item 6) */}
@@ -349,41 +379,27 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           <span>Pantallas</span>
         </button>
 
-        {/* Phase 7: Pre-Service Checklist Button */}
-        <button
-          type="button"
-          className="pro-status-pill-btn pro-checklist-btn"
-          onClick={onOpenChecklistModal}
-          title="Verificar servicio: inspección de medios, pantallas, biblias y hardware"
-          style={{ display: 'flex', alignItems: 'center', gap: 4, borderColor: '#22c55e', color: '#4ade80' }}
-        >
-          <CheckCircle2 size={12} color="#22c55e" />
-          <span>Verificar</span>
-        </button>
-
-        {/* Phase 7: Rehearsal Mode Badge */}
-        <button
-          type="button"
-          className="pro-status-pill-btn pro-rehearsal-pill"
-          onClick={onToggleRehearsal}
-          title={
-            isRehearsalActive
-              ? 'MODO ENSAYO ACTIVO: Clic para finalizar y ver resumen'
-              : 'Clic para iniciar Modo Ensayo (auditoría en archivo dedicado)'
-          }
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            borderColor: isRehearsalActive ? '#f97316' : '#3f3f46',
-            backgroundColor: isRehearsalActive ? 'rgba(249, 115, 22, 0.18)' : 'transparent',
-            color: isRehearsalActive ? '#f97316' : '#9ca3af',
-            fontWeight: isRehearsalActive ? 700 : 500
-          }}
-        >
-          <span className={`pro-status-dot ${isRehearsalActive ? 'dot-orange' : 'dot-gray'}`} />
-          <span>{isRehearsalActive ? 'ENSAYO' : 'Ensayo'}</span>
-        </button>
+        {/* Phase 7: Rehearsal Mode Badge (Visible only when actively running rehearsal) */}
+        {isRehearsalActive && (
+          <button
+            type="button"
+            className="pro-status-pill-btn pro-rehearsal-pill active"
+            onClick={onToggleRehearsal}
+            title="MODO ENSAYO ACTIVO: Clic para finalizar y ver resumen"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249, 115, 22, 0.2)',
+              color: '#f97316',
+              fontWeight: 700
+            }}
+          >
+            <span className="pro-status-dot dot-orange" />
+            <span>ENSAYO ACTIVO</span>
+          </button>
+        )}
 
         {/* Phase 7: Output Health Button & Real-time System Metrics */}
         <button

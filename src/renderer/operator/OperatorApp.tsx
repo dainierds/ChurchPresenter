@@ -128,13 +128,13 @@ export const OperatorApp: React.FC = () => {
 
   // Panel naming configuration (Requirement 1: ProPresenter names by default, Spanish option in Settings)
   const [panelNaming, setPanelNaming] = useState<PanelNaming>(() => {
-    return (localStorage.getItem('cp_panel_naming') as PanelNaming) || 'propresenter'
+    return (localStorage.getItem('cp_panel_naming') as PanelNaming) || 'spanish'
   })
 
   const panelLabels = useMemo(() => {
     return panelNaming === 'spanish'
-      ? { library: 'Biblioteca', playlist: 'Playlist', media: 'Medios', audience: 'Audiencia', stage: 'Escenario' }
-      : { library: 'Library', playlist: 'Playlist', media: 'Media', audience: 'Audience', stage: 'Stage' }
+      ? { library: 'Biblioteca', playlist: 'Playlist', media: 'Medios', audience: 'Audiencia', stage: 'Escenario', lobby: 'Vestíbulo' }
+      : { library: 'Library', playlist: 'Playlist', media: 'Media', audience: 'Audiencia', stage: 'Escenario', lobby: 'Vestíbulo' }
   }, [panelNaming])
 
   // Layout persistence & dimensions (Requirements 1, 2 & 5)
@@ -3859,6 +3859,65 @@ export const OperatorApp: React.FC = () => {
                   >
                     <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#22c55e' }}>Puente con OBS Studio</div>
                     <div style={{ fontSize: 12, color: '#9CA3AF' }}>Conexión obs-websocket v5 y fuentes de navegador transparentes</div>
+                  </button>
+
+                  {/* Verificación de Servicio Previo al Culto */}
+                  <button
+                    type="button"
+                    onClick={() => setIsChecklistModalOpen(true)}
+                    style={{
+                      background: '#1A1A1A',
+                      border: '1px solid #22C55E',
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: '#22C55E' }}>Verificar Servicio (Checklist)</span>
+                      <CheckCircle size={16} color="#22C55E" />
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>Inspección previa de medios, pantallas, biblias y hardware</div>
+                  </button>
+
+                  {/* Modo Ensayo */}
+                  <button
+                    type="button"
+                    onClick={handleToggleRehearsal}
+                    style={{
+                      background: isRehearsalActive ? 'rgba(249, 115, 22, 0.16)' : '#1A1A1A',
+                      border: `1px solid ${isRehearsalActive ? '#F97316' : '#EAB308'}`,
+                      borderRadius: 8,
+                      padding: 16,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#FFF'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: isRehearsalActive ? '#F97316' : '#FACC15' }}>
+                        Modo Ensayo {isRehearsalActive ? '(ACTIVO)' : ''}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          backgroundColor: isRehearsalActive ? '#F97316' : '#2A2A2A',
+                          color: '#FFFFFF',
+                          padding: '2px 8px',
+                          borderRadius: 4
+                        }}
+                      >
+                        {isRehearsalActive ? 'ENCENDIDO' : 'APAGADO'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9CA3AF' }}>
+                      {isRehearsalActive
+                        ? 'Ensayo en curso: la salida real no se modifica. Clic para desactivar y ver resumen.'
+                        : 'Practicar y cambiar diapositivas libremente sin proyectar en las salidas en vivo'}
+                    </div>
                   </button>
 
                   {/* Phase 10: Extras Cards */}

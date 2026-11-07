@@ -54,6 +54,7 @@ interface RightSidePanelProps {
     media: string
     audience: string
     stage: string
+    lobby?: string
   }
   previewHeight?: number
   onResizePreview?: (e: React.MouseEvent) => void
@@ -341,7 +342,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
               className={`pro-out-tab ${activeOutputTab === 'main' ? 'active' : ''}`}
               onClick={() => setActiveOutputTab('main')}
             >
-              {panelLabels?.audience ? `${panelLabels.audience}` : 'Sala Principal'}
+              {panelLabels?.audience || 'Audiencia'}
             </button>
             <button
               type="button"
@@ -357,7 +358,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
               className={`pro-out-tab ${activeOutputTab === 'lobby' ? 'active' : ''}`}
               onClick={() => setActiveOutputTab('lobby')}
             >
-              Lobby
+              {panelLabels?.lobby || 'Vestíbulo'}
             </button>
           </div>
           <button
