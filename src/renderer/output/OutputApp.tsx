@@ -853,6 +853,9 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                             window.churchPresenterApi.updateVideoDuration?.(v.duration)
                           }
                         }}
+                        onEnded={() => {
+                          window.churchPresenterApi.controlVideo?.('stop')
+                        }}
                         onError={(e) => {
                           const target = e.currentTarget as HTMLVideoElement
                           const errCode = target.error ? target.error.code : 'unknown'

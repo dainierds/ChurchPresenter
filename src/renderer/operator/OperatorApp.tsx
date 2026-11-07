@@ -1507,9 +1507,9 @@ export const OperatorApp: React.FC = () => {
       setPreviewSlideIndex(nextIdx)
       handleGoLive(activeSlides[nextIdx], activeSlides[nextIdx + 1])
     } else if (activeSlides.length > 0) {
-      // Loop back to start if at last slide
+      // Al terminar la canción: vuelve automáticamente al inicio la vista en miniatura principal (índice 0)
+      // esperando por si se quiere reproducir/proyectar de nuevo, pero sin reproducirse automáticamente
       setPreviewSlideIndex(0)
-      handleGoLive(activeSlides[0], activeSlides[1])
     }
   }, [previewSlideIndex, activeSlides, handleGoLive])
 

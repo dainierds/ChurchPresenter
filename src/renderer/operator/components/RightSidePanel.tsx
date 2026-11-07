@@ -685,7 +685,6 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                     src={toMediaUrl(activeMediaUrl)}
                     autoPlay
                     muted
-                    loop
                     playsInline
                     style={{
                       position: 'absolute',
@@ -699,6 +698,9 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                       if (v.duration && isFinite(v.duration)) {
                         window.churchPresenterApi.updateVideoDuration?.(v.duration)
                       }
+                    }}
+                    onEnded={() => {
+                      window.churchPresenterApi.controlVideo?.('stop')
                     }}
                   />
                 </div>

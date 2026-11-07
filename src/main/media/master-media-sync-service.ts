@@ -58,6 +58,12 @@ export class MasterMediaSyncService extends EventEmitter {
     switch (action) {
       case 'play':
         this.isVideoPlaying = true
+        if (!this.videoSyncInterval) {
+          const tickMs = 200
+          this.videoSyncInterval = setInterval(() => {
+            this.stepVideoTick(tickMs / 1000)
+          }, tickMs)
+        }
         break
       case 'pause':
         this.isVideoPlaying = false
@@ -107,15 +113,25 @@ export class MasterMediaSyncService extends EventEmitter {
     this.videoCurrentTime += deltaSeconds
 
     const inPoint = this.currentVideoConfig.inPoint || 0
-    const outPoint = this.currentVideoConfig.outPoint
+    const outPoint =
+      this.currentVideoConfig.outPoint !== undefined
+        ? this.currentVideoConfig.outPoint
+        : this.videoDuration > 0
+          ? this.videoDuration
+          : undefined
 
     if (outPoint !== undefined && this.videoCurrentTime >= outPoint) {
       if (this.currentVideoConfig.loop) {
         this.videoCurrentTime = inPoint
       } else {
-        // Handle end action
-        this.videoCurrentTime = outPoint
+        // Al terminar el video/canción: vuelve automáticamente al inicio (inPoint o 0),
+        // queda en pausa esperando por si quiere ser reproducida, sin reproducirse automáticamente
+        this.videoCurrentTime = inPoint
         this.isVideoPlaying = false
+        if (this.videoSyncInterval) {
+          clearInterval(this.videoSyncInterval)
+          this.videoSyncInterval = null
+        }
         this.emit('video-ended', {
           mediaId: this.currentVideoConfig.mediaId,
           endAction: this.currentVideoConfig.endAction
