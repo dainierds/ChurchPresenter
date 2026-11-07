@@ -49,6 +49,8 @@ import {
   PhoneCameraDevice,
   ChurchBrandingConfig
 } from '../../../shared/types'
+import { toMediaUrl } from '../../../shared/media-url'
+import appLogo from '../../assets/icon.png'
 import { cameraReceiverService } from '../services/camera-receiver-service'
 import { EpsBannerImporter } from '../services/eps-banner-importer'
 
@@ -1642,18 +1644,20 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             backgroundColor: '#000'
           }}
         >
-          {churchBranding?.logoUrl ? (
-            <img
-              src={churchBranding.logoUrl}
-              alt="Logo"
-              style={{ maxHeight: '35%', maxWidth: '60%', objectFit: 'contain', marginBottom: 4 }}
-            />
-          ) : (
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#FF7A00' }}>
-              {churchBranding?.churchName || 'CHURCH PRESENTER'}
-            </span>
-          )}
-          <span style={{ fontSize: 9, color: '#f59e0b' }}>⚠️ Respaldo Automático</span>
+          <img
+            src={toMediaUrl(churchBranding?.logoUrl) || appLogo}
+            alt="Logo"
+            onError={(e) => {
+              if (e.currentTarget.src !== appLogo) {
+                e.currentTarget.src = appLogo
+              }
+            }}
+            style={{ maxHeight: '40%', maxWidth: '60%', objectFit: 'contain', marginBottom: 6 }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#FF7A00', letterSpacing: '0.5px' }}>
+            {churchBranding?.churchName || 'CHURCH PRESENTER'}
+          </span>
+          <span style={{ fontSize: 9, color: '#f59e0b', marginTop: 2 }}>⚠️ Respaldo Automático</span>
         </div>
       )
     }
@@ -1666,7 +1670,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
         if (isVideo) {
           return (
             <video
-              src={layer.mediaUrl}
+              src={toMediaUrl(layer.mediaUrl)}
               autoPlay
               loop
               muted
@@ -1684,7 +1688,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
         }
         return (
           <img
-            src={layer.mediaUrl}
+            src={toMediaUrl(layer.mediaUrl)}
             alt={layer.name}
             style={{
               width: '100%',
@@ -1868,10 +1872,15 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               <QrCode size={isMiniPreview ? 24 : 36} color="#000" />
             )}
           </div>
-        ) : cfg.badgeType === 'church_logo' && churchBranding?.logoUrl ? (
+        ) : cfg.badgeType === 'church_logo' && (churchBranding?.logoUrl || appLogo) ? (
           <img
-            src={churchBranding.logoUrl}
+            src={toMediaUrl(churchBranding?.logoUrl) || appLogo}
             alt="Logo"
+            onError={(e) => {
+              if (e.currentTarget.src !== appLogo) {
+                e.currentTarget.src = appLogo
+              }
+            }}
             style={{ maxWidth: isMiniPreview ? 34 : 50, maxHeight: isMiniPreview ? 34 : 50, objectFit: 'contain' }}
           />
         ) : (
@@ -5090,9 +5099,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                           {layer.mediaUrl ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#18181b', padding: 8, borderRadius: 6, border: '1px solid #27272a' }}>
                               {layer.mediaType === 'video' || /\.(mp4|webm|mov|mkv)$/i.test(layer.mediaPath || layer.mediaUrl) ? (
-                                <video src={layer.mediaUrl} style={{ width: 64, height: 42, objectFit: 'cover', borderRadius: 4, backgroundColor: '#000' }} muted />
+                                <video src={toMediaUrl(layer.mediaUrl)} style={{ width: 64, height: 42, objectFit: 'cover', borderRadius: 4, backgroundColor: '#000' }} muted />
                               ) : (
-                                <img src={layer.mediaUrl} alt="Preview" style={{ width: 64, height: 42, objectFit: 'cover', borderRadius: 4, backgroundColor: '#000' }} />
+                                <img src={toMediaUrl(layer.mediaUrl)} alt="Preview" style={{ width: 64, height: 42, objectFit: 'cover', borderRadius: 4, backgroundColor: '#000' }} />
                               )}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 11, color: '#FFFFFF', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
