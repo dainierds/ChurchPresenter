@@ -8,10 +8,6 @@ import {
   Trash2,
   Clock,
   Layers,
-  Slash,
-  MessageSquare,
-  Music,
-  Film,
   Snowflake,
   Maximize2,
   Zap,
@@ -252,12 +248,6 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
       }
     }
   }, [isContentHidden, isVideo, activeOutputTab])
-
-
-  const hasBackground = Boolean(roleBackground?.value)
-  const hasSlide = Boolean(roleContent?.body || roleContent?.title)
-  const hasMedia = Boolean(activeMediaUrl || state?.mediaSyncTick?.filePath || isYouTube)
-  const hasMessage = Boolean(roleMessage?.visible && roleMessage?.text)
 
   const mediaTime = effectiveMediaTick?.currentTime || 0
   const mediaDuration = effectiveMediaTick?.duration || 0
@@ -881,58 +871,6 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                 }}
               />
             </div>
-          </div>
-
-          {/* Vertical Strip of Clear Buttons by Layer */}
-          <div className="pro-clear-layers-strip">
-            <button
-              className={`pro-layer-btn ${hasAudioActive ? 'has-content' : ''}`}
-              onClick={() => onClearLayer('audio')}
-              title="Limpiar capa de Audio"
-            >
-              <Music size={12} />
-              <span>Audio</span>
-            </button>
-            <button
-              className={`pro-layer-btn ${hasBackground ? 'has-content' : ''}`}
-              onClick={() => onClearLayer('background')}
-              title="Limpiar Fondo"
-            >
-              <Film size={12} />
-              <span>Fondo</span>
-            </button>
-            <button
-              className={`pro-layer-btn ${hasSlide ? 'has-content' : ''}`}
-              onClick={() => onClearLayer('slide')}
-              title="Limpiar Diapositiva"
-            >
-              <Layers size={12} />
-              <span>Diapo</span>
-            </button>
-            <button
-              className={`pro-layer-btn ${hasMessage ? 'has-content' : ''}`}
-              onClick={() => onClearLayer('message')}
-              title="Limpiar Mensaje"
-            >
-              <MessageSquare size={12} />
-              <span>Mensaje</span>
-            </button>
-            <button
-              className={`pro-layer-btn ${hasMedia ? 'has-content' : ''}`}
-              onClick={() => onClearLayer('media')}
-              title="Limpiar Medios"
-            >
-              <Tv size={12} />
-              <span>Medios</span>
-            </button>
-            <button
-              className="pro-layer-btn clear-all"
-              onClick={() => onClearLayer('all')}
-              title="Limpiar Todo"
-            >
-              <Slash size={12} />
-              <span>Todo</span>
-            </button>
           </div>
         </div>
       </div>

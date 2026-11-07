@@ -22,8 +22,14 @@ export const MessageModal: React.FC<MessageModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadPresets()
+      if (activeMessage?.text && !text) {
+        setText(activeMessage.text)
+      }
+      if (activeMessage?.target) {
+        setTarget(activeMessage.target)
+      }
     }
-  }, [isOpen])
+  }, [isOpen, activeMessage])
 
   const loadPresets = async () => {
     try {
@@ -186,9 +192,16 @@ export const MessageModal: React.FC<MessageModalProps> = ({
             </label>
             <textarea
               rows={3}
+              autoFocus
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Escriba aquí el aviso para el predicador, músicos o congregación..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+              placeholder="Escriba aquí el aviso para el predicador, músicos o congregación (Ctrl+Enter para proyectar)..."
               style={{
                 width: '100%',
                 backgroundColor: '#0d0d0d',
@@ -368,7 +381,7 @@ export const MessageModal: React.FC<MessageModalProps> = ({
             style={{ padding: '8px 20px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <Send size={14} />
-            <span>Publicar Mensaje</span>
+            <span>Proyectar Mensaje</span>
           </button>
         </div>
       </div>

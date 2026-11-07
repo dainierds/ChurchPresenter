@@ -2894,6 +2894,12 @@ body {
   color: #ffffff;
 }
 
+.pro-action-btn.active-message {
+  background-color: #ea580c;
+  border-color: #f97316;
+  color: #ffffff;
+}
+
 .pro-action-btn.active-freeze {
   background-color: #06b6d4;
   border-color: #0891b2;

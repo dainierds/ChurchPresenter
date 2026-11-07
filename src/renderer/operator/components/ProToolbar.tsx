@@ -3,10 +3,7 @@ import {
   Search,
   Type,
   Palette,
-  Eye,
-  Slash,
   ShieldCheck,
-  Snowflake,
   Tv,
   BookOpen,
   Edit3,
@@ -16,7 +13,6 @@ import {
   Smartphone,
   CheckCircle2,
   Activity,
-  AlertTriangle,
   RotateCcw,
   Radio
 } from 'lucide-react'
@@ -145,28 +141,6 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         <button className="pro-tool-btn" onClick={onOpenThemeModal} title="Configuración de Tema y Estilos">
           <Palette size={14} />
           <span>Tema</span>
-        </button>
-        <button
-          className="pro-tool-btn"
-          onClick={onOpenMessageModal}
-          title="Enviar Mensaje a Escenario o Audiencia"
-          style={{ position: 'relative' }}
-        >
-          <MessageSquare size={14} />
-          <span>Mensaje</span>
-          {state?.activeMessage && (
-            <span
-              style={{
-                position: 'absolute',
-                top: 4,
-                right: 4,
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                backgroundColor: '#f97316'
-              }}
-            />
-          )}
         </button>
       </div>
 
@@ -424,40 +398,8 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         </button>
       </div>
 
-      {/* Right: Global Emergency Actions (F1 - F4) + Panic Mode */}
+      {/* Right: Acciones Globales: Logo y Mensaje */}
       <div className="pro-global-actions">
-        {/* Phase 7: Emergency Mode Button */}
-        <button
-          type="button"
-          className={`pro-action-btn ${isEmergencyActive ? 'active-emergency' : ''}`}
-          onClick={onToggleEmergency}
-          title="Modo de Emergencia (Pánico): Congela medios y muestra fondo seguro en todas las salidas"
-          style={{
-            borderColor: isEmergencyActive ? '#ef4444' : 'rgba(239, 68, 68, 0.4)',
-            backgroundColor: isEmergencyActive ? '#ef4444' : 'rgba(239, 68, 68, 0.12)',
-            color: isEmergencyActive ? '#ffffff' : '#f87171',
-            fontWeight: isEmergencyActive ? 700 : 600
-          }}
-        >
-          <AlertTriangle size={14} />
-          <span>Emergencia</span>
-        </button>
-        <button
-          className={`pro-action-btn ${state?.controls.black ? 'active-black' : ''}`}
-          onClick={() => window.churchPresenterApi?.toggleGlobalControl('black')}
-          title={`Negro (${shortcuts.black})`}
-        >
-          <Slash size={14} />
-          <span>Negro</span>
-        </button>
-        <button
-          className={`pro-action-btn ${state?.controls.clear ? 'active-clear' : ''}`}
-          onClick={() => window.churchPresenterApi?.toggleGlobalControl('clear')}
-          title={`Limpiar (${shortcuts.clear})`}
-        >
-          <Eye size={14} />
-          <span>Limpiar</span>
-        </button>
         <button
           className={`pro-action-btn ${state?.controls.logo ? 'active-logo' : ''}`}
           onClick={() => window.churchPresenterApi?.toggleGlobalControl('logo')}
@@ -467,12 +409,32 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
           <span>Logo</span>
         </button>
         <button
-          className={`pro-action-btn ${state?.controls.freeze ? 'active-freeze' : ''}`}
-          onClick={() => window.churchPresenterApi?.toggleGlobalControl('freeze')}
-          title={`Congelar (${shortcuts.freeze})`}
+          type="button"
+          className={`pro-action-btn ${state?.activeMessage ? 'active-message' : ''}`}
+          onClick={onOpenMessageModal}
+          title="Editar y Proyectar Mensaje en Pantallas"
+          style={{
+            position: 'relative',
+            backgroundColor: state?.activeMessage ? 'rgba(249, 115, 22, 0.2)' : undefined,
+            borderColor: state?.activeMessage ? '#f97316' : undefined,
+            color: state?.activeMessage ? '#f97316' : undefined
+          }}
         >
-          <Snowflake size={14} />
-          <span>Congelar</span>
+          <MessageSquare size={14} />
+          <span>Mensaje</span>
+          {state?.activeMessage && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 3,
+                right: 3,
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: '#f97316'
+              }}
+            />
+          )}
         </button>
       </div>
     </div>
