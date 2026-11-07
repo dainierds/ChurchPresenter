@@ -328,16 +328,8 @@ export class CameraHubService extends EventEmitter {
   }
 
   public getPrimaryLocalIp(): string {
-    const ifaces = os.networkInterfaces()
-    for (const addrs of Object.values(ifaces)) {
-      if (!addrs) continue
-      for (const addr of addrs) {
-        if (addr.family === 'IPv4' && !addr.internal && addr.address !== '127.0.0.1') {
-          return addr.address
-        }
-      }
-    }
-    return '127.0.0.1'
+    const { localIp } = octoStreamService.getNetworkIps()
+    return localIp
   }
 
   public async getCameraQrInfo(): Promise<CameraQrInfo> {

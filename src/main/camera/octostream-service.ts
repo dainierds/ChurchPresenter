@@ -103,23 +103,61 @@ export class OctoStreamService extends EventEmitter {
   }
 
   public getNetworkIps(): { localIp: string; tailscaleIp: string } {
-    let localIp = '127.0.0.1'
     let tailscaleIp = databaseService.getCameraSettings()?.tailscaleIp || '100.73.59.102'
 
     const interfaces = os.networkInterfaces()
-    for (const [_name, addrs] of Object.entries(interfaces)) {
+    const candidates: { ip: string; isPhysical: boolean; isPrivateSubnet: boolean }[] = []
+
+    for (const [name, addrs] of Object.entries(interfaces)) {
       if (!addrs) continue
+      const lowerName = name.toLowerCase()
+      const isVirtual =
+        lowerName.includes('tailscale') ||
+        lowerName.includes('surfshark') ||
+        lowerName.includes('vpn') ||
+        lowerName.includes('virtual') ||
+        lowerName.includes('vmware') ||
+        lowerName.includes('vbox') ||
+        lowerName.includes('vethernet') ||
+        lowerName.includes('hyper-v') ||
+        lowerName.includes('tap') ||
+        lowerName.includes('tun') ||
+        lowerName.includes('loopback') ||
+        lowerName.includes('wsl') ||
+        lowerName.includes('docker')
+
       for (const a of addrs) {
         if (a.family === 'IPv4' && !a.internal) {
           if (a.address.startsWith('100.')) {
             tailscaleIp = a.address
-          } else if (localIp === '127.0.0.1') {
-            localIp = a.address
+            continue
           }
+          // Strictly reject APIPA link-local addresses (169.254.x.x) and loopback
+          if (a.address.startsWith('169.254.') || a.address === '127.0.0.1') {
+            continue
+          }
+
+          const isPrivate =
+            a.address.startsWith('10.') ||
+            a.address.startsWith('192.168.') ||
+            /^172\.(1[6-9]|2\d|3[0-1])\./.test(a.address)
+
+          candidates.push({
+            ip: a.address,
+            isPhysical: !isVirtual,
+            isPrivateSubnet: isPrivate
+          })
         }
       }
     }
 
+    candidates.sort((a, b) => {
+      const scoreA = (a.isPhysical ? 2 : 0) + (a.isPrivateSubnet ? 1 : 0)
+      const scoreB = (b.isPhysical ? 2 : 0) + (b.isPrivateSubnet ? 1 : 0)
+      return scoreB - scoreA
+    })
+
+    const localIp = candidates.length > 0 ? candidates[0].ip : '127.0.0.1'
     return { localIp, tailscaleIp }
   }
 

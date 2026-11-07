@@ -210,7 +210,7 @@ export class RemoteServer {
     for (const [name, addrs] of Object.entries(interfaces)) {
       if (!addrs) continue
       for (const addr of addrs) {
-        if (addr.family === 'IPv4' && !addr.internal) {
+        if (addr.family === 'IPv4' && !addr.internal && !addr.address.startsWith('169.254.')) {
           results.push({
             name: `${name} (${addr.address})`,
             ip: addr.address
