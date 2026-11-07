@@ -3627,14 +3627,16 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 type="button"
                 onClick={() => setSourcesTab('layers')}
                 style={{
-                  backgroundColor: sourcesTab === 'layers' ? '#38BDF8' : '#222',
-                  color: sourcesTab === 'layers' ? '#000' : '#D1D5DB',
-                  border: 'none',
-                  borderRadius: 4,
-                  padding: '4px 10px',
+                  backgroundColor: sourcesTab === 'layers' ? '#38BDF8' : 'rgba(56, 189, 248, 0.14)',
+                  color: sourcesTab === 'layers' ? '#000000' : '#38BDF8',
+                  border: sourcesTab === 'layers' ? '1px solid #38BDF8' : '1px solid rgba(56, 189, 248, 0.4)',
+                  boxShadow: sourcesTab === 'layers' ? '0 0 10px rgba(56, 189, 248, 0.45)' : 'none',
+                  borderRadius: 5,
+                  padding: '5px 11px',
                   fontSize: 11,
                   fontWeight: 700,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Capas ({activePreviewScene?.layers.length || 0})
@@ -3643,60 +3645,66 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 type="button"
                 onClick={() => setSourcesTab('phone_cameras')}
                 style={{
-                  backgroundColor: sourcesTab === 'phone_cameras' ? '#00D2FF' : '#222',
-                  color: sourcesTab === 'phone_cameras' ? '#000' : '#D1D5DB',
-                  border: 'none',
-                  borderRadius: 4,
-                  padding: '4px 10px',
+                  backgroundColor: sourcesTab === 'phone_cameras' ? '#22C55E' : 'rgba(34, 197, 94, 0.14)',
+                  color: sourcesTab === 'phone_cameras' ? '#000000' : '#22C55E',
+                  border: sourcesTab === 'phone_cameras' ? '1px solid #22C55E' : '1px solid rgba(34, 197, 94, 0.4)',
+                  boxShadow: sourcesTab === 'phone_cameras' ? '0 0 10px rgba(34, 197, 94, 0.45)' : 'none',
+                  borderRadius: 5,
+                  padding: '5px 11px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4
+                  gap: 5,
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <Smartphone size={12} /> Móviles ({phoneCameras.length})
+                <Smartphone size={12} color={sourcesTab === 'phone_cameras' ? '#000000' : '#22C55E'} /> Móviles ({phoneCameras.length})
               </button>
               <button
                 type="button"
                 onClick={() => setSourcesTab('transitions')}
                 style={{
-                  backgroundColor: sourcesTab === 'transitions' ? '#FF7A00' : '#222',
-                  color: sourcesTab === 'transitions' ? '#000' : '#D1D5DB',
-                  border: 'none',
-                  borderRadius: 4,
-                  padding: '4px 10px',
+                  backgroundColor: sourcesTab === 'transitions' ? '#FF7A00' : 'rgba(255, 122, 0, 0.14)',
+                  color: sourcesTab === 'transitions' ? '#000000' : '#FF7A00',
+                  border: sourcesTab === 'transitions' ? '1px solid #FF7A00' : '1px solid rgba(255, 122, 0, 0.4)',
+                  boxShadow: sourcesTab === 'transitions' ? '0 0 10px rgba(255, 122, 0, 0.45)' : 'none',
+                  borderRadius: 5,
+                  padding: '5px 11px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4
+                  gap: 5,
+                  transition: 'all 0.15s ease'
                 }}
                 title="Configurar efecto de transición de video"
               >
-                <Sparkles size={12} /> Transiciones
+                <Sparkles size={12} color={sourcesTab === 'transitions' ? '#000000' : '#FF7A00'} /> Transiciones
               </button>
               <button
                 type="button"
                 onClick={() => setSourcesTab('overlays')}
                 style={{
-                  backgroundColor: sourcesTab === 'overlays' ? '#A855F7' : '#222',
-                  color: sourcesTab === 'overlays' ? '#000' : '#D1D5DB',
-                  border: 'none',
-                  borderRadius: 4,
-                  padding: '4px 10px',
+                  backgroundColor: sourcesTab === 'overlays' ? '#A855F7' : 'rgba(168, 85, 247, 0.14)',
+                  color: sourcesTab === 'overlays' ? '#000000' : '#A855F7',
+                  border: sourcesTab === 'overlays' ? '1px solid #A855F7' : '1px solid rgba(168, 85, 247, 0.4)',
+                  boxShadow: sourcesTab === 'overlays' ? '0 0 10px rgba(168, 85, 247, 0.45)' : 'none',
+                  borderRadius: 5,
+                  padding: '5px 11px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4
+                  gap: 5,
+                  transition: 'all 0.15s ease'
                 }}
                 title="Banners, zócalos de orador, marquesina y código QR para ofrendas"
               >
-                <Tag size={12} /> Banners y Objetos
+                <Tag size={12} color={sourcesTab === 'overlays' ? '#000000' : '#A855F7'} /> Banners y Objetos
                 {(overlays.lowerThird.enabled || overlays.ticker.enabled || overlays.qrCode.enabled) && (
                   <span
                     style={{
