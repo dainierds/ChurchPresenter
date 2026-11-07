@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   BookOpen,
   Search,
@@ -71,6 +71,37 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   const [textResults, setTextResults] = useState<BibleSearchResult[]>([])
   const [selectedSlideIndex, setSelectedSlideIndex] = useState<number>(0)
   const [addedToast, setAddedToast] = useState<boolean>(false)
+  const targetVerseNumRef = useRef<number | null>(null)
+
+  // Auto-select and focus target verse slide when slides are loaded
+  useEffect(() => {
+    if (targetVerseNumRef.current !== null && directSlides.length > 0) {
+      const vNum = targetVerseNumRef.current
+      targetVerseNumRef.current = null
+      const regex = new RegExp(`:${vNum}(\\b|-)`)
+      let matchIdx = directSlides.findIndex((s) => regex.test(s.title || ''))
+      if (matchIdx === -1) {
+        matchIdx = directSlides.findIndex((s) => s.id?.includes(`_${vNum}_`) || regex.test(s.groupLabel || ''))
+      }
+      if (matchIdx !== -1) {
+        setSelectedSlideIndex(matchIdx)
+      } else if (vNum - 1 < directSlides.length && vNum - 1 >= 0) {
+        setSelectedSlideIndex(vNum - 1)
+      } else {
+        setSelectedSlideIndex(0)
+      }
+    }
+  }, [directSlides])
+
+  // Scroll active slide into view smoothly
+  useEffect(() => {
+    if (searchMode === 'reference' && selectedSlideIndex >= 0) {
+      const cardEl = document.getElementById(`bible-slide-card-${selectedSlideIndex}`)
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  }, [selectedSlideIndex, searchMode])
 
   // Book & Chapter Picker states
   const [pickerTestament, setPickerTestament] = useState<'OT' | 'NT'>('NT')
@@ -682,27 +713,6 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => {
-                  const ref = `${currentBook?.name || 'Mateo'} ${selectedChapter}`
-                  setRefInput(ref)
-                  onLoadPassage(ref, false)
-                  setSearchMode('reference')
-                }}
-                style={{
-                  backgroundColor: '#FF7A00',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Cargar Capítulo Completo ({currentBook?.name} {selectedChapter})
-              </button>
-              <button
-                type="button"
                 onClick={() => setSearchMode('reference')}
                 style={{
                   backgroundColor: '#262626',
@@ -726,7 +736,11 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             type="button"
             onClick={() => {
               if (directSlides.length > 0) {
-                onGoLive(directSlides[0], directSlides[1])
+                const targetIdx =
+                  selectedSlideIndex >= 0 && selectedSlideIndex < directSlides.length
+                    ? selectedSlideIndex
+                    : 0
+                onGoLive(directSlides[targetIdx], directSlides[targetIdx + 1])
               }
             }}
             disabled={directSlides.length === 0}
@@ -743,7 +757,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
               alignItems: 'center',
               gap: '6px'
             }}
-            title="Proyectar inmediatamente el primer versículo en la salida principal"
+            title="Proyectar inmediatamente el versículo seleccionado en la salida principal"
           >
             <Play size={13} fill="#FFFFFF" />
             <span>En Vivo</span>
@@ -1055,10 +1069,12 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                 <button
                   key={vNum}
                   type="button"
-                  onClick={() => {
-                    const ref = `${currentBook?.name || 'Mateo'} ${selectedChapter}:${vNum}`
-                    setRefInput(ref)
-                    onLoadPassage(ref, false)
+                  onClick={async () => {
+                    const bookName = currentBook?.name || 'Mateo'
+                    const chapterRef = `${bookName} ${selectedChapter}`
+                    targetVerseNumRef.current = vNum
+                    setRefInput(`${chapterRef}:${vNum}`)
+                    await onLoadPassage(chapterRef, false)
                     setSearchMode('reference')
                   }}
                   style={{
@@ -1080,7 +1096,7 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                     e.currentTarget.style.backgroundColor = '#1E1E1E'
                     e.currentTarget.style.color = '#E5E7EB'
                   }}
-                  title={`Cargar ${currentBook?.name} ${selectedChapter}:${vNum}`}
+                  title={`Cargar ${currentBook?.name} ${selectedChapter} y señalar versículo ${vNum}`}
                 >
                   {vNum}
                 </button>
@@ -1243,7 +1259,8 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                 return (
                   <div
                     key={slide.id || `slide_${index}`}
-                    className="pro-bible-slide-card"
+                    id={`bible-slide-card-${index}`}
+                    className={`pro-bible-slide-card ${isSelected ? 'is-selected' : ''}`}
                     onClick={() => {
                       setSelectedSlideIndex(index)
                       onGoLive(slide, directSlides[index + 1])
@@ -1254,18 +1271,19 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                     }}
                     style={{
                       aspectRatio: '16 / 9',
-                      backgroundColor: '#1E1E1E',
+                      backgroundColor: isSelected ? '#122338' : '#1E1E1E',
                       borderRadius: '6px',
                       border: isSelected
-                        ? '2px solid #2563EB'
+                        ? '2px solid #38BDF8'
                         : '1px solid #333333',
+                      boxShadow: isSelected ? '0 0 14px rgba(56, 189, 248, 0.45)' : 'none',
                       display: 'flex',
                       flexDirection: 'column',
                       padding: '12px',
                       cursor: 'pointer',
                       position: 'relative',
                       overflow: 'hidden',
-                      transition: 'border-color 0.15s ease'
+                      transition: 'all 0.15s ease'
                     }}
                   >
                     <div
@@ -1276,21 +1294,38 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                         marginBottom: '6px'
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: '#60A5FA',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        {slide.title || `Versículo ${index + 1}`}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: isSelected ? '#38BDF8' : '#60A5FA',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          {slide.title || `Versículo ${index + 1}`}
+                        </span>
+                        {isSelected && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              backgroundColor: '#0284C7',
+                              color: '#FFFFFF',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              letterSpacing: '0.5px'
+                            }}
+                          >
+                            SELECCIONADO
+                          </span>
+                        )}
+                      </div>
                       <span
                         style={{
                           fontSize: '10px',
-                          color: '#6B7280',
-                          backgroundColor: '#141414',
+                          color: isSelected ? '#93C5FD' : '#6B7280',
+                          backgroundColor: isSelected ? '#0B1726' : '#141414',
                           padding: '1px 5px',
                           borderRadius: '3px'
                         }}
