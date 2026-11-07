@@ -61,6 +61,7 @@ import { powerProtectionService } from './power/power-protection-service'
 import { emergencyService } from './emergency/emergency-service'
 import { workspaceService } from './workspace/workspace-service'
 import { mediaServer } from './media/media-server'
+import { masterMediaSyncService } from './media/master-media-sync-service'
 
 // Single instance lock (bypassed in test environment)
 const gotTheLock = isTest ? true : app.requestSingleInstanceLock()
@@ -131,8 +132,25 @@ async function initializeApp() {
       callback({ responseHeaders })
     })
 
+    // Grant speaker-selection and media permissions for hardware audio device routing (setSinkId)
+    session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+      if (['media', 'speaker-selection', 'audio-capture', 'notifications'].includes(permission)) {
+        return true
+      }
+      return true
+    })
+    session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+      if (['media', 'speaker-selection', 'audio-capture', 'notifications'].includes(permission)) {
+        return callback(true)
+      }
+      return callback(true)
+    })
+
     await databaseService.initialize()
     logger.info('Database initialized.')
+
+    const savedAudioDevice = databaseService.getConfig('audio_device_video') || ''
+    masterMediaSyncService.setAudioDeviceId(savedAudioDevice)
 
     libraryService.initialize()
     logger.info('LibraryService initialized.')

@@ -489,6 +489,9 @@ export function registerIpcHandlers(): void {
   // Phase 5A: Video & Media Sync
   ipcMain.handle(IPC_CHANNELS.VIDEO_PLAY, async (_event, config: VideoItemConfig) => {
     youtubeOutputManager.stop()
+    if (!config.audioDeviceId) {
+      config.audioDeviceId = databaseService.getConfig('audio_device_video') || masterMediaSyncService.getAudioDeviceId() || ''
+    }
     const mediaItem = databaseService.getMediaItemById(config.mediaId)
     if (mediaItem && mediaItem.duration) {
       masterMediaSyncService.updateVideoDuration(mediaItem.duration)
@@ -548,6 +551,21 @@ export function registerIpcHandlers(): void {
       return true
     }
   )
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO_GET_OUTPUT_DEVICE, async () => {
+    return databaseService.getConfig('audio_device_video') || masterMediaSyncService.getAudioDeviceId() || ''
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AUDIO_SET_OUTPUT_DEVICE, async (_event, deviceId: string) => {
+    const cleanId = typeof deviceId === 'string' ? deviceId : ''
+    databaseService.setConfig('audio_device_video', cleanId)
+    masterMediaSyncService.setAudioDeviceId(cleanId)
+    const tick = masterMediaSyncService.createVideoSyncTick()
+    stateManager.updateMediaSyncTick(tick)
+    windowManager.broadcastToAll(IPC_CHANNELS.MEDIA_SYNC_TICK, tick)
+    windowManager.broadcastToAll(IPC_CHANNELS.AUDIO_DEVICE_CHANGED, cleanId)
+    return true
+  })
 
   // Phase 5A: PDF
   ipcMain.handle(IPC_CHANNELS.PDF_GET_PAGE_COUNT, (_event, filePath: string) => {

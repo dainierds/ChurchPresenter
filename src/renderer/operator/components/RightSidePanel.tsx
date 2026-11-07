@@ -12,7 +12,9 @@ import {
   Maximize2,
   Zap,
   Copy,
-  Edit2
+  Edit2,
+  Volume2,
+  VolumeX
 } from 'lucide-react'
 import {
   PresenterState,
@@ -59,6 +61,10 @@ interface RightSidePanelProps {
   previewHeight?: number
   onResizePreview?: (e: React.MouseEvent) => void
   onResetPreview?: () => void
+  audioDevices?: { deviceId: string; label: string }[]
+  activeAudioDevice?: string
+  onSelectAudioDevice?: (deviceId: string) => void
+  onTestAudioDevice?: (deviceId?: string) => void
 }
 
 export const RightSidePanel: React.FC<RightSidePanelProps> = ({
@@ -85,7 +91,11 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   panelLabels,
   previewHeight,
   onResizePreview,
-  onResetPreview
+  onResetPreview,
+  audioDevices = [],
+  activeAudioDevice = '',
+  onSelectAudioDevice,
+  onTestAudioDevice
 }) => {
   const [activeOutputTab, setActiveOutputTab] = useState<'main' | 'stage' | 'lobby'>('main')
   const [activeBottomTab, setActiveBottomTab] = useState<'timers' | 'props' | 'macros'>('timers')
@@ -122,11 +132,63 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   // Media playback states
   const [liveMediaTick, setLiveMediaTick] = useState<MediaSyncTick | null>(null)
 
+  // Cabin Audio Monitor State (Allows operator to hear videos on PC)
+  const [isMonitorMuted, setIsMonitorMuted] = useState<boolean>(() => {
+    return localStorage.getItem('cp_operator_audio_monitor') === 'muted'
+  })
+  const [monitorVolume, setMonitorVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('cp_operator_monitor_volume')
+    return saved !== null ? Number(saved) : 1.0
+  })
+
+  const handleToggleMonitorMute = () => {
+    setIsMonitorMuted((prev) => {
+      const next = !prev
+      localStorage.setItem('cp_operator_audio_monitor', next ? 'muted' : 'unmuted')
+      if (previewVideoRef.current) {
+        previewVideoRef.current.muted = next
+        if (!next) {
+          previewVideoRef.current.volume = monitorVolume
+        }
+      }
+      return next
+    })
+  }
+
+  const handleMonitorVolumeChange = (vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol))
+    setMonitorVolume(clamped)
+    localStorage.setItem('cp_operator_monitor_volume', String(clamped))
+    if (previewVideoRef.current) {
+      previewVideoRef.current.volume = clamped
+      if (clamped > 0 && isMonitorMuted) {
+        setIsMonitorMuted(false)
+        localStorage.setItem('cp_operator_audio_monitor', 'unmuted')
+        previewVideoRef.current.muted = false
+      }
+    }
+  }
+
+  // Audio Device routing for operator preview
+  useEffect(() => {
+    const video = previewVideoRef.current
+    if (!video) return
+    video.muted = isMonitorMuted
+    video.volume = monitorVolume
+    if (typeof (video as any).setSinkId === 'function') {
+      (video as any).setSinkId(activeAudioDevice || '').catch((err: any) => {
+        console.warn('[RightSidePanel] Could not set audio device on preview video:', err)
+      })
+    }
+  }, [isMonitorMuted, monitorVolume, activeAudioDevice])
+
   useEffect(() => {
     const unsub = window.churchPresenterApi?.onMediaSyncTick?.((tick) => {
       setLiveMediaTick(tick)
       const video = previewVideoRef.current
       if (video) {
+        video.muted = isMonitorMuted
+        video.volume = monitorVolume
         if (tick.isPlaying && video.paused) {
           video.play().catch(() => {})
         } else if (!tick.isPlaying && !video.paused) {
@@ -139,7 +201,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
       }
     })
     return () => unsub?.()
-  }, [])
+  }, [isMonitorMuted, monitorVolume])
 
   const effectiveMediaTick = liveMediaTick || state?.mediaSyncTick || null
   const isPlayingMedia = Boolean(effectiveMediaTick?.isPlaying)
@@ -231,12 +293,16 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
 
   const isContentHidden = isCleared || showLogo || isBlack
 
-  // Master Clock Video Sync for Preview Monitor (strictly muted)
+  // Master Clock Video Sync for Preview Monitor (with Cabin Audio Monitor)
   useEffect(() => {
     const video = previewVideoRef.current
     const tick = state?.mediaSyncTick
     if (!video || !tick) return
-    video.muted = true
+    video.muted = isMonitorMuted
+    video.volume = monitorVolume
+    if (activeAudioDevice && typeof (video as any).setSinkId === 'function') {
+      (video as any).setSinkId(activeAudioDevice).catch(() => {})
+    }
 
     if (tick.isPlaying && video.paused) {
       video.play().catch(() => {})
@@ -248,7 +314,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
     if (drift > 0.2) {
       video.currentTime = tick.currentTime
     }
-  }, [state?.mediaSyncTick])
+  }, [state?.mediaSyncTick, isMonitorMuted, monitorVolume, activeAudioDevice])
 
   // When un-hiding preview (toggling off clear/logo or tab change), resync local video immediately
   useEffect(() => {
@@ -684,7 +750,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                     ref={previewVideoRef}
                     src={toMediaUrl(activeMediaUrl)}
                     autoPlay
-                    muted
+                    muted={isMonitorMuted}
                     playsInline
                     style={{
                       position: 'absolute',
@@ -695,6 +761,11 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
                     }}
                     onLoadedMetadata={(e) => {
                       const v = e.currentTarget
+                      v.muted = isMonitorMuted
+                      v.volume = monitorVolume
+                      if (activeAudioDevice && typeof (v as any).setSinkId === 'function') {
+                        (v as any).setSinkId(activeAudioDevice).catch(() => {})
+                      }
                       if (v.duration && isFinite(v.duration)) {
                         window.churchPresenterApi.updateVideoDuration?.(v.duration)
                       }
@@ -951,6 +1022,63 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
               .toString()
               .padStart(2, '0')}
           </span>
+        </div>
+
+        {/* Audio Output & Cabin Monitor Row */}
+        <div className="pro-transport-audio-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              className={`pro-audio-monitor-btn ${!isMonitorMuted ? 'active' : ''}`}
+              onClick={handleToggleMonitorMute}
+              title={
+                isMonitorMuted
+                  ? 'Monitor de cabina en silencio. Clic para escuchar en los altavoces/auriculares de la PC.'
+                  : 'Monitor de cabina activo. Clic para silenciar en la PC.'
+              }
+            >
+              {!isMonitorMuted ? <Volume2 size={12} /> : <VolumeX size={12} />}
+              <span>Cabina: {!isMonitorMuted ? `${Math.round(monitorVolume * 100)}%` : 'Silenciado'}</span>
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={isMonitorMuted ? 0 : monitorVolume}
+              onChange={(e) => handleMonitorVolumeChange(Number(e.target.value))}
+              className="pro-audio-volume-slider"
+              title="Volumen del monitor de cabina (PC)"
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end' }}>
+            <select
+              value={activeAudioDevice || ''}
+              onChange={(e) => onSelectAudioDevice?.(e.target.value)}
+              className="pro-audio-device-select"
+              title="Dispositivo de salida de audio de Church Presenter"
+            >
+              <option value="">🔊 Predeterminado del Sistema</option>
+              {audioDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            {onTestAudioDevice && (
+              <button
+                type="button"
+                className="pro-transport-btn"
+                style={{ padding: '3px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                onClick={() => onTestAudioDevice(activeAudioDevice)}
+                title="Probar sonido en la salida seleccionada"
+              >
+                <Volume2 size={11} />
+                <span>Probar</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -103,6 +103,9 @@ export const IPC_CHANNELS = {
   MEDIA_SYNC_TICK: 'media:sync-tick',
   AUDIO_PLAY_INDEPENDENT: 'audio:play-independent',
   AUDIO_CONTROL_INDEPENDENT: 'audio:control-independent',
+  AUDIO_GET_OUTPUT_DEVICE: 'audio:get-output-device',
+  AUDIO_SET_OUTPUT_DEVICE: 'audio:set-output-device',
+  AUDIO_DEVICE_CHANGED: 'audio:device-changed',
   PDF_RENDER_PAGE: 'pdf:render-page',
   PDF_GET_PAGE_COUNT: 'pdf:get-page-count',
 

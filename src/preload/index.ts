@@ -428,6 +428,22 @@ const api: ChurchPresenterApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_CONTROL_INDEPENDENT, action, value)
   },
 
+  getAudioOutputDevice: (): Promise<string> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_GET_OUTPUT_DEVICE)
+  },
+
+  setAudioOutputDevice: (deviceId: string): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.AUDIO_SET_OUTPUT_DEVICE, deviceId)
+  },
+
+  onAudioDeviceChanged: (callback: (deviceId: string) => void): (() => void) => {
+    const handler = (_event: any, devId: string) => callback(devId)
+    ipcRenderer.on(IPC_CHANNELS.AUDIO_DEVICE_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.AUDIO_DEVICE_CHANGED, handler)
+    }
+  },
+
   renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number): Promise<string> => {
     return ipcRenderer.invoke(IPC_CHANNELS.PDF_RENDER_PAGE, mediaId, pageNumber, targetWidth)
   },

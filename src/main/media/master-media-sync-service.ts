@@ -13,6 +13,7 @@ export class MasterMediaSyncService extends EventEmitter {
   private videoDuration: number = 0
   private isVideoPlaying: boolean = false
   private videoSyncInterval: NodeJS.Timeout | null = null
+  private audioDeviceId: string = ''
 
   private independentAudio: IndependentAudioState = {
     isPlaying: false,
@@ -35,6 +36,11 @@ export class MasterMediaSyncService extends EventEmitter {
   // =========================================================================
 
   public playVideo(config: VideoItemConfig): MediaSyncTick {
+    if (config.audioDeviceId !== undefined) {
+      this.audioDeviceId = config.audioDeviceId
+    } else if (this.audioDeviceId) {
+      config.audioDeviceId = this.audioDeviceId
+    }
     this.currentVideoConfig = config
     this.videoCurrentTime = config.inPoint || 0
     this.isVideoPlaying = true
@@ -103,6 +109,17 @@ export class MasterMediaSyncService extends EventEmitter {
     this.videoCurrentTime = 0
   }
 
+  public setAudioDeviceId(id: string): void {
+    this.audioDeviceId = id || ''
+    if (this.currentVideoConfig) {
+      this.currentVideoConfig.audioDeviceId = this.audioDeviceId
+    }
+  }
+
+  public getAudioDeviceId(): string {
+    return this.audioDeviceId
+  }
+
   public updateVideoDuration(duration: number): void {
     this.videoDuration = duration
   }
@@ -155,6 +172,7 @@ export class MasterMediaSyncService extends EventEmitter {
         loop: false,
         volume: 1.0,
         audioOutputRole: 'main',
+        audioDeviceId: this.audioDeviceId || '',
         timestamp: Date.now()
       }
     }
@@ -169,6 +187,7 @@ export class MasterMediaSyncService extends EventEmitter {
       loop: this.currentVideoConfig.loop,
       volume: this.currentVideoConfig.volume,
       audioOutputRole: this.currentVideoConfig.audioOutputRole || 'main',
+      audioDeviceId: this.currentVideoConfig.audioDeviceId ?? this.audioDeviceId ?? '',
       inPoint: this.currentVideoConfig.inPoint,
       outPoint: this.currentVideoConfig.outPoint,
       timestamp: Date.now()

@@ -534,6 +534,7 @@ export interface VideoItemConfig {
   fadeOutSeconds?: number
   endAction: 'freeze' | 'background' | 'next'
   audioOutputRole?: OutputRole // Role where audio will play unmuted (default: 'main')
+  audioDeviceId?: string // Specific hardware audio output device (sink ID)
 }
 
 export interface PdfItemConfig {
@@ -620,6 +621,7 @@ export interface MediaSyncTick {
   loop: boolean
   volume: number
   audioOutputRole: OutputRole
+  audioDeviceId?: string
   inPoint?: number
   outPoint?: number
   timestamp: number
@@ -1112,6 +1114,9 @@ export interface ChurchPresenterApi {
   onMediaSyncTick?: (callback: (tick: MediaSyncTick) => void) => () => void
   playIndependentAudio: (mediaId: string, filePath: string, title?: string) => Promise<void>
   controlIndependentAudio: (action: 'play' | 'pause' | 'stop' | 'fade-out' | 'volume', value?: number) => Promise<void>
+  getAudioOutputDevice?: () => Promise<string>
+  setAudioOutputDevice?: (deviceId: string) => Promise<boolean>
+  onAudioDeviceChanged?: (callback: (deviceId: string) => void) => () => void
   renderPdfPage: (mediaId: string, pageNumber: number, targetWidth?: number) => Promise<string>
   getPdfPageCount: (mediaId: string) => Promise<number>
 

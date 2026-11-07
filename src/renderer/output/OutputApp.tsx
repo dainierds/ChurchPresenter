@@ -55,16 +55,51 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     return () => unsub?.()
   }, [])
 
+  // Helper to safely route audio output to target audio hardware device (setSinkId)
+  const applySinkId = (video: HTMLVideoElement | null, deviceId?: string) => {
+    if (!video) return
+    if (typeof (video as any).setSinkId === 'function') {
+      (video as any).setSinkId(deviceId || '').catch((err: any) => {
+        console.warn('[OutputApp] Could not set audio sinkId on video:', err)
+      })
+    }
+  }
+
+  // Determine if this window should play audio (main or audience role)
+  const isAudioRoleMatch = (outputRole?: string): boolean => {
+    const target = outputRole || 'main'
+    return role === target ||
+      (role === 'main' && target === 'audience') ||
+      (role === 'audience' && target === 'main')
+  }
+
+  // Audio Device Configuration Sync
+  useEffect(() => {
+    window.churchPresenterApi?.getAudioOutputDevice?.().then((deviceId) => {
+      if (videoRef.current) {
+        applySinkId(videoRef.current, deviceId)
+      }
+    }).catch(() => {})
+
+    const unsubDevice = window.churchPresenterApi?.onAudioDeviceChanged?.((deviceId) => {
+      if (videoRef.current) {
+        applySinkId(videoRef.current, deviceId)
+      }
+    })
+    return () => unsubDevice?.()
+  }, [])
+
   // Instantaneous Master Clock Video Sync from media:sync-tick
   useEffect(() => {
     const unsub = window.churchPresenterApi?.onMediaSyncTick?.((tick) => {
       const video = videoRef.current
       if (!tick || !video) return
 
-      const shouldPlayAudio = role === (tick.audioOutputRole || 'main')
+      const shouldPlayAudio = isAudioRoleMatch(tick.audioOutputRole)
       video.muted = !shouldPlayAudio
       if (shouldPlayAudio) {
         video.volume = tick.volume ?? 1.0
+        applySinkId(video, tick.audioDeviceId)
       }
 
       if (tick.isPlaying && video.paused) {
@@ -88,10 +123,11 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
     if (!tick || !video) return
 
     // Dedicated audio role check: only unmuted on designated role!
-    const shouldPlayAudio = role === (tick.audioOutputRole || 'main')
+    const shouldPlayAudio = isAudioRoleMatch(tick.audioOutputRole)
     video.muted = !shouldPlayAudio
     if (shouldPlayAudio) {
       video.volume = tick.volume ?? 1.0
+      applySinkId(video, tick.audioDeviceId)
     }
 
     if (tick.isPlaying && video.paused) {
@@ -841,7 +877,7 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                         src={toMediaUrl(content.mediaUrl)}
                         autoPlay
                         playsInline
-                        muted={role !== (displayState?.mediaSyncTick?.audioOutputRole || 'main')}
+                        muted={!isAudioRoleMatch(displayState?.mediaSyncTick?.audioOutputRole)}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -851,6 +887,10 @@ export const OutputApp: React.FC<OutputAppProps> = ({ role }) => {
                           const v = e.currentTarget
                           if (v.duration && isFinite(v.duration)) {
                             window.churchPresenterApi.updateVideoDuration?.(v.duration)
+                          }
+                          const tick = displayState?.mediaSyncTick
+                          if (tick?.audioDeviceId) {
+                            applySinkId(v, tick.audioDeviceId)
                           }
                         }}
                         onEnded={() => {

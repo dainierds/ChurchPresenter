@@ -855,6 +855,18 @@ export const OperatorApp: React.FC = () => {
         }
       }
 
+      if (window.churchPresenterApi.getAudioOutputDevice) {
+        try {
+          const savedAudDev = await window.churchPresenterApi.getAudioOutputDevice()
+          if (savedAudDev !== undefined && savedAudDev !== null) {
+            setAudioDeviceVideo(savedAudDev)
+            localStorage.setItem('cp_audio_device_video', savedAudDev)
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       if (window.churchPresenterApi.getMacros) {
         try {
           const m = await window.churchPresenterApi.getMacros()
@@ -1422,6 +1434,15 @@ export const OperatorApp: React.FC = () => {
     }
   }
 
+  const handleSelectAudioDevice = async (deviceId: string) => {
+    const cleanId = deviceId || ''
+    setAudioDeviceVideo(cleanId)
+    localStorage.setItem('cp_audio_device_video', cleanId)
+    if (window.churchPresenterApi?.setAudioOutputDevice) {
+      await window.churchPresenterApi.setAudioOutputDevice(cleanId)
+    }
+  }
+
   // Clamp preview slide index when activeSlides change
   useEffect(() => {
     if (previewSlideIndex >= activeSlides.length) {
@@ -1478,7 +1499,8 @@ export const OperatorApp: React.FC = () => {
             loop: false,
             volume: 1.0,
             endAction: 'freeze',
-            audioOutputRole: audioOutputRole || 'main'
+            audioOutputRole: audioOutputRole || 'main',
+            audioDeviceId: audioDeviceVideo || undefined
           })
         }
       } else {
@@ -4263,7 +4285,8 @@ export const OperatorApp: React.FC = () => {
                       loop: true,
                       volume: 1.0,
                       endAction: 'freeze',
-                      audioOutputRole: 'main'
+                      audioOutputRole: 'main',
+                      audioDeviceId: audioDeviceVideo || undefined
                     })
                   }}
                   onSetAsBackground={(item) => {
@@ -4351,6 +4374,10 @@ export const OperatorApp: React.FC = () => {
                   onControlVideo={(action, time) => {
                     window.churchPresenterApi.controlVideo(action, time)
                   }}
+                  audioDevices={audioDevices}
+                  activeAudioDevice={audioDeviceVideo}
+                  onSelectAudioDevice={handleSelectAudioDevice}
+                  onTestAudioDevice={playTestAudioChime}
                 />
               </ErrorBoundary>
             </aside>
@@ -6188,10 +6215,7 @@ export const OperatorApp: React.FC = () => {
                         <label style={{ minWidth: 200 }}>Dispositivo de Audio (Video):</label>
                         <select
                           value={audioDeviceVideo}
-                          onChange={(e) => {
-                            setAudioDeviceVideo(e.target.value)
-                            localStorage.setItem('cp_audio_device_video', e.target.value)
-                          }}
+                          onChange={(e) => handleSelectAudioDevice(e.target.value)}
                           className="bible-select"
                           style={{ flex: 1 }}
                         >
