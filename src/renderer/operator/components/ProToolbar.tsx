@@ -142,7 +142,7 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         )}
       </div>
 
-      {/* Quick Creation Buttons: Texto, Tema */}
+      {/* Quick Creation Buttons: Texto, Tema, Pantallas */}
       <div className="pro-toolbar-tools">
         <button className="pro-tool-btn" onClick={onAddTextSlide} title="Agregar diapositiva de texto">
           <Type size={14} />
@@ -151,6 +151,10 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
         <button className="pro-tool-btn" onClick={onOpenThemeModal} title="Configuración de Tema y Estilos">
           <Palette size={14} />
           <span>Tema</span>
+        </button>
+        <button className="pro-tool-btn" onClick={onOpenDisplaysModal} title="Configurar asignación de pantallas físicas y roles de salida">
+          <Monitor size={14} />
+          <span>Pantallas</span>
         </button>
       </div>
 
@@ -367,17 +371,6 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             <span>Bucle ({loopStatus.nextAdvanceInSeconds}s) [Detener]</span>
           </button>
         )}
-
-        <button
-          type="button"
-          className="pro-status-pill-btn pro-screen-config-btn"
-          onClick={onOpenDisplaysModal}
-          title="Configurar asignación de pantallas físicas y roles de salida (Audiencia / Escenario)"
-          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-        >
-          <Monitor size={12} />
-          <span>Pantallas</span>
-        </button>
 
         {/* Phase 7: Rehearsal Mode Badge (Visible only when actively running rehearsal) */}
         {isRehearsalActive && (
