@@ -10,13 +10,16 @@ import {
   ChevronRight,
   Sliders,
   Check,
-  Grid
+  Grid,
+  Palette,
+  Edit2
 } from 'lucide-react'
 import {
   BibleSearchResult,
   BibleTranslationMeta,
   ServiceItem,
-  SlideItem
+  SlideItem,
+  ThemeConfig
 } from '../../../shared/types'
 import { BIBLE_BOOKS } from '../../../shared/bible-reference-parser'
 
@@ -30,6 +33,8 @@ interface BibleBrowserPanelProps {
   recents: string[]
   directSlides: SlideItem[]
   currentReference: string
+  themes?: ThemeConfig[]
+  currentBibleThemeId?: string
   onLoadPassage: (reference: string, sendLiveImmediately?: boolean) => Promise<void>
   onSelectPrimary: (abbrev: string) => void
   onSelectSecondary: (abbrev: string) => void
@@ -37,6 +42,8 @@ interface BibleBrowserPanelProps {
   onChangeDualLayout: (layout: 'stacked' | 'sideBySide') => void
   onOpenBibleManager: () => void
   onOpenBibleImport: () => void
+  onOpenThemeManager?: () => void
+  onSelectBibleTheme?: (themeId: string) => void
   onGoLive: (slide: SlideItem, nextSlide?: SlideItem) => void
   onAddToService: (item: ServiceItem) => void
   onToggleFavorite?: (reference: string) => void
@@ -52,6 +59,8 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   recents,
   directSlides,
   currentReference,
+  themes,
+  currentBibleThemeId,
   onLoadPassage,
   onSelectPrimary,
   onSelectSecondary,
@@ -59,6 +68,8 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
   onChangeDualLayout,
   onOpenBibleManager,
   onOpenBibleImport,
+  onOpenThemeManager,
+  onSelectBibleTheme,
   onGoLive,
   onAddToService,
   onToggleFavorite
@@ -464,6 +475,62 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
             <Sliders size={13} />
             <span>Administrar Biblias...</span>
           </button>
+
+          {/* Bible Theme Selector */}
+          {themes && themes.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#202024',
+                border: '1px solid #3A3A3A',
+                borderRadius: '4px',
+                padding: '3px 8px'
+              }}
+              title="Tema visual y fondo utilizado para proyectar la Biblia"
+            >
+              <Palette size={13} color="#F97316" />
+              <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 600 }}>Tema:</span>
+              <select
+                value={currentBibleThemeId || ''}
+                onChange={(e) => onSelectBibleTheme?.(e.target.value)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: '#F97316',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {themes.map((th) => (
+                  <option key={th.id} value={th.id} style={{ backgroundColor: '#1E1E1E', color: '#FFFFFF' }}>
+                    {th.name} {th.id === currentBibleThemeId ? '✓' : ''}
+                  </option>
+                ))}
+              </select>
+              {onOpenThemeManager && (
+                <button
+                  type="button"
+                  onClick={onOpenThemeManager}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: '#9CA3AF',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  title="Abrir editor de temas"
+                >
+                  <Edit2 size={12} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -740,7 +807,12 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                   selectedSlideIndex >= 0 && selectedSlideIndex < directSlides.length
                     ? selectedSlideIndex
                     : 0
-                onGoLive(directSlides[targetIdx], directSlides[targetIdx + 1])
+                const s1 = directSlides[targetIdx]
+                const s2 = directSlides[targetIdx + 1]
+                onGoLive(
+                  currentBibleThemeId ? { ...s1, themeId: currentBibleThemeId } : s1,
+                  s2 && currentBibleThemeId ? { ...s2, themeId: currentBibleThemeId } : s2
+                )
               }
             }}
             disabled={directSlides.length === 0}
@@ -1263,11 +1335,19 @@ export const BibleBrowserPanel: React.FC<BibleBrowserPanelProps> = ({
                     className={`pro-bible-slide-card ${isSelected ? 'is-selected' : ''}`}
                     onClick={() => {
                       setSelectedSlideIndex(index)
-                      onGoLive(slide, directSlides[index + 1])
+                      const s2 = directSlides[index + 1]
+                      onGoLive(
+                        currentBibleThemeId ? { ...slide, themeId: currentBibleThemeId } : slide,
+                        s2 && currentBibleThemeId ? { ...s2, themeId: currentBibleThemeId } : s2
+                      )
                     }}
                     onDoubleClick={() => {
                       setSelectedSlideIndex(index)
-                      onGoLive(slide, directSlides[index + 1])
+                      const s2 = directSlides[index + 1]
+                      onGoLive(
+                        currentBibleThemeId ? { ...slide, themeId: currentBibleThemeId } : slide,
+                        s2 && currentBibleThemeId ? { ...s2, themeId: currentBibleThemeId } : s2
+                      )
                     }}
                     style={{
                       aspectRatio: '16 / 9',

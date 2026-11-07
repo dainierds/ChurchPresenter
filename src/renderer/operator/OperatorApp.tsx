@@ -36,7 +36,8 @@ import {
   RemoteNetworkInterface,
   StageLayoutConfig,
   ChurchBrandingConfig,
-  DEFAULT_CHURCH_BRANDING
+  DEFAULT_CHURCH_BRANDING,
+  TypeDefaultThemesMap
 } from '../../shared/types'
 import { toMediaUrl } from '../../shared/media-url'
 import { TopMenuBar } from './components/TopMenuBar'
@@ -324,6 +325,8 @@ export const OperatorApp: React.FC = () => {
   const [bibleFavorites, setBibleFavorites] = useState<string[]>([])
   const [bibleRecentHistory, setBibleRecentHistory] = useState<string[]>([])
   const [bibleDirectSlides, setBibleDirectSlides] = useState<SlideItem[]>([])
+  const [typeDefaults, setTypeDefaults] = useState<Partial<TypeDefaultThemesMap>>({})
+  const [currentBibleThemeId, setCurrentBibleThemeId] = useState<string>('')
 
   // Active Service & Current Selection
   const [currentService, setCurrentService] = useState<ServicePlan | null>(null)
@@ -717,7 +720,8 @@ export const OperatorApp: React.FC = () => {
         bRecents,
         mediaList,
         rbConfigs,
-        brandingRes
+        brandingRes,
+        typeDefs
       ] = await Promise.all([
         window.churchPresenterApi.getDisplays(),
         window.churchPresenterApi.getRoleAssignments(),
@@ -735,7 +739,8 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi.getBibleRecentHistory(),
         window.churchPresenterApi.getMediaItems(),
         window.churchPresenterApi.getRoleBibleConfigs(),
-        window.churchPresenterApi.getChurchBranding?.()
+        window.churchPresenterApi.getChurchBranding?.(),
+        window.churchPresenterApi.getTypeDefaultThemes?.()
       ])
 
       setDisplays(disp)
@@ -747,6 +752,10 @@ export const OperatorApp: React.FC = () => {
       setSongs(songList)
       setPresentations(presList)
       setThemes(themeList)
+      if (typeDefs) {
+        setTypeDefaults(typeDefs)
+        if (typeDefs.bible) setCurrentBibleThemeId(typeDefs.bible)
+      }
       setServices(servList)
       setTemplates(tempList)
       setBackgroundImages(bgList)
@@ -1478,17 +1487,49 @@ export const OperatorApp: React.FC = () => {
         window.churchPresenterApi?.controlYouTube?.('stop')
       }
 
-      window.churchPresenterApi.sendSlide(slide, ['main', 'lobby', 'stage'], nextSlide)
-      setLiveSlideId(slide.id)
-      setLiveSourceId(slide.sourceId)
+      // For Bible scripture slides, ensure themeId is set if not already present
+      const effectiveSlide = { ...slide }
+      if (effectiveSlide.sourceType === 'scripture' && !effectiveSlide.themeId) {
+        effectiveSlide.themeId = currentBibleThemeId || typeDefaults.bible
+      }
+      const effectiveNext = nextSlide ? { ...nextSlide } : undefined
+      if (effectiveNext && effectiveNext.sourceType === 'scripture' && !effectiveNext.themeId) {
+        effectiveNext.themeId = currentBibleThemeId || typeDefaults.bible
+      }
+
+      window.churchPresenterApi.sendSlide(effectiveSlide, ['main', 'lobby', 'stage'], effectiveNext)
+      setLiveSlideId(effectiveSlide.id)
+      setLiveSourceId(effectiveSlide.sourceId)
       setIsLiveDirty(false)
 
       // Phase 8: Trigger Macro on Slide Enter
-      if (slide.macroTrigger?.onEnterMacroId) {
-        window.churchPresenterApi.runMacro?.(slide.macroTrigger.onEnterMacroId).catch(() => {})
+      if (effectiveSlide.macroTrigger?.onEnterMacroId) {
+        window.churchPresenterApi.runMacro?.(effectiveSlide.macroTrigger.onEnterMacroId).catch(() => {})
       }
     },
-    [currentServiceItem, mediaItems, audioOutputRole]
+    [currentServiceItem, mediaItems, audioOutputRole, currentBibleThemeId, typeDefaults.bible]
+  )
+
+  const handleSelectBibleTheme = useCallback(
+    async (themeId: string) => {
+      try {
+        await window.churchPresenterApi.setTypeDefaultTheme('bible', themeId)
+        const updatedDefs = await window.churchPresenterApi.getTypeDefaultThemes()
+        if (updatedDefs) setTypeDefaults(updatedDefs)
+        setCurrentBibleThemeId(themeId)
+
+        // If a scripture slide is currently live, re-project it with the updated theme
+        if (liveSlideId && (liveSlideId.startsWith('bible_') || activeToolbarMode === 'bible')) {
+          const targetSlide = bibleDirectSlides.find((s) => s.id === liveSlideId)
+          if (targetSlide) {
+            handleGoLive({ ...targetSlide, themeId })
+          }
+        }
+      } catch (err) {
+        console.error('Error selecting Bible theme:', err)
+      }
+    },
+    [liveSlideId, activeToolbarMode, bibleDirectSlides, handleGoLive]
   )
 
   // Send current preview slide to live
@@ -3585,6 +3626,10 @@ export const OperatorApp: React.FC = () => {
                 recents={bibleRecentHistory}
                 directSlides={bibleDirectSlides}
                 currentReference={currentLoadedBibleRef}
+                themes={themes}
+                currentBibleThemeId={currentBibleThemeId || typeDefaults.bible}
+                onSelectBibleTheme={handleSelectBibleTheme}
+                onOpenThemeManager={() => setIsThemesModalOpen(true)}
                 onLoadPassage={loadBiblePassage}
                 onSelectPrimary={setPrimaryBibleAbbrev}
                 onSelectSecondary={setSecondaryBibleAbbrev}
@@ -7649,6 +7694,11 @@ export const OperatorApp: React.FC = () => {
         onThemeSaved={async () => {
           const updatedThemes = await window.churchPresenterApi.getThemes()
           setThemes(updatedThemes)
+          const updatedDefs = await window.churchPresenterApi.getTypeDefaultThemes?.()
+          if (updatedDefs) {
+            setTypeDefaults(updatedDefs)
+            if (updatedDefs.bible) setCurrentBibleThemeId(updatedDefs.bible)
+          }
         }}
       />
 

@@ -14,7 +14,9 @@ import {
   Image as ImageIcon,
   Sparkles,
   HelpCircle,
-  Sliders
+  Sliders,
+  Star,
+  Palette
 } from 'lucide-react'
 import {
   ThemeConfig,
@@ -202,12 +204,24 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
   const handleSaveCurrentTheme = async () => {
     if (!editedTheme) return
     try {
-      const saved = await window.churchPresenterApi.saveTheme(editedTheme)
+      const themeToSave = { ...editedTheme }
+      if (activeFilter === 'bible') {
+        themeToSave.targetContentType = 'bible'
+      }
+      const saved = await window.churchPresenterApi.saveTheme(themeToSave)
       const all = await window.churchPresenterApi.getThemes()
       setThemes(all)
       setEditedTheme(JSON.parse(JSON.stringify(saved)))
       onThemeSaved?.(saved)
-      setStatusMessage({ text: `Cambios guardados en '${saved.name}'.`, type: 'success' })
+
+      if (activeFilter === 'bible') {
+        await handleSetTypeDefault('bible', saved.id)
+      }
+
+      setStatusMessage({
+        text: `Cambios guardados en '${saved.name}'${activeFilter === 'bible' ? ' y asignado como tema de Biblia' : ''}.`,
+        type: 'success'
+      })
     } catch (err: any) {
       setStatusMessage({ text: err.message || 'Error al guardar tema.', type: 'error' })
     }
@@ -487,7 +501,12 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
               {['all', 'songs', 'bible', 'announcements', 'messages', 'timer'].map((f) => (
                 <button
                   key={f}
-                  onClick={() => setActiveFilter(f)}
+                  onClick={() => {
+                    setActiveFilter(f)
+                    if (f !== 'all') {
+                      setPreviewContentType(f as ThemeContentType)
+                    }
+                  }}
                   style={{
                     padding: '4px 8px',
                     fontSize: '11px',
@@ -608,7 +627,63 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
                         {th.name}
                       </div>
 
-                      <div style={{ display: 'flex', gap: '4px', marginTop: '3px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '3px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {typeDefaults.bible === th.id && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              backgroundColor: '#ea580c',
+                              color: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              fontWeight: 800
+                            }}
+                          >
+                            Default Biblia
+                          </span>
+                        )}
+                        {typeDefaults.songs === th.id && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              backgroundColor: '#2563eb',
+                              color: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              fontWeight: 800
+                            }}
+                          >
+                            Default Canciones
+                          </span>
+                        )}
+                        {typeDefaults.announcements === th.id && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              backgroundColor: '#d97706',
+                              color: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              fontWeight: 800
+                            }}
+                          >
+                            Default Anuncios
+                          </span>
+                        )}
+                        {typeDefaults.messages === th.id && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              backgroundColor: '#9333ea',
+                              color: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              fontWeight: 800
+                            }}
+                          >
+                            Default Mensajes
+                          </span>
+                        )}
                         {isGeneralDefault && (
                           <span
                             style={{
@@ -620,7 +695,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
                               fontWeight: 700
                             }}
                           >
-                            Default
+                            Default General
                           </span>
                         )}
                         {th.isBuiltIn && (
@@ -1124,6 +1199,77 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
                     <span>Eliminar</span>
                   </button>
                 )}
+
+                {/* Button to set as default for Bible or active category */}
+                {(activeFilter === 'bible' || editedTheme?.targetContentType === 'bible' || previewContentType === 'bible') ? (
+                  <button
+                    onClick={async () => {
+                      if (!editedTheme) return
+                      await handleSetTypeDefault('bible', editedTheme.id)
+                      const updatedTheme = { ...editedTheme, targetContentType: 'bible' as ThemeContentType }
+                      setEditedTheme(updatedTheme)
+                      const saved = await window.churchPresenterApi.saveTheme(updatedTheme)
+                      onThemeSaved?.(saved)
+                      setStatusMessage({ text: `'${editedTheme.name}' establecido como tema predeterminado para la Biblia.`, type: 'success' })
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      backgroundColor: typeDefaults.bible === editedTheme?.id ? '#15803d' : '#1e293b',
+                      border: `1px solid ${typeDefaults.bible === editedTheme?.id ? '#22c55e' : '#f97316'}`,
+                      color: typeDefaults.bible === editedTheme?.id ? '#ffffff' : '#f97316',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    title="Establecer este tema como el predeterminado para todas las lecturas bíblicas"
+                  >
+                    {typeDefaults.bible === editedTheme?.id ? (
+                      <>
+                        <Check size={13} />
+                        <span>Predeterminado de Biblia</span>
+                      </>
+                    ) : (
+                      <>
+                        <Star size={13} fill="#f97316" />
+                        <span>Usar como Predeterminado para Biblia</span>
+                      </>
+                    )}
+                  </button>
+                ) : activeFilter !== 'all' && editedTheme ? (
+                  <button
+                    onClick={() => handleSetTypeDefault(activeFilter as ThemeContentType, editedTheme.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      backgroundColor: (typeDefaults as any)[activeFilter] === editedTheme?.id ? '#15803d' : '#1e293b',
+                      border: `1px solid ${(typeDefaults as any)[activeFilter] === editedTheme?.id ? '#22c55e' : '#f97316'}`,
+                      color: (typeDefaults as any)[activeFilter] === editedTheme?.id ? '#ffffff' : '#f97316',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    title={`Establecer como tema predeterminado para ${activeFilter}`}
+                  >
+                    {(typeDefaults as any)[activeFilter] === editedTheme?.id ? (
+                      <>
+                        <Check size={13} />
+                        <span>Predeterminado de {activeFilter === 'songs' ? 'Canciones' : activeFilter === 'announcements' ? 'Anuncios' : 'Mensajes'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Star size={13} fill="#f97316" />
+                        <span>Usar para {activeFilter === 'songs' ? 'Canciones' : activeFilter === 'announcements' ? 'Anuncios' : 'Mensajes'}</span>
+                      </>
+                    )}
+                  </button>
+                ) : null}
 
                 {!editedTheme?.isDefault && (
                   <button
