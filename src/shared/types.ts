@@ -1723,6 +1723,9 @@ export interface BroadcastLayer {
   width: number
   height: number
   crop?: { top: number; right: number; bottom: number; left: number }
+  zoom?: number
+  panX?: number
+  panY?: number
   opacity: number
   zIndex: number
   borderRadius?: number
@@ -2002,6 +2005,7 @@ export interface CameraSignalMessage {
   }
   control?: {
     audioMuted?: boolean
+    zoom?: number
     requestKeyframe?: boolean
   }
   name?: string

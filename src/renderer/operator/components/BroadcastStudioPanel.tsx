@@ -33,7 +33,10 @@ import {
   X,
   RotateCcw,
   Film,
-  Search
+  Search,
+  ZoomIn,
+  ZoomOut,
+  Move
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import {
@@ -514,13 +517,15 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
   const previewContainerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
     isDragging: boolean
-    type: 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e'
+    type: 'move' | 'pan' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e'
     startX: number
     startY: number
     initialX: number
     initialY: number
     initialW: number
     initialH: number
+    initialPanX: number
+    initialPanY: number
     layerIndex: number
   } | null>(null)
 
@@ -628,15 +633,42 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           const w = parseFloat(el.getAttribute('data-w') || '100') * 0.01 * canvas.width
           const h = parseFloat(el.getAttribute('data-h') || '100') * 0.01 * canvas.height
           const opacity = parseFloat(el.getAttribute('data-opacity') || '1')
+          const zoom = Math.max(1.0, parseFloat(el.getAttribute('data-zoom') || '1'))
+          const panX = Math.max(-50, Math.min(50, parseFloat(el.getAttribute('data-pan-x') || '0'))) * 0.01
+          const panY = Math.max(-50, Math.min(50, parseFloat(el.getAttribute('data-pan-y') || '0'))) * 0.01
 
           ctx.save()
           ctx.globalAlpha = opacity
           if (video && video.readyState >= 2) {
-            ctx.drawImage(video, x, y, w, h)
+            if (zoom > 1.001) {
+              const vidW = video.videoWidth || 1280
+              const vidH = video.videoHeight || 720
+              const srcW = vidW / zoom
+              const srcH = vidH / zoom
+              const maxPanX = (vidW - srcW) / 2
+              const maxPanY = (vidH - srcH) / 2
+              const srcX = Math.max(0, Math.min(vidW - srcW, ((vidW - srcW) / 2) - panX * maxPanX))
+              const srcY = Math.max(0, Math.min(vidH - srcH, ((vidH - srcH) / 2) - panY * maxPanY))
+              ctx.drawImage(video, srcX, srcY, srcW, srcH, x, y, w, h)
+            } else {
+              ctx.drawImage(video, x, y, w, h)
+            }
           } else {
             const img = el.querySelector('img')
             if (img && img.complete) {
-              ctx.drawImage(img, x, y, w, h)
+              if (zoom > 1.001) {
+                const imgW = img.naturalWidth || 1280
+                const imgH = img.naturalHeight || 720
+                const srcW = imgW / zoom
+                const srcH = imgH / zoom
+                const maxPanX = (imgW - srcW) / 2
+                const maxPanY = (imgH - srcH) / 2
+                const srcX = Math.max(0, Math.min(imgW - srcW, ((imgW - srcW) / 2) - panX * maxPanX))
+                const srcY = Math.max(0, Math.min(imgH - srcH, ((imgH - srcH) / 2) - panY * maxPanY))
+                ctx.drawImage(img, srcX, srcY, srcW, srcH, x, y, w, h)
+              } else {
+                ctx.drawImage(img, x, y, w, h)
+              }
             }
           }
           ctx.restore()
@@ -1227,6 +1259,20 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     await window.churchPresenterApi.saveBroadcastScene(updated)
   }
 
+  const handleSendPhoneZoom = async (cameraId: string, targetZoom: number) => {
+    try {
+      if (window.churchPresenterApi?.sendCameraSignal) {
+        await window.churchPresenterApi.sendCameraSignal({
+          type: 'control',
+          cameraId,
+          control: { zoom: targetZoom }
+        })
+      }
+    } catch (e) {
+      console.warn('Error sending phone zoom command:', e)
+    }
+  }
+
   const handleDeleteLayer = async (index: number) => {
     if (!activePreviewScene || activePreviewScene.layers.length <= 1) return
     const layers = activePreviewScene.layers.filter((_, i) => i !== index)
@@ -1240,7 +1286,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
   const startLayerInteraction = useCallback(
     (
       e: React.MouseEvent,
-      type: 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e',
+      type: 'move' | 'pan' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e',
       layerIndex: number
     ) => {
       e.stopPropagation()
@@ -1254,23 +1300,56 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       if (!container) return
 
       const rect = container.getBoundingClientRect()
+      const isPanMode = type === 'pan' || ((e.altKey || e.shiftKey || e.button === 2) && (layer.zoom || 1) > 1.001)
+
       dragRef.current = {
         isDragging: true,
-        type,
+        type: isPanMode ? 'pan' : type,
         startX: e.clientX,
         startY: e.clientY,
         initialX: layer.x,
         initialY: layer.y,
         initialW: layer.width,
         initialH: layer.height,
+        initialPanX: layer.panX || 0,
+        initialPanY: layer.panY || 0,
         layerIndex
       }
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!dragRef.current || !dragRef.current.isDragging) return
-        const { type: actionType, startX, startY, initialX, initialY, initialW, initialH, layerIndex: idx } = dragRef.current
+        const {
+          type: actionType,
+          startX,
+          startY,
+          initialX,
+          initialY,
+          initialW,
+          initialH,
+          initialPanX,
+          initialPanY,
+          layerIndex: idx
+        } = dragRef.current
         const deltaX = ((moveEvent.clientX - startX) / rect.width) * 100
         const deltaY = ((moveEvent.clientY - startY) / rect.height) * 100
+
+        if (actionType === 'pan') {
+          const newPanX = Math.max(-50, Math.min(50, initialPanX + deltaX * 1.5))
+          const newPanY = Math.max(-50, Math.min(50, initialPanY + deltaY * 1.5))
+          setScenes((prev) =>
+            prev.map((s) => {
+              if (s.id !== activePreviewScene.id) return s
+              const currentLayers = [...s.layers]
+              currentLayers[idx] = {
+                ...currentLayers[idx],
+                panX: Math.round(newPanX),
+                panY: Math.round(newPanY)
+              }
+              return { ...s, layers: currentLayers }
+            })
+          )
+          return
+        }
 
         let newX = initialX
         let newY = initialY
@@ -1521,6 +1600,13 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       phoneCameras[0]?.id ||
       Object.keys(cameraStreams)[0]
     const stream = layer.type === 'phone_camera' ? cameraStreams[camId || ''] : null
+    const zoom = layer.zoom || 1.0
+    const panX = layer.panX || 0
+    const panY = layer.panY || 0
+    const transformStyle =
+      zoom > 1.001 || panX !== 0 || panY !== 0
+        ? `scale(${zoom}) translate(${panX / zoom}%, ${panY / zoom}%)`
+        : 'none'
 
     if (layer.type === 'phone_camera' && stream) {
       return (
@@ -1531,7 +1617,14 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           autoPlay
           playsInline
           muted
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: transformStyle,
+            transformOrigin: 'center center',
+            transition: 'transform 0.08s ease-out'
+          }}
         />
       )
     } else if (layer.type === 'phone_camera') {
@@ -1578,7 +1671,14 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               loop
               muted
               playsInline
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: transformStyle,
+                transformOrigin: 'center center',
+                transition: 'transform 0.08s ease-out'
+              }}
             />
           )
         }
@@ -1586,7 +1686,14 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           <img
             src={layer.mediaUrl}
             alt={layer.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: transformStyle,
+              transformOrigin: 'center center',
+              transition: 'transform 0.08s ease-out'
+            }}
           />
         )
       }
@@ -2963,6 +3070,16 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                   <div
                     key={layer.id}
                     onMouseDown={(e) => startLayerInteraction(e, 'move', idx)}
+                    onWheel={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const delta = e.deltaY < 0 ? 0.1 : -0.1
+                      const curZoom = layer.zoom || 1.0
+                      const nextZoom = Math.min(4.0, Math.max(1.0, Math.round((curZoom + delta) * 10) / 10))
+                      if (nextZoom !== curZoom) {
+                        handleUpdateLayer(idx, { zoom: nextZoom })
+                      }
+                    }}
                     style={{
                       position: 'absolute',
                       left: `${layer.x}%`,
@@ -2977,7 +3094,11 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                       userSelect: 'none',
                       boxSizing: 'border-box'
                     }}
-                    title={isSelected ? 'Arrastra para mover o usa las esquinas para redimensionar' : `Clic para seleccionar capa "${layer.name}"`}
+                    title={
+                      isSelected
+                        ? 'Arrastra para mover | Rueda del ratón para Zoom | Alt+Arrastrar para encuadre (Pan)'
+                        : `Clic para seleccionar capa "${layer.name}"`
+                    }
                   >
                     {/* Inner Content (clipped) */}
                     <div
@@ -3013,10 +3134,79 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                             whiteSpace: 'nowrap',
                             pointerEvents: 'none',
                             zIndex: 40,
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
                           }}
                         >
-                          {layer.name} ({layer.x}%, {layer.y}%) • {layer.width}x{layer.height}%
+                          <span>{layer.name} ({layer.x}%, {layer.y}%) • {layer.width}x{layer.height}%</span>
+                          {(layer.zoom || 1.0) > 1.001 && (
+                            <span style={{ color: '#fed7aa', fontWeight: 800 }}>
+                              🔍 {(layer.zoom || 1.0).toFixed(1)}x
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Quick Zoom & Reset Controls Pill */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: -22,
+                            right: 0,
+                            backgroundColor: '#0F172A',
+                            border: '1px solid #38BDF8',
+                            color: '#38BDF8',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            zIndex: 42,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.6)',
+                            pointerEvents: 'auto'
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const nz = Math.max(1.0, Math.round(((layer.zoom || 1.0) - 0.2) * 10) / 10)
+                              handleUpdateLayer(idx, { zoom: nz })
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontWeight: 900, padding: '0 2px', fontSize: 11 }}
+                            title="Reducir zoom digital"
+                          >
+                            -
+                          </button>
+                          <span>{(layer.zoom || 1.0).toFixed(1)}x</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const nz = Math.min(4.0, Math.round(((layer.zoom || 1.0) + 0.2) * 10) / 10)
+                              handleUpdateLayer(idx, { zoom: nz })
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontWeight: 900, padding: '0 2px', fontSize: 11 }}
+                            title="Aumentar zoom digital"
+                          >
+                            +
+                          </button>
+                          {(layer.zoom || 1.0) > 1.001 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateLayer(idx, { zoom: 1.0, panX: 0, panY: 0 })
+                              }}
+                              style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontWeight: 700, padding: '0 2px', marginLeft: 2 }}
+                              title="Restablecer zoom a 1.0x"
+                            >
+                              Reset
+                            </button>
+                          )}
                         </div>
 
                         {/* 4 Corners */}
@@ -3246,6 +3436,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                     data-w={layer.width}
                     data-h={layer.height}
                     data-opacity={layer.opacity}
+                    data-zoom={layer.zoom || 1}
+                    data-pan-x={layer.panX || 0}
+                    data-pan-y={layer.panY || 0}
                     style={{
                       position: 'absolute',
                       left: `${layer.x}%`,
@@ -3613,6 +3806,35 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
 
                       {/* Controls */}
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {/* Remote Zoom PTZ */}
+                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#1e2430', border: '1px solid #2d3748', borderRadius: 4, padding: '2px 4px', gap: 3 }}>
+                          <span style={{ fontSize: 9, color: '#94a3b8', padding: '0 2px' }}>Lente:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleSendPhoneZoom(cam.id, 1.0)}
+                            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontSize: 10, fontWeight: 700, padding: '2px 3px' }}
+                            title="Zoom 1.0x en móvil"
+                          >
+                            1x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSendPhoneZoom(cam.id, 2.0)}
+                            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontSize: 10, fontWeight: 700, padding: '2px 3px' }}
+                            title="Zoom 2.0x en móvil"
+                          >
+                            2x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSendPhoneZoom(cam.id, 3.0)}
+                            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontSize: 10, fontWeight: 700, padding: '2px 3px' }}
+                            title="Zoom 3.0x en móvil"
+                          >
+                            3x
+                          </button>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => cameraReceiverService.toggleAudio(cam.id, !cam.audioMuted)}
@@ -5098,6 +5320,189 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                           onChange={(e) => handleUpdateLayer(selectedLayerIndex, { opacity: Number(e.target.value) })}
                           style={{ width: '100%', accentColor: '#38BDF8' }}
                         />
+                      </div>
+
+                      {/* Zoom Digital & Encuadre (PTZ) en Previo */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          backgroundColor: '#13161c',
+                          padding: '8px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #1e2430'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <ZoomIn size={13} /> Zoom Digital & Encuadre:
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#FF7A00' }}>
+                            {(layer.zoom || 1.0).toFixed(1)}x
+                          </span>
+                        </div>
+
+                        {/* Zoom Slider */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ZoomOut size={12} color="#9CA3AF" />
+                          <input
+                            type="range"
+                            min="1.0"
+                            max="4.0"
+                            step="0.1"
+                            value={layer.zoom || 1.0}
+                            onChange={(e) => handleUpdateLayer(selectedLayerIndex, { zoom: Number(e.target.value) })}
+                            style={{ flex: 1, accentColor: '#FF7A00' }}
+                          />
+                          <ZoomIn size={12} color="#9CA3AF" />
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLayer(selectedLayerIndex, { zoom: 1.0, panX: 0, panY: 0 })}
+                            style={{
+                              backgroundColor: (layer.zoom || 1.0) === 1.0 ? '#FF7A00' : '#1e222b',
+                              color: (layer.zoom || 1.0) === 1.0 ? '#FFFFFF' : '#D1D5DB',
+                              border: '1px solid #374151',
+                              borderRadius: 4,
+                              padding: '3px 2px',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                            title="Restablecer zoom a normal (1.0x)"
+                          >
+                            1.0x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLayer(selectedLayerIndex, { zoom: 1.5 })}
+                            style={{
+                              backgroundColor: (layer.zoom || 1.0) === 1.5 ? '#FF7A00' : '#1e222b',
+                              color: (layer.zoom || 1.0) === 1.5 ? '#FFFFFF' : '#D1D5DB',
+                              border: '1px solid #374151',
+                              borderRadius: 4,
+                              padding: '3px 2px',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            1.5x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLayer(selectedLayerIndex, { zoom: 2.0 })}
+                            style={{
+                              backgroundColor: (layer.zoom || 1.0) === 2.0 ? '#FF7A00' : '#1e222b',
+                              color: (layer.zoom || 1.0) === 2.0 ? '#FFFFFF' : '#D1D5DB',
+                              border: '1px solid #374151',
+                              borderRadius: 4,
+                              padding: '3px 2px',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            2.0x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLayer(selectedLayerIndex, { zoom: 3.0 })}
+                            style={{
+                              backgroundColor: (layer.zoom || 1.0) === 3.0 ? '#FF7A00' : '#1e222b',
+                              color: (layer.zoom || 1.0) === 3.0 ? '#FFFFFF' : '#D1D5DB',
+                              border: '1px solid #374151',
+                              borderRadius: 4,
+                              padding: '3px 2px',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            3.0x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLayer(selectedLayerIndex, { zoom: 1.0, panX: 0, panY: 0 })}
+                            style={{
+                              backgroundColor: '#1e222b',
+                              color: '#9CA3AF',
+                              border: '1px solid #374151',
+                              borderRadius: 4,
+                              padding: '3px 2px',
+                              fontSize: 9,
+                              cursor: 'pointer'
+                            }}
+                            title="Restablecer encuadre y zoom"
+                          >
+                            Reset
+                          </button>
+                        </div>
+
+                        {/* Pan controls when zoom > 1 */}
+                        {(layer.zoom || 1.0) > 1.001 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 2 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9CA3AF' }}>
+                                <span>Encuadre H:</span>
+                                <span>{layer.panX || 0}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={layer.panX || 0}
+                                onChange={(e) => handleUpdateLayer(selectedLayerIndex, { panX: Number(e.target.value) })}
+                                style={{ width: '100%', accentColor: '#38BDF8' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9CA3AF' }}>
+                                <span>Encuadre V:</span>
+                                <span>{layer.panY || 0}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={layer.panY || 0}
+                                onChange={(e) => handleUpdateLayer(selectedLayerIndex, { panY: Number(e.target.value) })}
+                                style={{ width: '100%', accentColor: '#38BDF8' }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Remote hardware zoom button for phone camera */}
+                        {layer.type === 'phone_camera' && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px dashed #222834', marginTop: 4 }}>
+                            <span style={{ fontSize: 10, color: '#94a3b8' }}>Zoom Lente Teléfono (Remoto):</span>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button
+                                type="button"
+                                onClick={() => handleSendPhoneZoom(layer.phoneCameraId || 'cam1', Math.max(1, (layer.zoom || 1) - 0.5))}
+                                style={{ backgroundColor: '#1e222b', border: '1px solid #374151', borderRadius: 3, padding: '2px 8px', color: '#FFF', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+                                title="Zoom - en lente de cámara física del móvil"
+                              >
+                                -
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSendPhoneZoom(layer.phoneCameraId || 'cam1', Math.min(5, (layer.zoom || 1) + 0.5))}
+                                style={{ backgroundColor: '#1e222b', border: '1px solid #374151', borderRadius: 3, padding: '2px 8px', color: '#FFF', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+                                title="Zoom + en lente de cámara física del móvil"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </>
                   )
