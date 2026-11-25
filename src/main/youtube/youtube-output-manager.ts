@@ -728,6 +728,7 @@ export class YouTubeOutputManager {
               duration: this.duration,
               isPlaying: this.isPlaying,
               isBrowserSource: false,
+              isLive: this.isLive,
               timestamp: Date.now()
             })
           }

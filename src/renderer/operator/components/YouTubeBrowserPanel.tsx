@@ -148,8 +148,10 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   useEffect(() => {
     // Check initial projection status
     window.churchPresenterApi?.controlYouTube?.('status').then((status) => {
-      if (status?.isLive) {
+      if (status?.isLive && Boolean(status?.activeVideoId)) {
         setIsProjecting(true)
+      } else {
+        setIsProjecting(false)
       }
     }).catch(() => {})
 
@@ -165,9 +167,9 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
 
     // Listen to YouTube Sync Tick from output windows to detect live projection state
     const unsubSync = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
-      if (tick && Boolean(tick.videoId)) {
+      if (tick && Boolean(tick.videoId) && tick.isLive) {
         setIsProjecting(true)
-      } else {
+      } else if (!tick || !tick.videoId || tick.isLive === false) {
         setIsProjecting(false)
       }
     })
@@ -492,10 +494,10 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
               className="pro-yt-action-btn pro-yt-project-btn"
               onClick={handleProjectCurrentVideo}
               disabled={isLoadingMeta}
-              title="Proyectar este video inmediatamente en las salidas (Ctrl+Y)"
+              title="Proyectar ahora en la pantalla de audiencia (Ctrl+Y)"
             >
               <Tv size={15} />
-              <span>Proyectar este video</span>
+              <span>Proyectar ahora</span>
               <kbd className="pro-kbd-badge">Ctrl+Y</kbd>
             </button>
           )}

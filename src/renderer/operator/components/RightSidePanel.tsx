@@ -356,7 +356,7 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const activeMediaType = roleContent?.mediaType || liveSlide?.mediaType
 
   const isYouTube =
-    Boolean(mirrorSync?.videoId) ||
+    (Boolean(mirrorSync?.isLive) && Boolean(mirrorSync?.videoId)) ||
     activeMediaType === 'youtube' ||
     Boolean((roleContent as any)?.youtubeId) ||
     Boolean((liveSlide as any)?.youtubeId)

@@ -197,6 +197,7 @@ export class YouTubeBrowserManager {
               duration: data.duration,
               isPlaying: !data.paused && !data.ended,
               isBrowserSource: true,
+              isLive: false,
               timestamp: Date.now()
             })
           }

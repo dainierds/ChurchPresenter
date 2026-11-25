@@ -465,6 +465,7 @@ export interface YouTubeSyncTick {
   duration: number
   isPlaying: boolean
   isBrowserSource: boolean
+  isLive?: boolean
   timestamp: number
 }
 

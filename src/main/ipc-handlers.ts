@@ -140,6 +140,8 @@ export function registerIpcHandlers(): void {
           currentTime: 0,
           duration: 0,
           isAd: false,
+          isLive: false,
+          isBrowserSource: false,
           timestamp: Date.now()
         })
       }
@@ -866,7 +868,7 @@ export function registerIpcHandlers(): void {
   })
 
   youtubeOutputManager.setSyncCallback((tick) => {
-    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, { ...tick, isLive: true })
   })
 
   youtubeOutputManager.setErrorCallback((err) => {
@@ -875,7 +877,8 @@ export function registerIpcHandlers(): void {
 
   youTubeBrowserManager.setSyncCallback((tick) => {
     youtubeOutputManager.syncToTick(tick)
-    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, tick)
+    const isLive = Boolean(youtubeOutputManager.getPlaybackState().isLive)
+    windowManager.broadcastToAll(IPC_CHANNELS.YOUTUBE_SYNC_TICK, { ...tick, isLive })
   })
 
   ipcMain.handle(IPC_CHANNELS.YOUTUBE_GET_ITEMS, () => {
