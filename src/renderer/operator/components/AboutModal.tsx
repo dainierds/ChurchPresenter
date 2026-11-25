@@ -149,7 +149,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 padding: '2px 10px'
               }}
             >
-              Versión 1.4.2
+              Versión 1.4.3
             </span>
             <span
               style={{

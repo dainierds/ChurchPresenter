@@ -1,6 +1,6 @@
 {
   "name": "church-presenter",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Church presentation software for Windows",
   "main": "./out/main/index.js",
   "author": "ChurchPresenter Team",
