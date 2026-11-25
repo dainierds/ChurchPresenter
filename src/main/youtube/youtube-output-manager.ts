@@ -69,7 +69,10 @@ export class YouTubeOutputManager {
 
     for (const rawRole of targetRoles) {
       const role = rawRole === 'audience' ? 'main' : rawRole
-      const win = outputWindows.get(role)
+      let win = outputWindows.get(role) || outputWindows.get(rawRole)
+      if (!win && (role === 'main' || targetRoles.length === 1) && outputWindows.size > 0) {
+        win = Array.from(outputWindows.values())[0]
+      }
       if (!win || win.isDestroyed()) continue
 
       const bounds = win.getContentBounds()
@@ -95,7 +98,12 @@ export class YouTubeOutputManager {
         #masthead-container, #related, #comments, #secondary, #below, ytd-miniplayer,
         #guide, ytd-guide-renderer, ytd-banner-promo-renderer-background,
         .ytp-chrome-top, .ytp-chrome-bottom, ytd-merch-shelf-renderer,
-        #chat, ytd-live-chat-frame, ytd-masthead, #ticker {
+        #chat, ytd-live-chat-frame, ytd-masthead, #ticker,
+        tp-yt-paper-dialog, ytd-popup-container, .ytp-pause-overlay,
+        .ytp-ce-element, .ytp-cards-teaser, .ytp-endscreen-element,
+        .ytp-bezel-text-wrapper, .ytp-gradient-top, .ytp-gradient-bottom,
+        .ytp-chrome-controls, .ytp-contextmenu, yt-confirm-dialog-renderer,
+        #consent-bump, ytd-consent-bump-v2-lightbox, .ytp-spinner {
           display: none !important;
         }
         html, body {
@@ -123,6 +131,7 @@ export class YouTubeOutputManager {
       view.webContents.on('dom-ready', async () => {
         try {
           await view.webContents.insertCSS(YOUTUBE_OUTPUT_CSS)
+          await view.webContents.executeJavaScript(YouTubeService.getAdSkipperScript()).catch(() => {})
           await view.webContents.executeJavaScript(`
             (function() {
               try {
@@ -145,15 +154,21 @@ export class YouTubeOutputManager {
 
         this.checkViewForErrors(view, role, config.youtubeId)
 
-        if (this.isLive && this.isPlaying && !this.hasPlaybackError) {
-          this.executePlay(view, shouldPlayAudio)
+        if (this.isLive && !this.hasPlaybackError) {
+          view.setVisible(true)
+          if (this.isPlaying) {
+            this.executePlay(view, shouldPlayAudio)
+          }
         }
       })
 
       view.webContents.on('did-finish-load', () => {
         this.checkViewForErrors(view, role, config.youtubeId)
-        if (this.isLive && this.isPlaying && !this.hasPlaybackError) {
-          this.executePlay(view, shouldPlayAudio)
+        if (this.isLive && !this.hasPlaybackError) {
+          view.setVisible(true)
+          if (this.isPlaying) {
+            this.executePlay(view, shouldPlayAudio)
+          }
         }
       })
 
@@ -175,31 +190,39 @@ export class YouTubeOutputManager {
       view.webContents.on('did-navigate-in-page', (_e, url) => {
         console.log(`[YT NAV IN PAGE] Role ${role} navigated in page to:`, url)
         this.checkViewForErrors(view, role, config.youtubeId)
-        if (this.isLive && this.isPlaying && !this.hasPlaybackError) {
-          this.executePlay(view, shouldPlayAudio)
+        if (this.isLive && !this.hasPlaybackError) {
+          view.setVisible(true)
+          if (this.isPlaying) {
+            this.executePlay(view, shouldPlayAudio)
+          }
         }
       })
 
       view.webContents.on('did-navigate', (_e, url) => {
         console.log(`[YT NAV] Role ${role} navigated to:`, url)
         this.checkViewForErrors(view, role, config.youtubeId)
-        if (this.isLive && this.isPlaying && !this.hasPlaybackError) {
-          this.executePlay(view, shouldPlayAudio)
+        if (this.isLive && !this.hasPlaybackError) {
+          view.setVisible(true)
+          if (this.isPlaying) {
+            this.executePlay(view, shouldPlayAudio)
+          }
         }
       })
 
-      // Construct authentic local embed server URL (Option A)
+      // Construct native YouTube watch page URL (Option B) to bypass third-party iframe embed blocks (Error 150/101)
       const inPointSec = config.inPoint ? Math.floor(config.inPoint) : 0
-      const embedUrl = await youtubeService.getEmbedUrl(config.youtubeId, !shouldPlayAudio, inPointSec)
+      const targetUrl = config.url && config.url.includes('youtube.com/watch')
+        ? (inPointSec > 0 ? `${config.url}${config.url.includes('?') ? '&' : '?'}t=${inPointSec}` : config.url)
+        : `https://www.youtube.com/watch?v=${config.youtubeId}${inPointSec > 0 ? `&t=${inPointSec}` : ''}`
 
       win.contentView.addChildView(view)
       view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
       // Keep hidden during prepare: audience never sees prepare / load state
       view.setVisible(false)
 
-      view.webContents.loadURL(embedUrl).catch((err) => {
+      view.webContents.loadURL(targetUrl).catch((err) => {
         if (!err.message?.includes('ERR_ABORTED')) {
-          logger.warn(`YouTube embed navigation error for ${config.youtubeId}:`, err)
+          logger.warn(`YouTube watch navigation error for ${config.youtubeId}:`, err)
         }
       })
 
@@ -214,7 +237,7 @@ export class YouTubeOutputManager {
 
       this.outputViews.set(role, view)
       this.parentWindows.set(role, win)
-      logger.info(`YouTube (Option A: Local Embed Server) prepared on output '${role}' with audio=${shouldPlayAudio}.`)
+      logger.info(`YouTube (Option B: Watch Page) prepared on output '${role}' with audio=${shouldPlayAudio}.`)
     }
   }
 
@@ -234,14 +257,17 @@ export class YouTubeOutputManager {
               reason: 'YouTube Error ' + window.__lastError
             };
           }
-          const errEl = document.querySelector('#player-error-message-container, .yt-playability-error-supported-renderers, ytd-player-error-message-renderer');
+          const errEl = document.querySelector('.yt-playability-error-supported-renderers, ytd-player-error-message-renderer, #player-error-message-container');
           const reason = document.querySelector('#reason, .reason, .subreason');
-          if (errEl && (errEl.offsetParent !== null || errEl.innerText.length > 5)) {
-            return {
-              hasError: true,
-              errorCode: '152-4',
-              reason: (reason ? reason.innerText : errEl.innerText).trim().replace(/\\s+/g, ' ')
-            };
+          if (errEl && (errEl as HTMLElement).offsetParent !== null && ((errEl as HTMLElement).offsetWidth > 0 || (errEl as HTMLElement).offsetHeight > 0)) {
+            const txt = (reason ? (reason as HTMLElement).innerText : (errEl as HTMLElement).innerText).trim().replace(/\\s+/g, ' ');
+            if (txt.length > 5) {
+              return {
+                hasError: true,
+                errorCode: '152-4',
+                reason: txt
+              };
+            }
           }
           return { hasError: false };
         })()
@@ -304,6 +330,10 @@ export class YouTubeOutputManager {
             try { player.playVideo(); } catch (_) {}
           }
         }
+        const playBtn = document.querySelector('.ytp-large-play-button');
+        if (playBtn && typeof (playBtn as any).click === 'function') {
+          try { (playBtn as any).click(); } catch (_) {}
+        }
         const video = document.querySelector('#movie_player video.html5-main-video') || document.querySelector('video');
         if (video) {
           video.muted = ${!shouldPlayAudio};
@@ -330,6 +360,12 @@ export class YouTubeOutputManager {
 
     for (const [role, view] of this.outputViews.entries()) {
       if (view.webContents.isDestroyed()) continue
+
+      const win = this.parentWindows.get(role)
+      if (win && !win.isDestroyed()) {
+        const bounds = win.getContentBounds()
+        view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
+      }
 
       // Only show if there is no error detected; if error, maintain black / safe background
       if (!this.hasPlaybackError) {
@@ -587,9 +623,12 @@ export class YouTubeOutputManager {
                           document.querySelector('video');
 
             const isAd = Boolean(document.querySelector('.ad-showing, .ytp-ad-player-overlay'));
-            const errEl = document.querySelector('#player-error-message-container, .yt-playability-error-supported-renderers, ytd-player-error-message-renderer');
-            if (errEl && (errEl.offsetParent !== null || errEl.innerText.length > 5)) {
-              return { exists: false, isError: true, errorReason: errEl.innerText.trim() };
+            const errEl = document.querySelector('.yt-playability-error-supported-renderers, ytd-player-error-message-renderer, #player-error-message-container');
+            if (errEl && (errEl as HTMLElement).offsetParent !== null && ((errEl as HTMLElement).offsetWidth > 0 || (errEl as HTMLElement).offsetHeight > 0)) {
+              const txt = (errEl as HTMLElement).innerText ? (errEl as HTMLElement).innerText.trim() : '';
+              if (txt.length > 5) {
+                return { exists: false, isError: true, errorReason: txt };
+              }
             }
             if (!video && !player) return { exists: false, isAd, isError: false };
 
@@ -689,6 +728,9 @@ export class YouTubeOutputManager {
         }
 
         if (stats && stats.exists) {
+          if (this.isLive && !this.hasPlaybackError && !masterView.webContents.isDestroyed()) {
+            masterView.setVisible(true)
+          }
           this.lastDiag = stats.diag
           this.currentTime = stats.currentTime
           if (stats.duration && !isNaN(stats.duration)) {

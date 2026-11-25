@@ -966,6 +966,7 @@ export function registerIpcHandlers(): void {
           // Status query only; does not modify playback
           break
         case 'prepare':
+          windowManager.syncOutputWindows()
           await youtubeOutputManager.prepareVideo(
             payload as YouTubeItemConfig,
             windowManager.getOutputWindows()
