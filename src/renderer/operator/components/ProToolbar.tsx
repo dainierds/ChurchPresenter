@@ -13,7 +13,8 @@ import {
   Smartphone,
   Activity,
   RotateCcw,
-  Radio
+  Radio,
+  Camera
 } from 'lucide-react'
 import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics, LoopStatus, BroadcastStatus } from '../../../shared/types'
 import { matchDisplayByStableId } from '../../../shared/display-utils'
@@ -24,7 +25,8 @@ interface ProToolbarProps {
   activeMode: 'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast'
   onModeChange: (mode: 'show' | 'edit' | 'bible' | 'youtube' | 'more' | 'broadcast') => void
   onAddTextSlide: () => void
-  onOpenThemeModal: () => void
+  onOpenThemeModal?: () => void
+  onOpenCamerasModal?: () => void
   onOpenMessageModal?: () => void
   onOpenChecklistModal?: () => void
   onOpenOutputHealthModal?: () => void
@@ -69,6 +71,7 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   onModeChange,
   onAddTextSlide,
   onOpenThemeModal,
+  onOpenCamerasModal,
   onOpenMessageModal,
   onOpenChecklistModal,
   onOpenOutputHealthModal,
@@ -110,15 +113,15 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
     <div className="pro-toolbar">
       {/* Left: Tools & Modes Group */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {/* Quick Creation Buttons: Texto, Tema, Pantallas */}
+        {/* Quick Creation Buttons: Texto, Cámaras, Pantallas */}
         <div className="pro-toolbar-tools">
           <button className="pro-tool-btn" onClick={onAddTextSlide} title="Agregar diapositiva de texto">
             <Type size={13} />
             <span>Texto</span>
           </button>
-          <button className="pro-tool-btn" onClick={onOpenThemeModal} title="Configuración de Tema y Estilos">
-            <Palette size={13} />
-            <span>Tema</span>
+          <button className="pro-tool-btn" onClick={onOpenCamerasModal} title="Configurar Cámaras Móviles (OctoStream / RTMP)">
+            <Camera size={13} />
+            <span>Cámaras</span>
           </button>
           <button className="pro-tool-btn" onClick={onOpenDisplaysModal} title="Configurar asignación de pantallas físicas y roles de salida">
             <Monitor size={13} />

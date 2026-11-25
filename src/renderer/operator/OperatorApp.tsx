@@ -37,7 +37,8 @@ import {
   StageLayoutConfig,
   ChurchBrandingConfig,
   DEFAULT_CHURCH_BRANDING,
-  TypeDefaultThemesMap
+  TypeDefaultThemesMap,
+  ThemeContentType
 } from '../../shared/types'
 import { toMediaUrl } from '../../shared/media-url'
 import { TopMenuBar } from './components/TopMenuBar'
@@ -119,7 +120,8 @@ import {
   Cpu,
   Image as ImageIcon,
   Tv,
-  Play
+  Play,
+  Palette
 } from 'lucide-react'
 import './operator.css'
 
@@ -505,6 +507,12 @@ export const OperatorApp: React.FC = () => {
       label: 'Pantallas',
       subtitle: 'Monitores, Diseño de Pantalla de Escenario',
       icon: Monitor
+    },
+    {
+      id: 'themes',
+      label: 'Temas y Estilos',
+      subtitle: 'Fuentes, Colores, Plantillas y Tipografía',
+      icon: Palette
     },
     {
       id: 'audio',
@@ -1585,6 +1593,22 @@ export const OperatorApp: React.FC = () => {
       }
     },
     [liveSlideId, activeToolbarMode, bibleDirectSlides, handleGoLive]
+  )
+
+  const handleSetContentTypeTheme = useCallback(
+    async (contentType: ThemeContentType, themeId: string) => {
+      try {
+        await window.churchPresenterApi.setTypeDefaultTheme(contentType, themeId)
+        const updatedDefs = await window.churchPresenterApi.getTypeDefaultThemes()
+        if (updatedDefs) {
+          setTypeDefaults(updatedDefs)
+          if (contentType === 'bible') setCurrentBibleThemeId(themeId)
+        }
+      } catch (err) {
+        console.error(`Error setting default theme for ${contentType}:`, err)
+      }
+    },
+    []
   )
 
   // Send current preview slide to live
@@ -3353,6 +3377,10 @@ export const OperatorApp: React.FC = () => {
         }}
         onAddTextSlide={handleAddBlankItem}
         onOpenThemeModal={() => setIsThemesModalOpen(true)}
+        onOpenCamerasModal={() => {
+          setSettingsCategory('cameras')
+          setIsSettingsOpen(true)
+        }}
         onOpenMessageModal={() => setIsMessageModalOpen(true)}
         onOpenChecklistModal={() => setIsChecklistModalOpen(true)}
         onOpenOutputHealthModal={() => setIsOutputHealthModalOpen(true)}
@@ -3900,7 +3928,10 @@ export const OperatorApp: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsThemesModalOpen(true)}
+                    onClick={() => {
+                      setSettingsCategory('themes')
+                      setIsSettingsOpen(true)
+                    }}
                     style={{
                       background: '#1A1A1A',
                       border: '1px solid #2E2E2E',
@@ -6556,6 +6587,207 @@ export const OperatorApp: React.FC = () => {
                       </div>
                     </div>
                   </>
+                )}
+
+                {/* =========================================================
+                    TEMAS Y ESTILOS
+                    ========================================================= */}
+                {settingsCategory === 'themes' && (
+                  <div className="settings-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div>
+                        <h3>Temas y Estilos de Proyección</h3>
+                        <p className="section-note" style={{ margin: 0 }}>
+                          Personalice fuentes, colores de texto, sombras, fondos y márgenes de proyección para alabanzas, lecturas bíblicas y anuncios.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-action-btn"
+                        onClick={() => setIsThemesModalOpen(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 14px' }}
+                      >
+                        <Palette size={14} />
+                        <span>Abrir Gestor Avanzado de Temas...</span>
+                      </button>
+                    </div>
+
+                    {/* Pre-configuración de temas por tipo de contenido */}
+                    <div style={{ marginTop: 14 }}>
+                      <h4 style={{ fontSize: 13, color: '#f97316', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Sliders size={14} />
+                        <span>Temas Predeterminados por Tipo de Contenido</span>
+                      </h4>
+                      <p className="section-note" style={{ marginBottom: 12 }}>
+                        Asigne qué tema gráfico se aplicará automáticamente cuando cree o proyecte cada tipo de elemento.
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+                        {/* 1. Alabanzas */}
+                        <div style={{ background: '#18181b', padding: 12, borderRadius: 6, border: '1px solid #27272a' }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#e4e4e7' }}>
+                            🎵 Canciones y Alabanzas:
+                          </label>
+                          <select
+                            value={typeDefaults.songs || ''}
+                            onChange={(e) => handleSetContentTypeTheme('songs', e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 4, fontSize: 12 }}
+                          >
+                            <option value="">(Predeterminado del Sistema)</option>
+                            {themes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name} {t.isBuiltIn ? '(Fábrica)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 2. Biblias */}
+                        <div style={{ background: '#18181b', padding: 12, borderRadius: 6, border: '1px solid #27272a' }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#e4e4e7' }}>
+                            📖 Pasajes Bíblicos:
+                          </label>
+                          <select
+                            value={typeDefaults.bible || currentBibleThemeId || ''}
+                            onChange={(e) => handleSetContentTypeTheme('bible', e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 4, fontSize: 12 }}
+                          >
+                            <option value="">(Predeterminado del Sistema)</option>
+                            {themes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name} {t.isBuiltIn ? '(Fábrica)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 3. Anuncios */}
+                        <div style={{ background: '#18181b', padding: 12, borderRadius: 6, border: '1px solid #27272a' }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#e4e4e7' }}>
+                            📢 Anuncios y Avisos:
+                          </label>
+                          <select
+                            value={typeDefaults.announcements || ''}
+                            onChange={(e) => handleSetContentTypeTheme('announcements', e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 4, fontSize: 12 }}
+                          >
+                            <option value="">(Predeterminado del Sistema)</option>
+                            {themes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name} {t.isBuiltIn ? '(Fábrica)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 4. Mensajes */}
+                        <div style={{ background: '#18181b', padding: 12, borderRadius: 6, border: '1px solid #27272a' }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#e4e4e7' }}>
+                            💬 Mensajes y Alertas en Pantalla:
+                          </label>
+                          <select
+                            value={typeDefaults.messages || ''}
+                            onChange={(e) => handleSetContentTypeTheme('messages', e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 4, fontSize: 12 }}
+                          >
+                            <option value="">(Predeterminado del Sistema)</option>
+                            {themes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name} {t.isBuiltIn ? '(Fábrica)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 5. Temporizador */}
+                        <div style={{ background: '#18181b', padding: 12, borderRadius: 6, border: '1px solid #27272a' }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#e4e4e7' }}>
+                            ⏱ Temporizador y Cuenta Regresiva:
+                          </label>
+                          <select
+                            value={typeDefaults.timer || ''}
+                            onChange={(e) => handleSetContentTypeTheme('timer', e.target.value)}
+                            style={{ width: '100%', padding: '6px 8px', background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 4, fontSize: 12 }}
+                          >
+                            <option value="">(Predeterminado del Sistema)</option>
+                            {themes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name} {t.isBuiltIn ? '(Fábrica)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Galería rápida de temas registrados */}
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <h4 style={{ fontSize: 13, color: '#e4e4e7', margin: 0 }}>
+                          Catálogo de Temas Disponibles ({themes.length})
+                        </h4>
+                        <button
+                          type="button"
+                          className="secondary-action-btn"
+                          onClick={() => setIsThemesModalOpen(true)}
+                          style={{ fontSize: 11, padding: '4px 10px' }}
+                        >
+                          + Crear o Editar Temas
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, maxHeight: 240, overflowY: 'auto', paddingRight: 4 }}>
+                        {themes.map((theme) => {
+                          const bgVal = theme.background?.type === 'color' ? theme.background.value : '#1f2937'
+                          return (
+                            <div
+                              key={theme.id}
+                              onClick={() => setIsThemesModalOpen(true)}
+                              style={{
+                                background: '#18181b',
+                                border: '1px solid #27272a',
+                                borderRadius: 6,
+                                padding: 10,
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s ease',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#f97316')}
+                              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#27272a')}
+                            >
+                              <div
+                                style={{
+                                  height: 52,
+                                  borderRadius: 4,
+                                  backgroundColor: bgVal || '#000',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: theme.color || '#ffffff',
+                                  fontFamily: theme.fontFamily || 'sans-serif',
+                                  fontWeight: theme.fontWeight === 'bold' ? 700 : 400,
+                                  fontSize: 12,
+                                  textAlign: 'center',
+                                  padding: 4,
+                                  border: '1px solid rgba(255,255,255,0.1)'
+                                }}
+                              >
+                                {theme.name}
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+                                <span style={{ color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                  {theme.fontFamily?.split(',')[0]}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    padding: '1px 5px',
+                                    borderRadius: 3,
+                                    backgroundColor: theme.isBuiltIn ? '#27272a' : '#1e3a5f',
+                                    color: theme.isBuiltIn ? '#a1a1aa' : '#60a5fa'
+                                  }}
+                                >
+                                  {theme.isBuiltIn ? 'Fábrica' : 'Personal'}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* =========================================================
