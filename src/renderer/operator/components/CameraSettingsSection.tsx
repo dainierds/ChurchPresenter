@@ -19,6 +19,7 @@ export const CameraSettingsSection: React.FC = () => {
   const [selectedQrSlot, setSelectedQrSlot] = useState<OctoStreamSlot | null>(null)
   const [loadingSlotId, setLoadingSlotId] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [ffmpegStatus, setFfmpegStatus] = useState<{ available: boolean; path?: string | null; version?: string | null } | null>(null)
 
   const loadSlots = useCallback(async () => {
     try {
@@ -29,6 +30,10 @@ export const CameraSettingsSection: React.FC = () => {
       if (window.churchPresenterApi?.getConnectedPhoneCameras) {
         const devs = await window.churchPresenterApi.getConnectedPhoneCameras()
         setPhoneCameras(devs || [])
+      }
+      if (window.churchPresenterApi?.detectFfmpeg) {
+        const ff = await window.churchPresenterApi.detectFfmpeg()
+        setFfmpegStatus(ff)
       }
     } catch (err) {
       console.error('Error loading OctoStream slots:', err)
@@ -49,11 +54,25 @@ export const CameraSettingsSection: React.FC = () => {
 
   const handleToggleSlot = async (slot: OctoStreamSlot) => {
     setLoadingSlotId(slot.id)
+    setStatusMessage(null)
     try {
       if (slot.enabled) {
-        await window.churchPresenterApi.stopOctoStreamSlot(slot.id)
+        const res = await window.churchPresenterApi.stopOctoStreamSlot(slot.id)
+        if (res && res.error) {
+          setStatusMessage({ type: 'error', text: res.error })
+        } else {
+          setStatusMessage({ type: 'info', text: `${slot.name}: desactivada correctamente.` })
+        }
       } else {
-        await window.churchPresenterApi.startOctoStreamSlot(slot.id)
+        const res = await window.churchPresenterApi.startOctoStreamSlot(slot.id)
+        if (res && !res.success) {
+          setStatusMessage({
+            type: 'error',
+            text: res.error || 'No se pudo activar la cámara. Verifique que FFmpeg esté disponible.'
+          })
+        } else {
+          setStatusMessage({ type: 'success', text: `${slot.name}: activada. Esperando señal RTMP desde OctoStream...` })
+        }
       }
       await loadSlots()
     } catch (err: any) {
@@ -100,23 +119,52 @@ export const CameraSettingsSection: React.FC = () => {
               Cámaras Móviles de Teléfono (OctoStream - iOS / Android)
             </h2>
           </div>
-          <button
-            onClick={() => loadSlots()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              backgroundColor: '#1f2937',
-              border: '1px solid #374151',
-              color: '#d1d5db',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            <RefreshCw size={13} /> Refrescar
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {ffmpegStatus && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  backgroundColor: ffmpegStatus.available ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  color: ffmpegStatus.available ? '#4ade80' : '#f87171',
+                  border: `1px solid ${ffmpegStatus.available ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title={ffmpegStatus.available ? `FFmpeg disponible: ${ffmpegStatus.path}` : 'FFmpeg no instalado en el sistema'}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    backgroundColor: ffmpegStatus.available ? '#22c55e' : '#ef4444'
+                  }}
+                />
+                {ffmpegStatus.available ? 'FFmpeg Receptor RTMP Activo' : 'FFmpeg Requerido'}
+              </span>
+            )}
+            <button
+              onClick={() => loadSlots()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                backgroundColor: '#1f2937',
+                border: '1px solid #374151',
+                color: '#d1d5db',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 12
+              }}
+            >
+              <RefreshCw size={13} /> Refrescar
+            </button>
+          </div>
         </div>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: '#9ca3af', lineHeight: 1.5 }}>
           Conecte hasta 4 iPhones simultáneos usando la app nativa <strong>OctoStream</strong> en 720p/1080p a 30 FPS.

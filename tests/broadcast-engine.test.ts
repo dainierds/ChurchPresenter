@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { databaseService } from '../src/main/db/database-service'
-import { broadcastEngine } from '../src/main/broadcast/broadcast-engine'
+import { broadcastEngine, buildBroadcastFfmpegArgs } from '../src/main/broadcast/broadcast-engine'
 import { safeStorageService } from '../src/main/security/safe-storage-service'
 import { ffmpegService } from '../src/main/media/ffmpeg-service'
 import { BroadcastScene, BroadcastAudioMixerState } from '../src/shared/types'
@@ -189,6 +189,39 @@ describe('Phase 9: Broadcast Engine, Scenes & Audio Mixer (Stages B, C, D)', () 
       const status = broadcastEngine.getStatus()
       expect(status.isStreaming).toBe(false)
       expect(status.connectionState).toBe('disconnected')
+    })
+
+    it('resolves DirectShow audio device from browser label and builds correct FFmpeg dshow audio args', () => {
+      const dshowDevices = ['Line (MG-XU)', 'Microphone Array (AMD Audio Device)']
+
+      // Substring match from browser label
+      const matched = broadcastEngine.resolveDirectShowAudioDevice('Line (MG-XU) (0499:1703)', dshowDevices)
+      expect(matched).toBe('Line (MG-XU)')
+
+      // Fallback if empty
+      const defaultDev = broadcastEngine.resolveDirectShowAudioDevice('', dshowDevices)
+      expect(defaultDev).toBe('Line (MG-XU)')
+
+      // Check buildBroadcastFfmpegArgs
+      const args = buildBroadcastFfmpegArgs({
+        resolution: '1280x720',
+        fps: 30,
+        videoBitrate: '3000k',
+        maxBitrate: '4000k',
+        bufSize: '8000k',
+        audioBitrate: '128k',
+        useNvenc: false,
+        audioDevice: matched,
+        audioFilter: 'volume=1.10,adelay=100|100'
+      })
+
+      expect(args).toContain('-f')
+      expect(args).toContain('dshow')
+      expect(args).toContain('audio=Line (MG-XU)')
+      expect(args).toContain('-af')
+      expect(args).toContain('volume=1.10,adelay=100|100')
+      expect(args).toContain('-c:a')
+      expect(args).toContain('aac')
     })
   })
 })

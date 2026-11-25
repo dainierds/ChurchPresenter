@@ -215,6 +215,13 @@ export class YouTubeBrowserManager {
   }
 
   public navigate(action: 'back' | 'forward' | 'home' | 'reload' | 'go', url?: string): void {
+    if (action === 'go' && url) {
+      const targetUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`
+      this.currentUrl = targetUrl
+    } else if (action === 'home') {
+      this.currentUrl = 'https://www.youtube.com'
+    }
+
     if (!this.view) return
 
     switch (action) {
@@ -229,7 +236,7 @@ export class YouTubeBrowserManager {
         }
         break
       case 'home':
-        this.view.webContents.loadURL('https://www.youtube.com')
+        this.view.webContents.loadURL(this.currentUrl)
         break
       case 'reload':
         this.view.webContents.reload()

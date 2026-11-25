@@ -4,6 +4,7 @@ import path from 'path'
 import os from 'os'
 import { pptxParser } from '../src/main/powerpoint/powerpoint-parser'
 import { PowerPointService } from '../src/main/powerpoint/powerpoint-service'
+import { toMediaUrl } from '../src/shared/media-url'
 
 describe('PowerPoint Engine & Fidelity Analysis (Phase 5B)', () => {
   const samplePptxPath = path.resolve(__dirname, 'fixtures/sample_presentation.pptx')
@@ -87,5 +88,15 @@ describe('PowerPoint Engine & Fidelity Analysis (Phase 5B)', () => {
   it('detects external modifications to original presentation file', async () => {
     const isMod = await pptService.checkIfModified(samplePptxPath, 'different_dummy_hash')
     expect(isMod).toBe(true)
+  })
+
+  it('ensures all converted slides produce valid streamable media URLs for thumbnails', async () => {
+    const manifest = await pptService.importPresentation(samplePptxPath)
+    for (const slide of manifest.slides) {
+      expect(slide.imagePath).toBeDefined()
+      const mediaUrl = toMediaUrl(slide.imagePath)
+      expect(mediaUrl).toContain('http://127.0.0.1:')
+      expect(mediaUrl).toContain('/stream?file=')
+    }
   })
 })

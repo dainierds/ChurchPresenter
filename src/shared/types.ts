@@ -1712,6 +1712,15 @@ export type BroadcastSourceType =
   | 'color'
   | 'phone_camera'
 
+export interface LayerColorCorrection {
+  preset?: string
+  temperature?: number // -100 to 100 (Negative = cool/blue, Positive = warm/amber)
+  tint?: number // -100 to 100 (Negative = green, Positive = magenta)
+  contrast?: number // 50 to 180 (%)
+  brightness?: number // 60 to 140 (%)
+  saturation?: number // 0 to 200 (%)
+}
+
 export interface BroadcastLayer {
   id: string
   name: string
@@ -1731,6 +1740,7 @@ export interface BroadcastLayer {
   zoom?: number
   panX?: number
   panY?: number
+  colorCorrection?: LayerColorCorrection
   opacity: number
   zIndex: number
   borderRadius?: number
@@ -1751,6 +1761,7 @@ export interface BroadcastAudioSource {
   id: string
   name: string
   deviceId?: string
+  deviceName?: string
   type: 'presentation' | 'mic_input' | 'aux_input' | 'media'
   volume: number
   muted: boolean

@@ -30,6 +30,7 @@ export interface BroadcastFfmpegArgOptions {
   localRecordDestination?: string
   recordingFormat?: string
   audioDevice?: string
+  audioFilter?: string
 }
 
 export function buildBroadcastFfmpegArgs(options: BroadcastFfmpegArgOptions): string[] {
@@ -111,6 +112,11 @@ export function buildBroadcastFfmpegArgs(options: BroadcastFfmpegArgOptions): st
     )
   }
 
+  // Audio filter if specified
+  if (options.audioFilter) {
+    args.push('-af', options.audioFilter)
+  }
+
   // Audio Codec flags
   args.push('-c:a', 'aac', '-b:a', options.audioBitrate, '-ar', '48000', '-ac', '2')
 
@@ -188,6 +194,56 @@ export class BroadcastEngine extends EventEmitter {
     } catch {
       this.status.diskFreeFormatted = undefined
     }
+  }
+
+  public async listDirectShowAudioDevices(ffmpegPath?: string): Promise<string[]> {
+    if (process.platform !== 'win32') return []
+    const bin = ffmpegPath || (await ffmpegService.detectFfmpeg()).path
+    if (!bin) return []
+
+    return new Promise((resolve) => {
+      const proc = spawn(bin, ['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], {
+        windowsHide: true
+      })
+      let stderr = ''
+      proc.stderr?.on('data', (d) => {
+        stderr += d.toString()
+      })
+      proc.on('close', () => {
+        const devices: string[] = []
+        const regex = /"([^"]+)"\s+\(audio\)/g
+        let match: RegExpExecArray | null
+        while ((match = regex.exec(stderr)) !== null) {
+          if (match[1] && !devices.includes(match[1])) {
+            devices.push(match[1])
+          }
+        }
+        resolve(devices)
+      })
+      proc.on('error', () => {
+        resolve([])
+      })
+    })
+  }
+
+  public resolveDirectShowAudioDevice(requestedNameOrId: string, dshowDevices: string[]): string | undefined {
+    if (dshowDevices.length === 0) return undefined
+    if (!requestedNameOrId) return dshowDevices[0]
+
+    const cleanReq = requestedNameOrId.trim().toLowerCase()
+
+    // 1. Exact match
+    const exact = dshowDevices.find((d) => d.toLowerCase() === cleanReq)
+    if (exact) return exact
+
+    // 2. Substring match (e.g. "Line (MG-XU) (0499:1703)" matches "Line (MG-XU)")
+    const sub = dshowDevices.find(
+      (d) => cleanReq.includes(d.toLowerCase()) || d.toLowerCase().includes(cleanReq)
+    )
+    if (sub) return sub
+
+    // 3. Fallback to first available DirectShow audio device
+    return dshowDevices[0]
   }
 
   public async start(options?: {
@@ -296,6 +352,42 @@ export class BroadcastEngine extends EventEmitter {
       this.targetBitrateKbps = 9000
     }
 
+    // Resolve audio device and filters from Audio Mixer config
+    let audioDevice: string | undefined = undefined
+    let audioFilter: string | undefined = undefined
+
+    const mixerState = databaseService.getAudioMixerConfig()
+    if (!mixerState.masterMuted) {
+      // Find active microphone or aux input
+      const activeSource = mixerState.sources.find(
+        (s) => (s.type === 'mic_input' || s.type === 'aux_input') && !s.muted
+      )
+      if (activeSource) {
+        const dshowDevices = await this.listDirectShowAudioDevices(ffmpegStatus.path)
+        if (dshowDevices.length > 0) {
+          const userDeviceName = (activeSource as any).deviceName || activeSource.deviceId || ''
+          audioDevice = this.resolveDirectShowAudioDevice(userDeviceName, dshowDevices)
+
+          logger.info(`[BroadcastEngine] Using DirectShow audio device: "${audioDevice}" for source "${activeSource.name}"`)
+
+          const filters: string[] = []
+          const effectiveVol = (activeSource.volume ?? 1.0) * (mixerState.masterVolume ?? 1.0)
+          if (Math.abs(effectiveVol - 1.0) > 0.05) {
+            filters.push(`volume=${effectiveVol.toFixed(2)}`)
+          }
+          if (activeSource.delayMs && activeSource.delayMs > 0) {
+            filters.push(`adelay=${activeSource.delayMs}|${activeSource.delayMs}`)
+          }
+          if (mixerState.limiterEnabled) {
+            filters.push('alimiter=limit=0.95:level=true')
+          }
+          if (filters.length > 0) {
+            audioFilter = filters.join(',')
+          }
+        }
+      }
+    }
+
     const ffmpegArgs = buildBroadcastFfmpegArgs({
       resolution,
       fps,
@@ -307,7 +399,9 @@ export class BroadcastEngine extends EventEmitter {
       useNvenc,
       rtmpDestination: shouldStream ? rtmpDestination : undefined,
       localRecordDestination: shouldRecord ? localRecordDestination : undefined,
-      recordingFormat: settings.recordingFormat
+      recordingFormat: settings.recordingFormat,
+      audioDevice,
+      audioFilter
     })
 
     try {

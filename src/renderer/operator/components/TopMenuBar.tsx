@@ -34,6 +34,7 @@ interface TopMenuBarProps {
   onOpenSubtitles?: () => void
   onOpenAiAssistant?: () => void
   onOpenSecondaryBackup?: () => void
+  onOpenAboutModal?: () => void
 }
 
 export const TopMenuBar: React.FC<TopMenuBarProps> = ({
@@ -68,7 +69,8 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
   onOpenSongUsage,
   onOpenSubtitles,
   onOpenAiAssistant,
-  onOpenSecondaryBackup
+  onOpenSecondaryBackup,
+  onOpenAboutModal
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -614,7 +616,7 @@ export const TopMenuBar: React.FC<TopMenuBarProps> = ({
                 className="pro-dropdown-item"
                 onClick={() => {
                   closeMenu()
-                  alert('ChurchPresenter - Software Profesional de Presentación para Iglesias\nVersión 1.1.0 (Fase 7: Estabilidad y Operación Segura)')
+                  onOpenAboutModal?.()
                 }}
               >
                 <span>Acerca de ChurchPresenter</span>

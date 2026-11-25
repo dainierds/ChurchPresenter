@@ -14,7 +14,9 @@ import {
   Copy,
   Edit2,
   Volume2,
-  VolumeX
+  VolumeX,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import {
   PresenterState,
@@ -24,7 +26,9 @@ import {
   YouTubeSyncTick,
   MediaSyncTick,
   MacroItem,
-  PropItem
+  PropItem,
+  BroadcastAudioMixerState,
+  BroadcastAudioSource
 } from '../../../shared/types'
 import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 import { toMediaUrl } from '../../../shared/media-url'
@@ -167,6 +171,95 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
         previewVideoRef.current.muted = false
       }
     }
+  }
+
+  // Audio Mixer State (integrated under Timers)
+  const [audioMixer, setAudioMixer] = useState<BroadcastAudioMixerState>({
+    sources: [
+      { id: 'source_presentation', name: 'Presentación (Salida)', type: 'presentation', volume: 1.0, muted: false, delayMs: 0 },
+      { id: 'source_mic_1', name: 'Micrófono Principal', type: 'mic_input', volume: 1.0, muted: false, delayMs: 0 },
+      { id: 'source_aux', name: 'Audio Auxiliar / Música', type: 'aux_input', volume: 0.8, muted: false, delayMs: 0 }
+    ],
+    masterVolume: 1.0,
+    masterMuted: false,
+    limiterEnabled: true
+  })
+  const [isMixerCollapsed, setIsMixerCollapsed] = useState<boolean>(false)
+
+  useEffect(() => {
+    let isMounted = true
+    const loadAudioMixer = async () => {
+      try {
+        const config = await window.churchPresenterApi?.getAudioMixerConfig?.()
+        if (config && isMounted && config.sources) {
+          setAudioMixer(config)
+        }
+      } catch (err) {
+        console.warn('[RightSidePanel] Failed to load audio mixer config:', err)
+      }
+    }
+    loadAudioMixer()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Enumerate physical audio input devices (Microphones, USB mixers, Line In)
+  const [audioInputDevices, setAudioInputDevices] = useState<{ deviceId: string; label: string }[]>([])
+
+  useEffect(() => {
+    let isCancelled = false
+    const refreshInputs = async () => {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          let devs = await navigator.mediaDevices.enumerateDevices()
+          const hasLabels = devs.some((d) => d.kind === 'audioinput' && d.label)
+          if (!hasLabels && navigator.mediaDevices.getUserMedia) {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+              stream.getTracks().forEach((t) => t.stop())
+              devs = await navigator.mediaDevices.enumerateDevices()
+            } catch {
+              // ignore
+            }
+          }
+          if (isCancelled) return
+          const inputs = devs
+            .filter((d) => d.kind === 'audioinput')
+            .map((d, i) => ({
+              deviceId: d.deviceId,
+              label: d.label || `Micrófono / Entrada ${i + 1}`
+            }))
+          setAudioInputDevices(inputs)
+        } catch (e) {
+          console.warn('[RightSidePanel] Failed to enumerate audio inputs:', e)
+        }
+      }
+    }
+    refreshInputs()
+    if (navigator.mediaDevices && 'addEventListener' in navigator.mediaDevices) {
+      navigator.mediaDevices.addEventListener('devicechange', refreshInputs)
+      return () => {
+        isCancelled = true
+        navigator.mediaDevices.removeEventListener('devicechange', refreshInputs)
+      }
+    }
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  const handleUpdateAudioSource = async (id: string, patch: Partial<BroadcastAudioSource>) => {
+    const nextSources = audioMixer.sources.map((s) => (s.id === id ? { ...s, ...patch } : s))
+    const nextState = { ...audioMixer, sources: nextSources }
+    setAudioMixer(nextState)
+    await window.churchPresenterApi?.saveAudioMixerConfig?.(nextState)
+  }
+
+  const handleToggleMasterMute = async () => {
+    const nextState = { ...audioMixer, masterMuted: !audioMixer.masterMuted }
+    setAudioMixer(nextState)
+    await window.churchPresenterApi?.saveAudioMixerConfig?.(nextState)
   }
 
   // Audio Device routing for operator preview
@@ -333,11 +426,165 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
   const activeRunningTimer = timers.find((t) => t.isRunning)
 
   // Real VU Meter measurement (Requirement 5)
-  // When audio is actively playing, compute real audio level.
+  // When audio is actively playing or microphone is active, compute real audio level.
   // When idle or silent, level is strictly 0% (never simulated CSS pulses).
   const [vuLevelLeft, setVuLevelLeft] = useState(0)
   const [vuLevelRight, setVuLevelRight] = useState(0)
+  const [sourceVuLevels, setSourceVuLevels] = useState<Record<string, number>>({})
 
+  const micSource = audioMixer.sources.find((s) => s.type === 'mic_input')
+  const micDeviceId = micSource?.deviceId
+  const micMuted = micSource?.muted || audioMixer.masterMuted
+  const micVolume = micSource?.volume ?? 1.0
+
+  const auxSource = audioMixer.sources.find((s) => s.type === 'aux_input')
+  const auxDeviceId = auxSource?.deviceId
+  const auxMuted = auxSource?.muted || audioMixer.masterMuted
+  const auxVolume = auxSource?.volume ?? 1.0
+
+  // Live microphone capture for mixer VU meter
+  useEffect(() => {
+    if (!micSource || micMuted) {
+      setSourceVuLevels((prev) => ({ ...prev, [micSource?.id || 'mic']: 0 }))
+      return undefined
+    }
+
+    let isCancelled = false
+    let audioCtx: AudioContext | null = null
+    let stream: MediaStream | null = null
+    let animId: number | null = null
+
+    const startMicMonitoring = async () => {
+      try {
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtxClass || !navigator.mediaDevices?.getUserMedia) return
+
+        const constraints: MediaStreamConstraints = {
+          audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : true,
+          video: false
+        }
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+        if (isCancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        audioCtx = new AudioCtxClass()
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume()
+        }
+
+        const analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.3
+        const sourceNode = audioCtx.createMediaStreamSource(stream)
+        sourceNode.connect(analyser)
+
+        const bufferLength = analyser.frequencyBinCount
+        const dataArray = new Uint8Array(bufferLength)
+
+        const updateMeter = () => {
+          if (isCancelled) return
+          analyser.getByteFrequencyData(dataArray)
+          let sum = 0
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i]
+          }
+          const avg = sum / bufferLength
+          // Scale to 0-100% with volume gain multiplier
+          const percent = Math.min(100, Math.round((avg / 140) * 100 * micVolume))
+          setSourceVuLevels((prev) => ({ ...prev, [micSource.id]: percent }))
+          animId = requestAnimationFrame(updateMeter)
+        }
+        animId = requestAnimationFrame(updateMeter)
+      } catch (err) {
+        console.warn('[RightSidePanel] Failed to monitor microphone audio level:', err)
+        setSourceVuLevels((prev) => ({ ...prev, [micSource.id]: 0 }))
+      }
+    }
+
+    startMicMonitoring()
+
+    return () => {
+      isCancelled = true
+      if (animId) cancelAnimationFrame(animId)
+      if (stream) stream.getTracks().forEach((t) => t.stop())
+      if (audioCtx) audioCtx.close().catch(() => {})
+      setSourceVuLevels((prev) => ({ ...prev, [micSource.id]: 0 }))
+    }
+  }, [micSource?.id, micDeviceId, micMuted, micVolume])
+
+  // Live aux audio input capture for mixer VU meter
+  useEffect(() => {
+    if (!auxSource || auxMuted || !auxDeviceId || auxDeviceId === micDeviceId) {
+      setSourceVuLevels((prev) => ({ ...prev, [auxSource?.id || 'aux']: 0 }))
+      return undefined
+    }
+
+    let isCancelled = false
+    let audioCtx: AudioContext | null = null
+    let stream: MediaStream | null = null
+    let animId: number | null = null
+
+    const startAuxMonitoring = async () => {
+      try {
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtxClass || !navigator.mediaDevices?.getUserMedia) return
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: auxDeviceId } },
+          video: false
+        })
+        if (isCancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        audioCtx = new AudioCtxClass()
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume()
+        }
+
+        const analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.3
+        const sourceNode = audioCtx.createMediaStreamSource(stream)
+        sourceNode.connect(analyser)
+
+        const bufferLength = analyser.frequencyBinCount
+        const dataArray = new Uint8Array(bufferLength)
+
+        const updateMeter = () => {
+          if (isCancelled) return
+          analyser.getByteFrequencyData(dataArray)
+          let sum = 0
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i]
+          }
+          const avg = sum / bufferLength
+          const percent = Math.min(100, Math.round((avg / 140) * 100 * auxVolume))
+          setSourceVuLevels((prev) => ({ ...prev, [auxSource.id]: percent }))
+          animId = requestAnimationFrame(updateMeter)
+        }
+        animId = requestAnimationFrame(updateMeter)
+      } catch {
+        setSourceVuLevels((prev) => ({ ...prev, [auxSource.id]: 0 }))
+      }
+    }
+
+    startAuxMonitoring()
+
+    return () => {
+      isCancelled = true
+      if (animId) cancelAnimationFrame(animId)
+      if (stream) stream.getTracks().forEach((t) => t.stop())
+      if (audioCtx) audioCtx.close().catch(() => {})
+      setSourceVuLevels((prev) => ({ ...prev, [auxSource.id]: 0 }))
+    }
+  }, [auxSource?.id, auxDeviceId, auxMuted, auxVolume, micDeviceId])
+
+  // Media playback VU meter for Presentation
   useEffect(() => {
     let animId: number
     if (!hasAudioActive) {
@@ -403,6 +650,16 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
       return undefined
     }
   }, [hasAudioActive, state?.mediaSyncTick?.isPlaying, state?.mediaSyncTick?.volume])
+
+  // Combined master stereo VU peak
+  const micLevel = sourceVuLevels[micSource?.id || ''] || 0
+  const auxLevel = sourceVuLevels[auxSource?.id || ''] || 0
+  const masterLevelLeft = Math.max(vuLevelLeft, micLevel, auxLevel)
+  const masterLevelRight = Math.max(
+    vuLevelRight,
+    micLevel > 0 ? Math.max(0, micLevel - 2) : 0,
+    auxLevel > 0 ? Math.max(0, auxLevel - 2) : 0
+  )
 
   return (
     <div className="pro-right-panel-content">
@@ -938,25 +1195,25 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
             <div
               className="pro-audio-vu-meter-bars"
               title={
-                hasAudioActive
-                  ? `Nivel real medido: L ${vuLevelLeft}% | R ${vuLevelRight}%`
+                masterLevelLeft > 0 || hasAudioActive
+                  ? `Nivel real medido: L ${masterLevelLeft}% | R ${masterLevelRight}%`
                   : 'Nivel de audio: Inactivo (0%)'
               }
             >
               <div
                 className="pro-vu-bar l"
                 style={{
-                  height: `${vuLevelLeft}%`,
+                  height: `${masterLevelLeft}%`,
                   transition: 'height 80ms ease-out',
-                  opacity: vuLevelLeft > 0 ? 1 : 0.2
+                  opacity: masterLevelLeft > 0 ? 1 : 0.2
                 }}
               />
               <div
                 className="pro-vu-bar r"
                 style={{
-                  height: `${vuLevelRight}%`,
+                  height: `${masterLevelRight}%`,
                   transition: 'height 80ms ease-out',
-                  opacity: vuLevelRight > 0 ? 1 : 0.2
+                  opacity: masterLevelRight > 0 ? 1 : 0.2
                 }}
               />
             </div>
@@ -1258,6 +1515,221 @@ export const RightSidePanel: React.FC<RightSidePanelProps> = ({
               {timers.length === 0 && (
                 <div className="pro-timers-empty">
                   <span>Sin temporizadores creados. Haga clic en + para agregar uno.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Mezclador de Audio situado debajo del temporizador */}
+            <div
+              className="pro-audio-mixer-bottom-card"
+              style={{
+                backgroundColor: '#121212',
+                borderTop: '1px solid #24262c',
+                display: 'flex',
+                flexDirection: 'column',
+                flexShrink: 0,
+                maxHeight: isMixerCollapsed ? '36px' : '320px',
+                transition: 'max-height 0.2s ease',
+                overflow: 'hidden'
+              }}
+            >
+              <div
+                style={{
+                  padding: '7px 10px',
+                  borderBottom: isMixerCollapsed ? 'none' : '1px solid #222222',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#161616',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+                onClick={() => setIsMixerCollapsed((prev) => !prev)}
+                title="Clic para plegar o desplegar el Mezclador de Audio"
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#D1D5DB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Volume2 size={13} color="#22c55e" /> MEZCLADOR DE AUDIO
+                  {isMixerCollapsed ? <ChevronDown size={13} color="#71717a" /> : <ChevronUp size={13} color="#71717a" />}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: audioMixer.limiterEnabled ? '#22c55e' : '#71717a',
+                      backgroundColor: audioMixer.limiterEnabled ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                      padding: '1px 5px',
+                      borderRadius: 3
+                    }}
+                  >
+                    LIMITADOR
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleToggleMasterMute}
+                    style={{
+                      background: audioMixer.masterMuted ? '#ef4444' : '#222',
+                      border: '1px solid #333',
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                      color: '#FFF',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title={audioMixer.masterMuted ? 'Desmutear Master' : 'Silenciar Master'}
+                  >
+                    {audioMixer.masterMuted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                  </button>
+                </div>
+              </div>
+
+              {!isMixerCollapsed && (
+                <div style={{ padding: '8px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                  {audioMixer.sources.map((src) => {
+                    const level =
+                      src.muted || audioMixer.masterMuted
+                        ? 0
+                        : src.type === 'presentation'
+                        ? Math.round(vuLevelLeft * (src.volume || 1.0))
+                        : (sourceVuLevels[src.id] || 0)
+                    return (
+                      <div
+                        key={src.id}
+                        style={{
+                          backgroundColor: '#181818',
+                          border: '1px solid #262626',
+                          borderRadius: 6,
+                          padding: '6px 8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 5
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#FFFFFF' }}>{src.name}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {src.type !== 'presentation' && (
+                              <select
+                                value={src.deviceId || ''}
+                                onChange={(e) => {
+                                  const devId = e.target.value
+                                  const matched = audioInputDevices.find((d) => d.deviceId === devId)
+                                  handleUpdateAudioSource(src.id, {
+                                    deviceId: devId,
+                                    deviceName: matched?.label || ''
+                                  })
+                                }}
+                                style={{
+                                  backgroundColor: '#121212',
+                                  border: '1px solid #2E2E2E',
+                                  borderRadius: 4,
+                                  padding: '2px 4px',
+                                  color: '#A1A1AA',
+                                  fontSize: 10,
+                                  maxWidth: 145
+                                }}
+                                title="Seleccionar entrada física de audio (Micrófono / Consola USB)"
+                              >
+                                <option value="">(Dispositivo por defecto)</option>
+                                {audioInputDevices.map((d) => (
+                                  <option key={d.deviceId} value={d.deviceId}>
+                                    {d.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateAudioSource(src.id, { muted: !src.muted })}
+                              style={{
+                                background: src.muted ? '#ef4444' : '#2A2A2A',
+                                border: 'none',
+                                borderRadius: 4,
+                                padding: '2px 6px',
+                                color: '#FFF',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {src.muted ? 'MUTE' : 'ON'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Real VU Peak Meter */}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: 6,
+                            backgroundColor: '#0A0A0A',
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                            display: 'flex',
+                            border: '1px solid #222'
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(100, Math.max(0, level))}%`,
+                              height: '100%',
+                              backgroundColor: level > 85 ? '#ef4444' : level > 70 ? '#f59e0b' : '#22c55e',
+                              transition: 'width 60ms ease-out'
+                            }}
+                          />
+                        </div>
+
+                        {/* Controls: Volume Slider & Lip-Sync Delay */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 85px', gap: 6, alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Volume2 size={11} color="#9CA3AF" />
+                            <input
+                              type="range"
+                              min="0"
+                              max="1.5"
+                              step="0.05"
+                              value={src.volume}
+                              onChange={(e) => handleUpdateAudioSource(src.id, { volume: Number(e.target.value) })}
+                              style={{ width: '100%', accentColor: '#22c55e' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }} title="Compensación de retardo (Lip-Sync)">
+                            <Clock size={10} color="#38BDF8" />
+                            <input
+                              type="number"
+                              min="0"
+                              max="1000"
+                              step="10"
+                              value={src.delayMs}
+                              onChange={(e) => handleUpdateAudioSource(src.id, { delayMs: Number(e.target.value) })}
+                              style={{
+                                width: 44,
+                                backgroundColor: '#121212',
+                                border: '1px solid #333',
+                                borderRadius: 4,
+                                padding: '1px 3px',
+                                color: '#38BDF8',
+                                fontSize: 10,
+                                textAlign: 'right'
+                              }}
+                            />
+                            <span style={{ fontSize: 9, color: '#9CA3AF' }}>ms</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>

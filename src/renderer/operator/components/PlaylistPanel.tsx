@@ -18,7 +18,8 @@ import {
   Edit2,
   Search,
   Palette,
-  Film
+  Film,
+  Tv
 } from 'lucide-react'
 import { ServicePlan, ServiceItem, ThemeConfig } from '../../../shared/types'
 
@@ -53,6 +54,7 @@ interface PlaylistPanelProps {
   onDropItemToPlaylist?: (data: any, targetIndex: number) => void
   onReorderSectionByDrag?: (fromHeaderIndex: number, toHeaderIndex: number) => void
   onAddBlankItem: () => void
+  onOpenYouTube?: (url: string) => void
   onVerifyPlaylist?: () => void
   allThemes?: ThemeConfig[]
   onAssignItemTheme?: (itemIndex: number, themeId: string | null) => void
@@ -87,6 +89,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   onDropItemToPlaylist,
   onReorderSectionByDrag,
   onAddBlankItem,
+  onOpenYouTube,
   onVerifyPlaylist,
   allThemes,
   onAssignItemTheme,
@@ -629,6 +632,33 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                       <span style={{ fontSize: '9px', backgroundColor: '#38bdf8', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Bucle automático activo">
                         🔁 Bucle
                       </span>
+                    )}
+                    {(item.youtubeConfig?.url || (item.notes && (item.notes.includes('youtube.com') || item.notes.includes('youtu.be')))) && onOpenYouTube && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const url = item.youtubeConfig?.url || item.notes!
+                          onOpenYouTube(url)
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                          border: '1px solid #ef4444',
+                          borderRadius: 4,
+                          padding: '1px 6px',
+                          color: '#f87171',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                        title="Abrir este video en la ventana interna de YouTube"
+                      >
+                        <Tv size={10} color="#ef4444" />
+                        <span>YouTube</span>
+                      </button>
                     )}
                   </div>
                   {item.notes && item.type !== 'header' && (

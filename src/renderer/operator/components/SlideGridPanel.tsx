@@ -178,6 +178,16 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
               const isSelected = selectedSlideIndex === idx
               const isLive = liveSlideId === slide.id
               const badgeClass = getGroupBadgeClass(slide.groupLabel)
+              const slideImageUrl =
+                slide.thumbnailUrl ||
+                (slide.background?.type === 'image' ? slide.background.value : undefined) ||
+                slide.mediaUrl
+              const isImageOrPresentation =
+                slide.sourceType === 'presentation' ||
+                slide.sourceType === 'powerpoint' ||
+                slide.sourceType === 'image' ||
+                slide.mediaType === 'image' ||
+                !slide.body
 
               return (
                 <div
@@ -213,22 +223,54 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                     style={{
                       height: cardHeight,
                       fontFamily: theme.fontFamily || 'sans-serif',
-                      background:
-                        slide.background?.type === 'image'
-                          ? `url(${slide.background.value}) center/cover no-repeat`
-                          : slide.background?.value ||
-                            (theme.background?.type === 'image'
-                              ? `url(${theme.background.value}) center/cover no-repeat`
-                              : theme.background?.value || '#181818')
+                      backgroundColor:
+                        slide.background?.type === 'color' || slide.background?.type === 'gradient'
+                          ? slide.background.value
+                          : (theme.background?.type === 'color' || theme.background?.type === 'gradient'
+                            ? theme.background.value
+                            : '#0a0a0c'),
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                   >
-                    {/* Image / Thumbnail / Video Poster Preview */}
-                    {(slide.thumbnailUrl || (slide.mediaUrl && (slide.mediaType === 'image' || slide.sourceType === 'image' || slide.sourceType === 'powerpoint'))) && (
+                    {/* Slide Image Preview (PowerPoint, Presentation, Image background, etc.) */}
+                    {slideImageUrl && !slide.youtubeId && slide.mediaType !== 'video' && slide.sourceType !== 'video' && (
                       <img
-                        src={toMediaUrl(slide.thumbnailUrl || slide.mediaUrl)}
+                        src={toMediaUrl(slideImageUrl)}
                         alt=""
                         className="pro-slide-thumb-img"
-                        style={{ objectFit: 'cover', opacity: 0.9 }}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: isImageOrPresentation ? 'contain' : 'cover',
+                          backgroundColor: '#000000',
+                          opacity: isImageOrPresentation ? 1 : 0.75
+                        }}
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none'
+                        }}
+                      />
+                    )}
+
+                    {/* Theme Image Fallback (when slide has no custom image/bg) */}
+                    {!slideImageUrl && !slide.youtubeId && theme.background?.type === 'image' && theme.background.value && (
+                      <img
+                        src={toMediaUrl(theme.background.value)}
+                        alt=""
+                        className="pro-slide-thumb-img"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          opacity: 0.7
+                        }}
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none'
+                        }}
                       />
                     )}
 
@@ -239,7 +281,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                         muted
                         playsInline
                         className="pro-slide-thumb-img"
-                        style={{ objectFit: 'cover', opacity: 0.9, pointerEvents: 'none' }}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9, pointerEvents: 'none' }}
                       />
                     )}
 
@@ -248,7 +290,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                         src={`https://i.ytimg.com/vi/${slide.youtubeId}/hqdefault.jpg`}
                         alt=""
                         className="pro-slide-thumb-img"
-                        style={{ objectFit: 'cover', opacity: 0.9 }}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }}
                       />
                     )}
 
@@ -277,7 +319,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                       >
                         {slide.body}
                       </div>
-                    ) : (
+                    ) : slide.body ? (
                       <div
                         className="pro-slide-text-preview"
                         style={{
@@ -288,7 +330,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                       >
                         {slide.body}
                       </div>
-                    )}
+                    ) : null}
 
                     {isLive && (
                       <div className="pro-slide-live-overlay">
@@ -309,6 +351,10 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
               const isSelected = selectedSlideIndex === idx
               const isLive = liveSlideId === slide.id
               const badgeClass = getGroupBadgeClass(slide.groupLabel)
+              const slideImageUrl =
+                slide.thumbnailUrl ||
+                (slide.background?.type === 'image' ? slide.background.value : undefined) ||
+                slide.mediaUrl
 
               return (
                 <div
@@ -320,6 +366,24 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                   onDoubleClick={() => onGoLive(slide, slides[idx + 1])}
                 >
                   <span className="pro-list-idx">{idx + 1}</span>
+                  {slideImageUrl && !slide.youtubeId && slide.mediaType !== 'video' && slide.sourceType !== 'video' && (
+                    <img
+                      src={toMediaUrl(slideImageUrl)}
+                      alt=""
+                      style={{
+                        width: 44,
+                        height: 25,
+                        objectFit: 'contain',
+                        backgroundColor: '#000000',
+                        borderRadius: 3,
+                        marginRight: 8,
+                        flexShrink: 0
+                      }}
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none'
+                      }}
+                    />
+                  )}
                   {(slide.macroTrigger?.onEnterMacroId || slide.macroTrigger?.onExitMacroId) && (
                     <span style={{ fontSize: '9px', backgroundColor: '#FF7A00', color: '#ffffff', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }} title="Tiene macro asignada">
                       ⚡ M
@@ -331,7 +395,7 @@ export const SlideGridPanel: React.FC<SlideGridPanelProps> = ({
                   >
                     {slide.groupLabel || 'Diapositiva'}
                   </span>
-                  <div className="pro-list-text">{slide.body}</div>
+                  <div className="pro-list-text">{slide.body || slide.title || slide.subtitle || `Diapositiva ${idx + 1}`}</div>
                   {isLive && (
                     <span className="pro-live-tag">
                       <Radio size={11} /> EN VIVO

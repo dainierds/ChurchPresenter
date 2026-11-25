@@ -206,13 +206,7 @@ export class OctoStreamService extends EventEmitter {
     }
 
     this.slots.set(updated.id, updated)
-    const list = Array.from(this.slots.values()).map((s) => ({
-      ...s,
-      qrDataUrl: undefined,
-      rtmpUrl: undefined,
-      tailscaleRtmpUrl: undefined
-    }))
-    databaseService.setConfig(OCTOSTREAM_CONFIG_KEY, JSON.stringify(list))
+    this.persistSlots()
 
     if (needsRestart) {
       await this.stopSlot(updated.id)
@@ -228,6 +222,16 @@ export class OctoStreamService extends EventEmitter {
     }
 
     return this.getSlotsWithUrls()
+  }
+
+  private persistSlots(): void {
+    const list = Array.from(this.slots.values()).map((s) => ({
+      ...s,
+      qrDataUrl: undefined,
+      rtmpUrl: undefined,
+      tailscaleRtmpUrl: undefined
+    }))
+    databaseService.setConfig(OCTOSTREAM_CONFIG_KEY, JSON.stringify(list))
   }
 
   public async getSlotsWithUrls(): Promise<OctoStreamSlot[]> {
@@ -292,6 +296,7 @@ export class OctoStreamService extends EventEmitter {
 
     slot.error = undefined
     slot.enabled = true
+    this.persistSlots()
 
     let args: string[] = []
     if (slot.mode === 'rtmp') {
@@ -449,6 +454,7 @@ export class OctoStreamService extends EventEmitter {
     slot.isStreaming = false
     slot.actualFps = 0
     slot.bitrateKbps = 0
+    this.persistSlots()
 
     const timeout = this.restartTimeouts.get(slotId)
     if (timeout) {

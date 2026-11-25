@@ -5634,6 +5634,18 @@ body {
   box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);
 }
 
+.pro-yt-stop-project-btn {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  border: 1px solid #f87171;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+.pro-yt-stop-project-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7);
+}
+
 .pro-kbd-badge {
   background: rgba(0, 0, 0, 0.4);
   padding: 2px 5px;

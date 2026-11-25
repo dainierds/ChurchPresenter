@@ -1,6 +1,6 @@
 {
   "name": "church-presenter",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Church presentation software for Windows",
   "main": "./out/main/index.js",
   "author": "ChurchPresenter Team",
@@ -18,7 +18,7 @@
     "benchmark": "node scripts/benchmark-5000-songs.js",
     "e2e": "node scripts/run-e2e.js",
     "soak": "node scripts/run-soak.js",
-    "dist:win": "electron-vite build && electron-builder --win --x64"
+    "dist:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "acme-client": "^5.4.0",

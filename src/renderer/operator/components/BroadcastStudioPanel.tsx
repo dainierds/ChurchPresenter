@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Radio,
-  Volume2,
-  VolumeX,
   Layers,
   Settings,
   Square,
@@ -10,7 +8,6 @@ import {
   Plus,
   Trash2,
   Copy,
-  Clock,
   HardDrive,
   ShieldCheck,
   ArrowRight,
@@ -42,8 +39,6 @@ import QRCode from 'qrcode'
 import {
   BroadcastScene,
   BroadcastLayer,
-  BroadcastAudioMixerState,
-  BroadcastAudioSource,
   BroadcastStatus,
   DesktopCaptureSource,
   PhoneCameraDevice,
@@ -53,6 +48,7 @@ import { toMediaUrl } from '../../../shared/media-url'
 import appLogo from '../../assets/icon.png'
 import { cameraReceiverService } from '../services/camera-receiver-service'
 import { EpsBannerImporter } from '../services/eps-banner-importer'
+import { VIDEO_COLOR_PRESETS, getColorCorrectionFilter } from '../utils/videoColorPresets'
 
 interface BroadcastStudioPanelProps {
   onOpenSettings: () => void
@@ -405,20 +401,8 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
 
   // Hardware Devices
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
+  const [_audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [desktopSources, setDesktopSources] = useState<DesktopCaptureSource[]>([])
-
-  // Audio Mixer State
-  const [audioMixer, setAudioMixer] = useState<BroadcastAudioMixerState>({
-    sources: [
-      { id: 'pres_audio', name: 'Audio Presentación / Medios', type: 'presentation', volume: 1.0, muted: false, delayMs: 0 },
-      { id: 'mic_main', name: 'Micrófono Principal', type: 'mic_input', volume: 0.9, muted: false, delayMs: 150 },
-      { id: 'aux_line', name: 'Entrada Auxiliar / Línea', type: 'aux_input', volume: 0.8, muted: false, delayMs: 0 }
-    ],
-    masterVolume: 1.0,
-    masterMuted: false,
-    limiterEnabled: true
-  })
 
   // Live Status & Telemetry
   const [status, setStatus] = useState<BroadcastStatus>({
@@ -482,6 +466,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     }
   })
   const [isEditingLowerThird, setIsEditingLowerThird] = useState<boolean>(false)
+  const [inspectorTab, setInspectorTab] = useState<'presets' | 'manual' | 'transform' | 'all'>('presets')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Deleted/Hidden templates and user-imported custom banners
@@ -505,7 +490,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
   const [importMode, setImportMode] = useState<'add_new' | 'replace_current'>('add_new')
 
   // Real VU Meter Audio Context & Analyser
-  const [vuLevels, setVuLevels] = useState<{ [id: string]: number }>({
+  const [_vuLevels, setVuLevels] = useState<{ [id: string]: number }>({
     master: 0,
     pres_audio: 0,
     mic_main: 0,
@@ -638,9 +623,13 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           const zoom = Math.max(1.0, parseFloat(el.getAttribute('data-zoom') || '1'))
           const panX = Math.max(-50, Math.min(50, parseFloat(el.getAttribute('data-pan-x') || '0'))) * 0.01
           const panY = Math.max(-50, Math.min(50, parseFloat(el.getAttribute('data-pan-y') || '0'))) * 0.01
+          const layerFilter = el.getAttribute('data-filter') || 'none'
 
           ctx.save()
           ctx.globalAlpha = opacity
+          if (layerFilter && layerFilter !== 'none') {
+            ctx.filter = layerFilter
+          }
           if (video && video.readyState >= 2) {
             if (zoom > 1.001) {
               const vidW = video.videoWidth || 1280
@@ -762,10 +751,6 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
         setPreviewSceneId(dbScenes[0].id)
         setProgramSceneId(dbScenes[0].id)
         setProgramScene(JSON.parse(JSON.stringify(dbScenes[0])))
-      }
-      const mixerState = await window.churchPresenterApi.getAudioMixerConfig()
-      if (mixerState) {
-        setAudioMixer(mixerState)
       }
       const st = await window.churchPresenterApi.getBroadcastStatus()
       if (st) {
@@ -1133,11 +1118,46 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     return undefined
   }, [scenes, handleCutTransition, handleExecuteTransition])
 
-  // Scene Management
+  // Scene Management & Renaming
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
+  const [editingSceneName, setEditingSceneName] = useState<string>('')
+
+  const handleStartRenameScene = (scene: BroadcastScene, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setEditingSceneId(scene.id)
+    setEditingSceneName(scene.name)
+  }
+
+  const handleSaveRenameScene = async (sceneId: string) => {
+    const trimmed = editingSceneName.trim()
+    if (!trimmed) {
+      setEditingSceneId(null)
+      return
+    }
+    const targetScene = scenes.find((s) => s.id === sceneId)
+    if (!targetScene) {
+      setEditingSceneId(null)
+      return
+    }
+    const updated = { ...targetScene, name: trimmed }
+    setScenes((prev) => prev.map((s) => (s.id === sceneId ? updated : s)))
+    if (programSceneId === sceneId) {
+      setProgramScene((prev) => (prev ? { ...prev, name: trimmed } : prev))
+    }
+    setEditingSceneId(null)
+    await window.churchPresenterApi.saveBroadcastScene(updated)
+  }
+
+  const handleCancelRenameScene = () => {
+    setEditingSceneId(null)
+    setEditingSceneName('')
+  }
+
   const handleCreateScene = async () => {
+    const defaultName = `Nueva Escena ${scenes.length + 1}`
     const newScene: BroadcastScene = {
       id: `scene_${Date.now()}`,
-      name: `Nueva Escena ${scenes.length + 1}`,
+      name: defaultName,
       orderIndex: scenes.length,
       layers: [
         {
@@ -1157,6 +1177,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     const saved = await window.churchPresenterApi.saveBroadcastScene(newScene)
     setScenes((prev) => [...prev, saved])
     setPreviewSceneId(saved.id)
+    // Immediately enter rename mode so the user can type the desired scene name
+    setEditingSceneId(saved.id)
+    setEditingSceneName(saved.name)
   }
 
   const handleDuplicateScene = async () => {
@@ -1258,6 +1281,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     layers[index] = { ...layers[index], ...patch }
     const updated = { ...activePreviewScene, layers }
     setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+    if (programSceneId === updated.id) {
+      setProgramScene(JSON.parse(JSON.stringify(updated)))
+    }
     await window.churchPresenterApi.saveBroadcastScene(updated)
   }
 
@@ -1458,20 +1484,6 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activePreviewScene, selectedLayerIndex])
 
-  // Audio Mixer Updates
-  const handleUpdateAudioSource = async (id: string, patch: Partial<BroadcastAudioSource>) => {
-    const nextSources = audioMixer.sources.map((s) => (s.id === id ? { ...s, ...patch } : s))
-    const nextState = { ...audioMixer, sources: nextSources }
-    setAudioMixer(nextState)
-    await window.churchPresenterApi.saveAudioMixerConfig(nextState)
-  }
-
-  const handleToggleMasterMute = async () => {
-    const nextState = { ...audioMixer, masterMuted: !audioMixer.masterMuted }
-    setAudioMixer(nextState)
-    await window.churchPresenterApi.saveAudioMixerConfig(nextState)
-  }
-
   const startPreStreamDiagnostic = () => {
     diagnosticFramesCountRef.current = 0
     setPreStreamCheck({
@@ -1605,6 +1617,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
     const zoom = layer.zoom || 1.0
     const panX = layer.panX || 0
     const panY = layer.panY || 0
+    const filterStyle = getColorCorrectionFilter(layer.colorCorrection)
     const transformStyle =
       zoom > 1.001 || panX !== 0 || panY !== 0
         ? `scale(${zoom}) translate(${panX / zoom}%, ${panY / zoom}%)`
@@ -1625,7 +1638,8 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             objectFit: 'cover',
             transform: transformStyle,
             transformOrigin: 'center center',
-            transition: 'transform 0.08s ease-out'
+            transition: 'transform 0.08s ease-out',
+            filter: filterStyle
           }}
         />
       )
@@ -1681,7 +1695,8 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 objectFit: 'cover',
                 transform: transformStyle,
                 transformOrigin: 'center center',
-                transition: 'transform 0.08s ease-out'
+                transition: 'transform 0.08s ease-out',
+                filter: filterStyle
               }}
             />
           )
@@ -1696,7 +1711,8 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               objectFit: 'cover',
               transform: transformStyle,
               transformOrigin: 'center center',
-              transition: 'transform 0.08s ease-out'
+              transition: 'transform 0.08s ease-out',
+              filter: filterStyle
             }}
           />
         )
@@ -2694,7 +2710,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
+        flex: 1,
         height: '100%',
+        minHeight: 0,
         backgroundColor: '#0A0A0A',
         color: '#FFFFFF',
         overflow: 'hidden',
@@ -2707,17 +2725,20 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '8px 16px',
+          padding: '5px 12px',
           backgroundColor: '#121212',
-          borderBottom: '1px solid #222222'
+          borderBottom: '1px solid #222222',
+          flexShrink: 0,
+          gap: 8,
+          flexWrap: 'nowrap'
         }}
       >
         {/* Left: Studio Title & Hardware Isolation Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Radio size={18} color="#FF7A00" />
-            <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: '0.05em' }}>
-              ESTUDIO DE TRANSMISIÓN
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Radio size={16} color="#FF7A00" />
+            <span style={{ fontWeight: 800, fontSize: 13, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+              ESTUDIO
             </span>
           </div>
 
@@ -2725,42 +2746,46 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 4,
               backgroundColor: 'rgba(34, 197, 94, 0.12)',
               border: '1px solid rgba(34, 197, 94, 0.3)',
-              padding: '3px 8px',
+              padding: '2px 6px',
               borderRadius: 4,
-              fontSize: 11,
-              color: '#4ade80'
+              fontSize: 10,
+              fontWeight: 600,
+              color: '#4ade80',
+              whiteSpace: 'nowrap'
             }}
             title="Aislamiento total garantizado: La transmisión por internet nunca bloquea las pantallas de la iglesia"
           >
-            <ShieldCheck size={13} color="#22c55e" />
-            <span>Salidas de Proyección Aisladas</span>
+            <ShieldCheck size={12} color="#22c55e" />
+            <span>Proyección Aislada</span>
           </div>
         </div>
 
-        {/* Center: Live Telemetry Metrics */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Center: Live Telemetry Metrics HUD */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>
           {/* Stream Status Pill */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               backgroundColor: status.isStreaming ? 'rgba(239, 68, 68, 0.2)' : '#181818',
               border: status.isStreaming ? '1px solid #ef4444' : '1px solid #2E2E2E',
-              padding: '4px 10px',
-              borderRadius: 6,
-              fontSize: 12,
+              padding: '2px 7px',
+              borderRadius: 4,
+              fontSize: 11,
               fontWeight: 700,
-              color: status.isStreaming ? '#ef4444' : '#9CA3AF'
+              color: status.isStreaming ? '#ef4444' : '#9CA3AF',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
           >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: '50%',
                 backgroundColor: status.isStreaming
                   ? '#ef4444'
@@ -2769,19 +2794,19 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                     : status.connectionState === 'reconnecting'
                       ? '#f59e0b'
                       : '#52525b',
-                boxShadow: status.isStreaming ? '0 0 8px #ef4444' : 'none'
+                boxShadow: status.isStreaming ? '0 0 6px #ef4444' : 'none'
               }}
             />
             <span>
               {status.isStreaming
                 ? 'EN VIVO'
                 : status.connectionState === 'error'
-                  ? 'ERROR STREAM'
+                  ? 'ERROR'
                   : status.connectionState === 'reconnecting'
                     ? 'RECONECTANDO'
                     : 'STREAM OFF'}
             </span>
-            {status.isStreaming && <span style={{ color: '#FFFFFF' }}>{status.formattedTime}</span>}
+            {status.isStreaming && <span style={{ color: '#FFFFFF', marginLeft: 2 }}>{status.formattedTime}</span>}
           </div>
 
           {/* Record Status Pill */}
@@ -2789,75 +2814,95 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 4,
               backgroundColor: status.isRecording ? 'rgba(255, 122, 0, 0.18)' : '#181818',
               border: status.isRecording ? '1px solid #FF7A00' : '1px solid #2E2E2E',
-              padding: '4px 10px',
-              borderRadius: 6,
-              fontSize: 12,
+              padding: '2px 6px',
+              borderRadius: 4,
+              fontSize: 11,
               fontWeight: 700,
-              color: status.isRecording ? '#FF7A00' : '#9CA3AF'
+              color: status.isRecording ? '#FF7A00' : '#9CA3AF',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
           >
-            <HardDrive size={13} color={status.isRecording ? '#FF7A00' : '#71717a'} />
+            <HardDrive size={11} color={status.isRecording ? '#FF7A00' : '#71717a'} />
             <span>{status.isRecording ? 'REC' : 'REC OFF'}</span>
           </div>
 
-          {/* Telemetry Bitrate, Capture FPS, Output FPS, Drops & Encoder */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: '#9CA3AF' }}>
-            <span style={{ color: status.bitrateKbps > 0 ? '#38BDF8' : '#71717a', fontWeight: 600 }} title="Bitrate actual enviado a YouTube">
+          {/* Grouped Telemetry HUD Strip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#161922',
+              border: '1px solid #222834',
+              borderRadius: 4,
+              padding: '2px 7px',
+              fontSize: 10,
+              color: '#9CA3AF',
+              whiteSpace: 'nowrap',
+              flexShrink: 1,
+              overflow: 'hidden'
+            }}
+          >
+            <span style={{ color: status.bitrateKbps > 0 ? '#38BDF8' : '#71717a', fontWeight: 700 }} title="Bitrate actual enviado a YouTube">
               {status.bitrateKbps > 0
                 ? `${Math.round(status.bitrateKbps)} kbps`
                 : status.isStreaming
                   ? '0 kbps'
                   : '-- kbps'}
             </span>
-            <span title="FPS reales de captura de escena ingresados a FFmpeg">
-              Captura:{' '}
+            <span style={{ color: '#334155' }}>|</span>
+            <span title={`Captura: ${captureFps.toFixed(1)} FPS | Salida FFmpeg: ${status.fps.toFixed(1)} FPS`}>
               <strong style={{ color: captureFps >= 25 ? '#4ADE80' : captureFps > 0 ? '#FBBF24' : '#71717A' }}>
-                {captureFps > 0 ? `${captureFps.toFixed(1)}` : (status.isStreaming ? '30.0' : '--')}
-              </strong>{' '}
-              FPS
-            </span>
-            <span title="FPS de salida codificados por FFmpeg y transmitidos a YouTube">
-              Salida:{' '}
+                {captureFps > 0 ? `${captureFps.toFixed(0)}` : (status.isStreaming ? '30' : '--')}
+              </strong>
+              <span style={{ color: '#64748B' }}>/</span>
               <strong style={{ color: status.fps >= 25 ? '#4ADE80' : status.fps > 0 ? '#FBBF24' : '#71717A' }}>
-                {status.fps > 0 ? `${status.fps.toFixed(1)}` : (status.isStreaming ? '0.0' : '--')}
-              </strong>{' '}
-              FPS
+                {status.fps > 0 ? `${status.fps.toFixed(0)}` : (status.isStreaming ? '0' : '--')}
+              </strong>
+              <span style={{ fontSize: 9, marginLeft: 2, color: '#94A3B8' }}>fps</span>
             </span>
-            <span title="Fotogramas perdidos acumulados reportados por FFmpeg">
+            <span style={{ color: '#334155' }}>|</span>
+            <span title="Fotogramas perdidos acumulados">
               Caídas:{' '}
               <strong style={{ color: status.droppedFrames > 0 ? '#ef4444' : '#22c55e' }}>
                 {status.droppedFrames}
               </strong>
             </span>
+            <span style={{ color: '#334155' }}>|</span>
             <span
               style={{
                 backgroundColor: status.encoderUsed === 'nvenc' ? '#14532d' : '#1C1C1C',
                 border: status.encoderUsed === 'nvenc' ? '1px solid #22c55e' : '1px solid #3F3F46',
-                padding: '2px 6px',
-                borderRadius: 4,
+                padding: '1px 5px',
+                borderRadius: 3,
+                fontSize: 9,
                 color: status.encoderUsed === 'nvenc' ? '#86efac' : '#D1D5DB',
-                fontWeight: 600
+                fontWeight: 700
               }}
             >
               {status.encoderUsed === 'nvenc'
-                ? 'NVENC (GPU Hardware)'
+                ? 'NVENC'
                 : status.encoderUsed === 'x264'
-                  ? 'libx264 (CPU)'
+                  ? 'x264'
                   : 'Listo'}
             </span>
             {status.diskFreeFormatted && (
-              <span style={{ color: '#9CA3AF', fontSize: 11 }} title="Espacio libre en disco para grabaciones">
-                💾 {status.diskFreeFormatted}
-              </span>
+              <>
+                <span style={{ color: '#334155' }}>|</span>
+                <span style={{ color: '#9CA3AF', fontSize: 10 }} title="Espacio libre en disco">
+                  💾 {status.diskFreeFormatted.replace(' GB Libres', 'GB')}
+                </span>
+              </>
             )}
           </div>
         </div>
 
         {/* Right: Actions (Stream, Record, OBS, Settings) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           {status.isStreaming ? (
             <button
               type="button"
@@ -2866,17 +2911,18 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 backgroundColor: '#ef4444',
                 color: '#FFFFFF',
                 border: 'none',
-                borderRadius: 6,
-                padding: '6px 14px',
-                fontSize: 12,
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 11,
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6
+                gap: 5,
+                whiteSpace: 'nowrap'
               }}
             >
-              <Square size={13} /> Detener Transmisión
+              <Square size={11} /> Detener Transmisión
             </button>
           ) : (
             <button
@@ -2886,18 +2932,19 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 backgroundColor: '#FF7A00',
                 color: '#FFFFFF',
                 border: 'none',
-                borderRadius: 6,
-                padding: '6px 14px',
-                fontSize: 12,
+                borderRadius: 4,
+                padding: '4px 11px',
+                fontSize: 11,
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 6px rgba(255, 122, 0, 0.4)'
+                gap: 5,
+                boxShadow: '0 2px 6px rgba(255, 122, 0, 0.4)',
+                whiteSpace: 'nowrap'
               }}
             >
-              <Radio size={13} /> Transmitir en Vivo
+              <Radio size={11} /> Transmitir en Vivo
             </button>
           )}
 
@@ -2909,11 +2956,12 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 backgroundColor: '#27272a',
                 color: '#ef4444',
                 border: '1px solid #ef4444',
-                borderRadius: 6,
-                padding: '6px 12px',
-                fontSize: 12,
+                borderRadius: 4,
+                padding: '4px 8px',
+                fontSize: 11,
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
               Detener Grabación
@@ -2926,14 +2974,15 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                 backgroundColor: '#1E1E1E',
                 color: '#D1D5DB',
                 border: '1px solid #3F3F46',
-                borderRadius: 6,
-                padding: '6px 12px',
-                fontSize: 12,
+                borderRadius: 4,
+                padding: '4px 8px',
+                fontSize: 11,
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
-              Grabar Local
+              Grabar
             </button>
           )}
 
@@ -2945,12 +2994,14 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               backgroundColor: '#1E1E1E',
               color: '#D1D5DB',
               border: '1px solid #2E2E2E',
-              borderRadius: 6,
-              padding: '6px 8px',
-              cursor: 'pointer'
+              borderRadius: 4,
+              padding: '4px 6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
-            <Settings size={15} />
+            <Settings size={13} />
           </button>
         </div>
       </div>
@@ -3038,35 +3089,40 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 140px 1fr',
-          gap: 12,
-          padding: 12,
+          gridTemplateColumns: '1fr 110px 1fr',
+          gap: 10,
+          padding: '6px 12px',
           backgroundColor: '#0F0F0F',
           borderBottom: '1px solid #222222',
           flex: '0 0 auto',
-          minHeight: 280
+          maxHeight: '38vh'
         }}
       >
         {/* PREVIEW Monitor (Left) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#38BDF8' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#38BDF8' }} />
               PREVIO (PREVIEW)
             </span>
-            <span style={{ fontSize: 11, color: '#9CA3AF' }}>{activePreviewScene?.name}</span>
+            <span style={{ fontSize: 10, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50%' }}>
+              {activePreviewScene?.name}
+            </span>
           </div>
 
           <div
             style={{
               position: 'relative',
               width: '100%',
-              paddingTop: '56.25%', // 16:9 aspect ratio
+              maxWidth: 360,
+              aspectRatio: '16 / 9',
+              maxHeight: 180,
+              margin: '0 auto',
               backgroundColor: '#000000',
-              borderRadius: 8,
+              borderRadius: 6,
               border: '2px solid #38BDF8',
               overflow: 'hidden',
-              boxShadow: '0 4px 12px rgba(56, 189, 248, 0.15)'
+              boxShadow: '0 2px 8px rgba(56, 189, 248, 0.15)'
             }}
           >
             {/* Layers Rendering in Preview with Interactive Drag & Resize */}
@@ -3155,6 +3211,63 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                               🔍 {(layer.zoom || 1.0).toFixed(1)}x
                             </span>
                           )}
+                        </div>
+
+                        {/* Quick Filter Pill for 1-Click Image Improvement */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: -22,
+                            right: 92,
+                            backgroundColor: '#0F172A',
+                            border: '1px solid #38BDF8',
+                            color: '#38BDF8',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            zIndex: 42,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.6)',
+                            pointerEvents: 'auto'
+                          }}
+                          title="Filtro rápido de corrección de color y mejora de imagen"
+                        >
+                          <Palette size={10} color="#38BDF8" />
+                          <select
+                            value={layer.colorCorrection?.preset || 'original'}
+                            onChange={(e) => {
+                              e.stopPropagation()
+                              const p = VIDEO_COLOR_PRESETS.find((pr) => pr.id === e.target.value)
+                              if (p) {
+                                handleUpdateLayer(idx, {
+                                  colorCorrection: {
+                                    preset: p.id,
+                                    ...p.settings
+                                  }
+                                })
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: '#38BDF8',
+                              fontSize: 9,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              outline: 'none',
+                              maxWidth: 105
+                            }}
+                          >
+                            {VIDEO_COLOR_PRESETS.map((p) => (
+                              <option key={p.id} value={p.id} style={{ backgroundColor: '#0F172A', color: '#FFF' }}>
+                                {p.shortName}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Quick Zoom & Reset Controls Pill */}
@@ -3279,11 +3392,11 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 12,
-            padding: '10px 0'
+            gap: 8,
+            padding: '4px 0'
           }}
         >
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF' }}>TRANSICIÓN</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.04em' }}>TRANSICIÓN</span>
 
           {/* CUT Button */}
           <button
@@ -3294,18 +3407,18 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               backgroundColor: '#1E1E1E',
               border: '1px solid #3F3F46',
               color: '#FFFFFF',
-              borderRadius: 6,
-              padding: '10px 0',
-              fontSize: 13,
+              borderRadius: 5,
+              padding: '6px 0',
+              fontSize: 11,
               fontWeight: 800,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 6
+              gap: 4
             }}
           >
-            CORTE <ArrowRight size={14} color="#38BDF8" />
+            CORTE <ArrowRight size={12} color="#38BDF8" />
           </button>
 
           {/* FADE / SELECTED TRANSITION Button */}
@@ -3318,30 +3431,30 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               backgroundColor: '#FF7A00',
               border: 'none',
               color: '#FFFFFF',
-              borderRadius: 6,
-              padding: '10px 6px',
-              fontSize: 12,
+              borderRadius: 5,
+              padding: '6px 4px',
+              fontSize: 11,
               fontWeight: 800,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 6,
-              boxShadow: '0 2px 8px rgba(255, 122, 0, 0.4)',
+              gap: 4,
+              boxShadow: '0 2px 6px rgba(255, 122, 0, 0.35)',
               opacity: isTransitioning ? 0.6 : 1
             }}
             title={`Ejecutar transición activa: ${TRANSITION_PRESETS.find((p) => p.id === selectedTransition)?.name}`}
           >
-            <span>{TRANSITION_PRESETS.find((p) => p.id === selectedTransition)?.icon || '✨'}</span>
+            <span style={{ fontSize: 11 }}>{TRANSITION_PRESETS.find((p) => p.id === selectedTransition)?.icon || '✨'}</span>
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {TRANSITION_PRESETS.find((p) => p.id === selectedTransition)?.name.split(' ')[0].toUpperCase() || 'FUNDIDO'}
             </span>
-            <ArrowRight size={13} />
+            <ArrowRight size={11} />
           </button>
 
           {/* Transition Duration Slider */}
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'center' }}>
-            <span style={{ fontSize: 10, color: '#9CA3AF' }}>Duración: {transitionDuration}ms</span>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'center' }}>
+            <span style={{ fontSize: 9, color: '#9CA3AF' }}>Duración: {transitionDuration}ms</span>
             <input
               type="range"
               min="100"
@@ -3349,31 +3462,36 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               step="50"
               value={transitionDuration}
               onChange={(e) => setTransitionDuration(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#FF7A00' }}
+              style={{ width: '100%', height: 3, accentColor: '#FF7A00' }}
             />
           </div>
         </div>
 
         {/* PROGRAM Monitor (Right) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
               PROGRAMA (EN EL AIRE)
             </span>
-            <span style={{ fontSize: 11, color: '#9CA3AF' }}>{activeProgramScene?.name}</span>
+            <span style={{ fontSize: 10, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50%' }}>
+              {activeProgramScene?.name}
+            </span>
           </div>
 
           <div
             style={{
               position: 'relative',
               width: '100%',
-              paddingTop: '56.25%', // 16:9 aspect ratio
+              maxWidth: 360,
+              aspectRatio: '16 / 9',
+              maxHeight: 180,
+              margin: '0 auto',
               backgroundColor: '#000000',
-              borderRadius: 8,
+              borderRadius: 6,
               border: '2px solid #ef4444',
               overflow: 'hidden',
-              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.15)'
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)'
             }}
           >
             {/* Outgoing Scene (only rendered during active transition animation) */}
@@ -3448,6 +3566,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                     data-zoom={layer.zoom || 1}
                     data-pan-x={layer.panX || 0}
                     data-pan-y={layer.panY || 0}
+                    data-filter={getColorCorrectionFilter(layer.colorCorrection)}
                     style={{
                       position: 'absolute',
                       left: `${layer.x}%`,
@@ -3482,15 +3601,20 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
         </div>
       </div>
 
-      {/* Lower Workspace (Bottom Half): Scenes, Layer Editor, Audio Mixer */}
+      {/* Lower Workspace (Bottom Half): Scenes and Layer Editor (Audio Mixer relocated under Timers) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '260px 1fr 340px',
-          gap: 12,
-          padding: 12,
-          flex: '1 1 auto',
-          overflow: 'hidden'
+          gridTemplateColumns: '240px 1fr',
+          gridTemplateRows: 'minmax(0, 1fr)',
+          gap: 8,
+          padding: 8,
+          flex: '1 1 0',
+          minHeight: 0,
+          height: '100%',
+          maxHeight: '100%',
+          overflow: 'hidden',
+          boxSizing: 'border-box'
         }}
       >
         {/* Panel 1: Scenes List */}
@@ -3498,15 +3622,18 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           style={{
             backgroundColor: '#121212',
             border: '1px solid #222222',
-            borderRadius: 8,
+            borderRadius: 6,
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            minHeight: 0,
+            height: '100%',
+            boxSizing: 'border-box'
           }}
         >
           <div
             style={{
-              padding: '10px 12px',
+              padding: '6px 10px',
               borderBottom: '1px solid #222222',
               display: 'flex',
               alignItems: 'center',
@@ -3514,24 +3641,45 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               backgroundColor: '#161616'
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Layers size={14} color="#FF7A00" /> ESCENAS ({scenes.length})
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Layers size={13} color="#FF7A00" /> ESCENAS ({scenes.length})
             </span>
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 3 }}>
               <button
                 type="button"
                 onClick={handleCreateScene}
-                title="Nueva Escena"
+                title="Nueva Escena (crear y editar nombre)"
                 style={{
                   background: '#222',
                   border: '1px solid #333',
                   borderRadius: 4,
                   padding: 4,
                   cursor: 'pointer',
-                  color: '#FFF'
+                  color: '#22c55e'
                 }}
               >
                 <Plus size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (activePreviewScene) {
+                    handleStartRenameScene(activePreviewScene)
+                  }
+                }}
+                disabled={!activePreviewScene}
+                title="Renombrar Escena Seleccionada"
+                style={{
+                  background: '#222',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  padding: 4,
+                  cursor: 'pointer',
+                  color: '#38BDF8',
+                  opacity: !activePreviewScene ? 0.4 : 1
+                }}
+              >
+                <Edit3 size={13} />
               </button>
               <button
                 type="button"
@@ -3568,38 +3716,159 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             </div>
           </div>
 
-          <div style={{ padding: 8, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+          <div style={{ padding: 8, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
             {scenes.map((scene) => {
               const isPreview = scene.id === previewSceneId
               const isProgram = scene.id === programSceneId
+              const isEditing = editingSceneId === scene.id
+
               return (
                 <div
                   key={scene.id}
-                  onClick={() => setPreviewSceneId(scene.id)}
+                  onClick={() => {
+                    if (!isEditing) setPreviewSceneId(scene.id)
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    handleStartRenameScene(scene)
+                  }}
                   style={{
-                    backgroundColor: isProgram ? 'rgba(239, 68, 68, 0.15)' : isPreview ? 'rgba(56, 189, 248, 0.12)' : '#181818',
-                    border: isProgram ? '1px solid #ef4444' : isPreview ? '1px solid #38BDF8' : '1px solid #282828',
+                    backgroundColor: isProgram
+                      ? 'rgba(239, 68, 68, 0.15)'
+                      : isPreview
+                      ? 'rgba(56, 189, 248, 0.12)'
+                      : '#181818',
+                    border: isProgram
+                      ? '1px solid #ef4444'
+                      : isPreview
+                      ? '1px solid #38BDF8'
+                      : '1px solid #282828',
                     borderRadius: 6,
                     padding: '8px 10px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    gap: 6
                   }}
+                  title="Clic para previsualizar | Doble clic para cambiar nombre"
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>{scene.name}</span>
-                    <span style={{ fontSize: 10, color: '#9CA3AF' }}>{scene.layers.length} capas</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    {isEditing ? (
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="text"
+                          value={editingSceneName}
+                          autoFocus
+                          onChange={(e) => setEditingSceneName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveRenameScene(scene.id)
+                            } else if (e.key === 'Escape') {
+                              handleCancelRenameScene()
+                            }
+                          }}
+                          onBlur={() => handleSaveRenameScene(scene.id)}
+                          style={{
+                            backgroundColor: '#0F1117',
+                            border: '1px solid #38BDF8',
+                            borderRadius: 4,
+                            color: '#FFF',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            width: '100%',
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            handleSaveRenameScene(scene.id)
+                          }}
+                          style={{
+                            backgroundColor: '#22c55e',
+                            border: 'none',
+                            borderRadius: 3,
+                            color: '#000',
+                            padding: '3px 5px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title="Guardar nombre (Enter)"
+                        >
+                          <Check size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#FFFFFF',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {scene.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleStartRenameScene(scene, e)}
+                          title="Cambiar nombre de la escena"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748B',
+                            cursor: 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: isPreview ? 1 : 0.6
+                          }}
+                        >
+                          <Edit3 size={11} />
+                        </button>
+                      </div>
+                    )}
+                    <span style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
+                      {scene.layers.length} capas
+                    </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     {isPreview && (
-                      <span style={{ backgroundColor: '#38BDF8', color: '#000', fontSize: 9, fontWeight: 800, padding: '2px 5px', borderRadius: 3 }}>
+                      <span
+                        style={{
+                          backgroundColor: '#38BDF8',
+                          color: '#000',
+                          fontSize: 9,
+                          fontWeight: 800,
+                          padding: '2px 5px',
+                          borderRadius: 3
+                        }}
+                      >
                         PREV
                       </span>
                     )}
                     {isProgram && (
-                      <span style={{ backgroundColor: '#ef4444', color: '#FFF', fontSize: 9, fontWeight: 800, padding: '2px 5px', borderRadius: 3 }}>
+                      <span
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: '#FFF',
+                          fontSize: 9,
+                          fontWeight: 800,
+                          padding: '2px 5px',
+                          borderRadius: 3
+                        }}
+                      >
                         PROG
                       </span>
                     )}
@@ -3618,20 +3887,26 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             borderRadius: 8,
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            minWidth: 0,
+            minHeight: 0,
+            height: '100%',
+            maxHeight: '100%',
+            boxSizing: 'border-box'
           }}
         >
           <div
             style={{
-              padding: '8px 12px',
+              padding: '6px 10px',
               borderBottom: '1px solid #222222',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#161616'
+              backgroundColor: '#161616',
+              flex: '0 0 auto'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <button
                 type="button"
                 onClick={() => setSourcesTab('layers')}
@@ -3639,9 +3914,9 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                   backgroundColor: sourcesTab === 'layers' ? '#38BDF8' : 'rgba(56, 189, 248, 0.14)',
                   color: sourcesTab === 'layers' ? '#000000' : '#38BDF8',
                   border: sourcesTab === 'layers' ? '1px solid #38BDF8' : '1px solid rgba(56, 189, 248, 0.4)',
-                  boxShadow: sourcesTab === 'layers' ? '0 0 10px rgba(56, 189, 248, 0.45)' : 'none',
-                  borderRadius: 5,
-                  padding: '5px 11px',
+                  boxShadow: sourcesTab === 'layers' ? '0 0 8px rgba(56, 189, 248, 0.4)' : 'none',
+                  borderRadius: 4,
+                  padding: '3px 8px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -3657,19 +3932,19 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                   backgroundColor: sourcesTab === 'phone_cameras' ? '#22C55E' : 'rgba(34, 197, 94, 0.14)',
                   color: sourcesTab === 'phone_cameras' ? '#000000' : '#22C55E',
                   border: sourcesTab === 'phone_cameras' ? '1px solid #22C55E' : '1px solid rgba(34, 197, 94, 0.4)',
-                  boxShadow: sourcesTab === 'phone_cameras' ? '0 0 10px rgba(34, 197, 94, 0.45)' : 'none',
-                  borderRadius: 5,
-                  padding: '5px 11px',
+                  boxShadow: sourcesTab === 'phone_cameras' ? '0 0 8px rgba(34, 197, 94, 0.4)' : 'none',
+                  borderRadius: 4,
+                  padding: '3px 8px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: 4,
                   transition: 'all 0.15s ease'
                 }}
               >
-                <Smartphone size={12} color={sourcesTab === 'phone_cameras' ? '#000000' : '#22C55E'} /> Móviles ({phoneCameras.length})
+                <Smartphone size={11} color={sourcesTab === 'phone_cameras' ? '#000000' : '#22C55E'} /> Móviles ({phoneCameras.length})
               </button>
               <button
                 type="button"
@@ -3678,15 +3953,15 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                   backgroundColor: sourcesTab === 'transitions' ? '#FF7A00' : 'rgba(255, 122, 0, 0.14)',
                   color: sourcesTab === 'transitions' ? '#000000' : '#FF7A00',
                   border: sourcesTab === 'transitions' ? '1px solid #FF7A00' : '1px solid rgba(255, 122, 0, 0.4)',
-                  boxShadow: sourcesTab === 'transitions' ? '0 0 10px rgba(255, 122, 0, 0.45)' : 'none',
-                  borderRadius: 5,
-                  padding: '5px 11px',
+                  boxShadow: sourcesTab === 'transitions' ? '0 0 8px rgba(255, 122, 0, 0.4)' : 'none',
+                  borderRadius: 4,
+                  padding: '3px 8px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: 4,
                   transition: 'all 0.15s ease'
                 }}
                 title="Configurar efecto de transición de video"
@@ -3700,15 +3975,15 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                   backgroundColor: sourcesTab === 'overlays' ? '#A855F7' : 'rgba(168, 85, 247, 0.14)',
                   color: sourcesTab === 'overlays' ? '#000000' : '#A855F7',
                   border: sourcesTab === 'overlays' ? '1px solid #A855F7' : '1px solid rgba(168, 85, 247, 0.4)',
-                  boxShadow: sourcesTab === 'overlays' ? '0 0 10px rgba(168, 85, 247, 0.45)' : 'none',
-                  borderRadius: 5,
-                  padding: '5px 11px',
+                  boxShadow: sourcesTab === 'overlays' ? '0 0 8px rgba(168, 85, 247, 0.4)' : 'none',
+                  borderRadius: 4,
+                  padding: '3px 8px',
                   fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: 4,
                   transition: 'all 0.15s ease'
                 }}
                 title="Banners, zócalos de orador, marquesina y código QR para ofrendas"
@@ -3753,7 +4028,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
           </div>
 
           {sourcesTab === 'phone_cameras' ? (
-            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0 }}>
               {phoneCameras.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '36px 0', color: '#64748B', fontSize: 12 }}>
                   <Smartphone size={32} color="#334155" style={{ marginBottom: 8 }} />
@@ -3897,7 +4172,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               )}
             </div>
           ) : sourcesTab === 'transitions' ? (
-            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -4081,7 +4356,7 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               </div>
             </div>
           ) : sourcesTab === 'overlays' ? (
-            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+            <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -4844,9 +5119,22 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
               </div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', flex: 1, overflow: 'hidden' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '200px 1fr',
+                gridTemplateRows: 'minmax(0, 1fr)',
+                flex: '1 1 0',
+                minHeight: 0,
+                height: '100%',
+                maxHeight: '100%',
+                overflow: 'hidden',
+                minWidth: 0,
+                boxSizing: 'border-box'
+              }}
+            >
             {/* Layers List */}
-            <div style={{ borderRight: '1px solid #222222', padding: 8, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ borderRight: '1px solid #222222', padding: 8, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, minHeight: 0, height: '100%', boxSizing: 'border-box' }}>
               {activePreviewScene?.layers.map((layer, idx) => (
                 <div
                   key={layer.id}
@@ -4934,7 +5222,21 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
 
             {/* Selected Layer Properties Inspector */}
             {activePreviewScene?.layers[selectedLayerIndex] ? (
-              <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div
+                style={{
+                  padding: '10px 12px 24px 12px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  minWidth: 0,
+                  minHeight: 0,
+                  height: '100%',
+                  maxHeight: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
                 {(() => {
                   const layer = activePreviewScene.layers[selectedLayerIndex]
                   return (
@@ -5219,8 +5521,123 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                         </div>
                       )}
 
-                      {/* Position and Size (X, Y, W, H %) */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                      {/* Sub-tabs: Filtros Pro | Ajuste Manual | Posición y Zoom | Todo */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 3,
+                          padding: 3,
+                          backgroundColor: '#161922',
+                          borderRadius: 6,
+                          border: '1px solid #222834',
+                          marginTop: 2
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setInspectorTab('presets')}
+                          style={{
+                            padding: '6px 4px',
+                            fontSize: 10,
+                            fontWeight: inspectorTab === 'presets' ? 700 : 500,
+                            backgroundColor: inspectorTab === 'presets' ? '#0284c7' : 'transparent',
+                            color: inspectorTab === 'presets' ? '#ffffff' : '#94a3b8',
+                            border: inspectorTab === 'presets' ? '1px solid #38bdf8' : '1px solid transparent',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <Palette size={12} color={inspectorTab === 'presets' ? '#ffffff' : '#38bdf8'} />
+                          <span>Filtros Pro</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setInspectorTab('manual')}
+                          style={{
+                            padding: '6px 4px',
+                            fontSize: 10,
+                            fontWeight: inspectorTab === 'manual' ? 700 : 500,
+                            backgroundColor: inspectorTab === 'manual' ? '#0284c7' : 'transparent',
+                            color: inspectorTab === 'manual' ? '#ffffff' : '#94a3b8',
+                            border: inspectorTab === 'manual' ? '1px solid #38bdf8' : '1px solid transparent',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <Sliders size={12} color={inspectorTab === 'manual' ? '#ffffff' : '#38bdf8'} />
+                          <span>Ajuste Manual</span>
+                          {((layer.colorCorrection?.temperature || 0) !== 0 || (layer.colorCorrection?.tint || 0) !== 0) && (
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#f59e0b' }} />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setInspectorTab('transform')}
+                          style={{
+                            padding: '6px 4px',
+                            fontSize: 10,
+                            fontWeight: inspectorTab === 'transform' ? 700 : 500,
+                            backgroundColor: inspectorTab === 'transform' ? '#0284c7' : 'transparent',
+                            color: inspectorTab === 'transform' ? '#ffffff' : '#94a3b8',
+                            border: inspectorTab === 'transform' ? '1px solid #38bdf8' : '1px solid transparent',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <Move size={12} color={inspectorTab === 'transform' ? '#ffffff' : '#94a3b8'} />
+                          <span>Posición / PIP</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setInspectorTab('all')}
+                          style={{
+                            padding: '6px 4px',
+                            fontSize: 10,
+                            fontWeight: inspectorTab === 'all' ? 700 : 500,
+                            backgroundColor: inspectorTab === 'all' ? '#1e293b' : 'transparent',
+                            color: inspectorTab === 'all' ? '#f1f5f9' : '#64748b',
+                            border: inspectorTab === 'all' ? '1px solid #475569' : '1px solid transparent',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 3,
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <span>Todo</span>
+                        </button>
+                      </div>
+
+                      {/* Section: Posición, PIP y Zoom */}
+                      {(inspectorTab === 'transform' || inspectorTab === 'all') && (
+                        <>
+                          {/* Position and Size (X, Y, W, H %) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: 10, color: '#9CA3AF' }}>Pos X (%)</span>
                           <input
@@ -5522,6 +5939,412 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
                         )}
                       </div>
                     </>
+                  )}
+
+                  {/* DEFINICIÓN DE SLIDERS DE AJUSTE MANUAL REUTILIZABLE */}
+                  {(() => {
+                    const renderManualFineTuning = (standalone: boolean = false) => (
+                      <div
+                        style={{
+                          backgroundColor: '#121620',
+                          border: '1px solid #1E2638',
+                          borderRadius: 6,
+                          padding: standalone ? 12 : 8,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          boxSizing: 'border-box',
+                          maxWidth: '100%',
+                          width: '100%',
+                          flexShrink: 0
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <span style={{ fontSize: standalone ? 11 : 10, fontWeight: 700, color: '#E2E8F0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Sliders size={standalone ? 13 : 11} color="#38BDF8" /> {standalone ? 'Ajuste Fino Manual (Balance de Blancos & Color)' : 'Ajuste Fino Manual:'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const originalPreset = VIDEO_COLOR_PRESETS.find((p) => p.id === 'original')!
+                              handleUpdateLayer(selectedLayerIndex, {
+                                colorCorrection: {
+                                  preset: 'original',
+                                  ...originalPreset.settings
+                                }
+                              })
+                            }}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: '#94A3B8',
+                              fontSize: 9,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}
+                            title="Restablecer a valores neutros"
+                          >
+                            <RotateCcw size={10} /> Restablecer
+                          </button>
+                        </div>
+
+                        {standalone && (
+                          <div style={{ fontSize: 10, color: '#94A3B8', lineHeight: 1.35 }}>
+                            Ajusta la calibración de la cámara directamente. Si el escenario se ve amarillo o ámbar, desliza <strong>Temperatura</strong> hacia la izquierda (Azul). Si los rostros lucen verdosos, desliza <strong>Tinte</strong> hacia Magenta.
+                          </div>
+                        )}
+
+                        {/* Slider 1: Temperatura */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+                            <span style={{ color: '#94A3B8' }}>Temperatura (Balance de Blancos):</span>
+                            <span style={{ fontWeight: 700, color: (layer.colorCorrection?.temperature || 0) < 0 ? '#38BDF8' : (layer.colorCorrection?.temperature || 0) > 0 ? '#F59E0B' : '#E2E8F0' }}>
+                              {(layer.colorCorrection?.temperature || 0) < 0
+                                ? `Frío / Azul (${layer.colorCorrection?.temperature || 0})`
+                                : (layer.colorCorrection?.temperature || 0) > 0
+                                ? `Cálido / Ámbar (+${layer.colorCorrection?.temperature || 0})`
+                                : 'Neutro (0)'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', minWidth: 0 }}>
+                            <span style={{ fontSize: 9, color: '#38BDF8', fontWeight: 600, flexShrink: 0 }}>Frío (Azul)</span>
+                            <input
+                              type="range"
+                              min="-60"
+                              max="60"
+                              step="1"
+                              value={layer.colorCorrection?.temperature ?? 0}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                handleUpdateLayer(selectedLayerIndex, {
+                                  colorCorrection: {
+                                    preset: 'custom',
+                                    temperature: val,
+                                    tint: layer.colorCorrection?.tint ?? 0,
+                                    contrast: layer.colorCorrection?.contrast ?? 100,
+                                    brightness: layer.colorCorrection?.brightness ?? 100,
+                                    saturation: layer.colorCorrection?.saturation ?? 100
+                                  }
+                                })
+                              }}
+                              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', accentColor: '#38BDF8' }}
+                            />
+                            <span style={{ fontSize: 9, color: '#F59E0B', fontWeight: 600, flexShrink: 0 }}>Cálido (Ámbar)</span>
+                          </div>
+                        </div>
+
+                        {/* Slider 2: Tinte */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+                            <span style={{ color: '#94A3B8' }}>Tinte (Matiz Verde / Magenta):</span>
+                            <span style={{ fontWeight: 700, color: '#E2E8F0' }}>
+                              {(layer.colorCorrection?.tint || 0) < 0
+                                ? `Verde (${layer.colorCorrection?.tint || 0})`
+                                : (layer.colorCorrection?.tint || 0) > 0
+                                ? `Magenta (+${layer.colorCorrection?.tint || 0})`
+                                : 'Neutro (0)'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', minWidth: 0 }}>
+                            <span style={{ fontSize: 9, color: '#22C55E', fontWeight: 600, flexShrink: 0 }}>Verde</span>
+                            <input
+                              type="range"
+                              min="-30"
+                              max="30"
+                              step="1"
+                              value={layer.colorCorrection?.tint ?? 0}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                handleUpdateLayer(selectedLayerIndex, {
+                                  colorCorrection: {
+                                    preset: 'custom',
+                                    temperature: layer.colorCorrection?.temperature ?? 0,
+                                    tint: val,
+                                    contrast: layer.colorCorrection?.contrast ?? 100,
+                                    brightness: layer.colorCorrection?.brightness ?? 100,
+                                    saturation: layer.colorCorrection?.saturation ?? 100
+                                  }
+                                })
+                              }}
+                              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', accentColor: '#A855F7' }}
+                            />
+                            <span style={{ fontSize: 9, color: '#EC4899', fontWeight: 600, flexShrink: 0 }}>Magenta</span>
+                          </div>
+                        </div>
+
+                        {/* Sliders 3, 4, 5: Contraste, Brillo, Saturación */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: 6, width: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94A3B8' }}>
+                              <span>Contraste:</span>
+                              <span style={{ fontWeight: 700, color: '#E2E8F0' }}>{layer.colorCorrection?.contrast ?? 100}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="70"
+                              max="150"
+                              step="1"
+                              value={layer.colorCorrection?.contrast ?? 100}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                handleUpdateLayer(selectedLayerIndex, {
+                                  colorCorrection: {
+                                    preset: 'custom',
+                                    temperature: layer.colorCorrection?.temperature ?? 0,
+                                    tint: layer.colorCorrection?.tint ?? 0,
+                                    contrast: val,
+                                    brightness: layer.colorCorrection?.brightness ?? 100,
+                                    saturation: layer.colorCorrection?.saturation ?? 100
+                                  }
+                                })
+                              }}
+                              style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', accentColor: '#38BDF8' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94A3B8' }}>
+                              <span>Brillo:</span>
+                              <span style={{ fontWeight: 700, color: '#E2E8F0' }}>{layer.colorCorrection?.brightness ?? 100}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="70"
+                              max="130"
+                              step="1"
+                              value={layer.colorCorrection?.brightness ?? 100}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                handleUpdateLayer(selectedLayerIndex, {
+                                  colorCorrection: {
+                                    preset: 'custom',
+                                    temperature: layer.colorCorrection?.temperature ?? 0,
+                                    tint: layer.colorCorrection?.tint ?? 0,
+                                    contrast: layer.colorCorrection?.contrast ?? 100,
+                                    brightness: val,
+                                    saturation: layer.colorCorrection?.saturation ?? 100
+                                  }
+                                })
+                              }}
+                              style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', accentColor: '#F59E0B' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94A3B8' }}>
+                              <span>Saturación:</span>
+                              <span style={{ fontWeight: 700, color: '#E2E8F0' }}>{layer.colorCorrection?.saturation ?? 100}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="200"
+                              step="1"
+                              value={layer.colorCorrection?.saturation ?? 100}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                handleUpdateLayer(selectedLayerIndex, {
+                                  colorCorrection: {
+                                    preset: 'custom',
+                                    temperature: layer.colorCorrection?.temperature ?? 0,
+                                    tint: layer.colorCorrection?.tint ?? 0,
+                                    contrast: layer.colorCorrection?.contrast ?? 100,
+                                    brightness: layer.colorCorrection?.brightness ?? 100,
+                                    saturation: val
+                                  }
+                                })
+                              }}
+                              style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', accentColor: '#EC4899' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+
+                    return (
+                      <>
+                        {/* PESTAÑA: AJUSTE MANUAL DIRECTO (100% VISIBLE SIN PRESETS) */}
+                        {inspectorTab === 'manual' && (
+                          <div
+                            style={{
+                              backgroundColor: '#161922',
+                              border: '1px solid #222834',
+                              borderRadius: 6,
+                              padding: 10,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 10,
+                              maxWidth: '100%',
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              flexShrink: 0
+                            }}
+                          >
+                            {renderManualFineTuning(true)}
+                          </div>
+                        )}
+
+                        {/* MEJORA DE IMAGEN Y CORRECCIÓN DE COLOR (PROFESIONAL CON PRESETS 3 COLUMNAS) */}
+                        {(inspectorTab === 'presets' || inspectorTab === 'all') && (
+                          <div
+                            style={{
+                              backgroundColor: '#161922',
+                              border: '1px solid #222834',
+                              borderRadius: 6,
+                              padding: 10,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 10,
+                              maxWidth: '100%',
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              flexShrink: 0
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Palette size={13} color="#38BDF8" /> Corrección de Color & Filtros Pro
+                              </span>
+                              {layer.colorCorrection?.preset && layer.colorCorrection.preset !== 'original' && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: '#38BDF8',
+                                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                                    borderRadius: 4,
+                                    padding: '1px 6px'
+                                  }}
+                                >
+                                  {VIDEO_COLOR_PRESETS.find((p) => p.id === layer.colorCorrection?.preset)?.shortName || 'Personalizado'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ fontSize: 10, color: '#94A3B8', lineHeight: 1.35 }}>
+                              Toca un filtro para aplicarlo automáticamente a la cámara en vivo. Elimina el tono amarillento de los focos de escenario y optimiza la nitidez y los rostros.
+                            </div>
+
+                            {/* Quick 1-Touch Presets Grid (3 Columnas Compactas) */}
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(3, 1fr)',
+                                gap: 5,
+                                width: '100%',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              {VIDEO_COLOR_PRESETS.map((preset) => {
+                                const isActive = (layer.colorCorrection?.preset || 'original') === preset.id
+                                return (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdateLayer(selectedLayerIndex, {
+                                        colorCorrection: {
+                                          preset: preset.id,
+                                          ...preset.settings
+                                        }
+                                      })
+                                    }}
+                                    title={preset.description}
+                                    style={{
+                                      backgroundColor: isActive ? 'rgba(56, 189, 248, 0.18)' : '#1a202c',
+                                      color: isActive ? '#FFFFFF' : '#D1D5DB',
+                                      border: isActive ? `1.5px solid ${preset.accentColor}` : '1px solid #2D3748',
+                                      borderRadius: 5,
+                                      padding: '5px 6px',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'stretch',
+                                      gap: 2,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                      transition: 'all 0.15s ease',
+                                      boxShadow: isActive ? `0 0 10px ${preset.accentColor}33` : 'none',
+                                      boxSizing: 'border-box',
+                                      width: '100%',
+                                      minWidth: 0,
+                                      overflow: 'hidden'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 4, minWidth: 0 }}>
+                                      <span
+                                        style={{
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          color: isActive ? preset.accentColor : '#E2E8F0',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          flex: 1,
+                                          minWidth: 0
+                                        }}
+                                      >
+                                        {preset.shortName}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: 8,
+                                          padding: '1px 3px',
+                                          borderRadius: 3,
+                                          backgroundColor: isActive ? preset.accentColor : 'rgba(255,255,255,0.06)',
+                                          color: isActive ? '#000000' : '#94A3B8',
+                                          fontWeight: 800,
+                                          whiteSpace: 'nowrap',
+                                          flexShrink: 0
+                                        }}
+                                      >
+                                        {preset.tag}
+                                      </span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: 8,
+                                        color: '#94A3B8',
+                                        lineHeight: 1.2,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        width: '100%'
+                                      }}
+                                    >
+                                      {preset.id === 'anti_tungsten_strong'
+                                        ? '🎯 Corrige focos amarillos'
+                                        : preset.id === 'anti_tungsten_soft'
+                                        ? 'Balance cálido equilibrado'
+                                        : preset.id === 'daylight_clean'
+                                        ? 'Blanco puro 5600K estudio'
+                                        : preset.id === 'portrait_preach'
+                                        ? 'Optimiza piel de predicador'
+                                        : preset.id === 'stage_vivid'
+                                        ? 'Contraste alto y alabanza'
+                                        : preset.id === 'cool_cinematic'
+                                        ? 'Look frío de TV moderna'
+                                        : preset.id === 'warm_cozy'
+                                        ? 'Calidez dorada suave'
+                                        : preset.id === 'cinema_bw'
+                                        ? 'Blanco y negro puro'
+                                        : 'Sin corrección digital'}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+
+                            {/* Deslizadores de Ajuste Fino Manual */}
+                            {renderManualFineTuning(false)}
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
+                  </>
                   )
                 })()}
               </div>
@@ -5532,179 +6355,6 @@ export const BroadcastStudioPanel: React.FC<BroadcastStudioPanelProps> = ({
             )}
           </div>
           )}
-        </div>
-
-        {/* Panel 3: Real Web Audio Mixer with Lip-Sync Delay & VU Meters */}
-        <div
-          style={{
-            backgroundColor: '#121212',
-            border: '1px solid #222222',
-            borderRadius: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}
-        >
-          <div
-            style={{
-              padding: '10px 12px',
-              borderBottom: '1px solid #222222',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#161616'
-            }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Volume2 size={14} color="#22c55e" /> MEZCLADOR DE AUDIO
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: audioMixer.limiterEnabled ? '#22c55e' : '#71717a' }}>
-                LIMITADOR
-              </span>
-              <button
-                type="button"
-                onClick={handleToggleMasterMute}
-                style={{
-                  background: audioMixer.masterMuted ? '#ef4444' : '#222',
-                  border: '1px solid #333',
-                  borderRadius: 4,
-                  padding: '3px 6px',
-                  color: '#FFF',
-                  cursor: 'pointer'
-                }}
-                title={audioMixer.masterMuted ? 'Desmutear Master' : 'Silenciar Master'}
-              >
-                {audioMixer.masterMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-            {/* Audio Channels */}
-            {audioMixer.sources.map((src) => {
-              const level = vuLevels[src.id] || 0
-              return (
-                <div
-                  key={src.id}
-                  style={{
-                    backgroundColor: '#181818',
-                    border: '1px solid #262626',
-                    borderRadius: 6,
-                    padding: '8px 10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#FFFFFF' }}>{src.name}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {src.type !== 'presentation' && audioDevices.length > 0 && (
-                        <select
-                          value={src.deviceId || ''}
-                          onChange={(e) => handleUpdateAudioSource(src.id, { deviceId: e.target.value })}
-                          style={{
-                            backgroundColor: '#121212',
-                            border: '1px solid #2E2E2E',
-                            borderRadius: 4,
-                            padding: '2px 4px',
-                            color: '#A1A1AA',
-                            fontSize: 10,
-                            maxWidth: 130
-                          }}
-                          title="Seleccionar micrófono o entrada de línea física"
-                        >
-                          <option value="">(Dispositivo por defecto)</option>
-                          {audioDevices.map((d) => (
-                            <option key={d.deviceId} value={d.deviceId}>
-                              {d.label || `Entrada ${d.deviceId.slice(0, 6)}`}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateAudioSource(src.id, { muted: !src.muted })}
-                        style={{
-                          background: src.muted ? '#ef4444' : '#2A2A2A',
-                          border: 'none',
-                          borderRadius: 4,
-                          padding: '2px 6px',
-                          color: '#FFF',
-                          fontSize: 10,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {src.muted ? 'MUTE' : 'ON'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Real AnalyserNode VU Peak Meter */}
-                  <div
-                    style={{
-                      width: '100%',
-                      height: 8,
-                      backgroundColor: '#0A0A0A',
-                      borderRadius: 4,
-                      overflow: 'hidden',
-                      display: 'flex',
-                      border: '1px solid #222'
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: src.muted ? '0%' : `${level}%`,
-                        height: '100%',
-                        backgroundColor: level > 85 ? '#ef4444' : level > 70 ? '#f59e0b' : '#22c55e',
-                        transition: 'width 60ms ease-out'
-                      }}
-                    />
-                  </div>
-
-                  {/* Controls: Volume Slider & Lip-Sync Delay */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Volume2 size={11} color="#9CA3AF" />
-                      <input
-                        type="range"
-                        min="0"
-                        max="1.5"
-                        step="0.05"
-                        value={src.volume}
-                        onChange={(e) => handleUpdateAudioSource(src.id, { volume: Number(e.target.value) })}
-                        style={{ width: '100%', accentColor: '#22c55e' }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Compensación de retardo (Lip-Sync)">
-                      <Clock size={11} color="#38BDF8" />
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        step="10"
-                        value={src.delayMs}
-                        onChange={(e) => handleUpdateAudioSource(src.id, { delayMs: Number(e.target.value) })}
-                        style={{
-                          width: 48,
-                          backgroundColor: '#121212',
-                          border: '1px solid #333',
-                          borderRadius: 4,
-                          padding: '2px 4px',
-                          color: '#38BDF8',
-                          fontSize: 10,
-                          textAlign: 'right'
-                        }}
-                      />
-                      <span style={{ fontSize: 9, color: '#9CA3AF' }}>ms</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
         </div>
       </div>
 

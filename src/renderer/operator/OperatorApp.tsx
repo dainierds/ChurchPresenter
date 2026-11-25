@@ -72,6 +72,7 @@ import { LiveSubtitlesModal } from './components/LiveSubtitlesModal'
 import { AiAssistantModal } from './components/AiAssistantModal'
 import { SecondaryBackupModal } from './components/SecondaryBackupModal'
 import { CameraSettingsSection } from './components/CameraSettingsSection'
+import { AboutModal } from './components/AboutModal'
 import { SessionSnapshot, RehearsalSummary, SystemMetrics, MacroItem, PropItem, LoopStatus, BroadcastStatus } from '../../shared/types'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatDisplayTitle, matchDisplayByStableId } from '../../shared/display-utils'
@@ -83,6 +84,7 @@ import {
 import { searchItems } from '../../shared/search-utils'
 import { createServiceFromTemplate } from '../../shared/service-utils'
 import { parseBibleReference } from '../../shared/bible-reference-parser'
+import { parseYouTubeUrl } from '../../shared/youtube-utils'
 import {
   Monitor,
   FolderOpen,
@@ -115,7 +117,9 @@ import {
   Database,
   HardDrive,
   Cpu,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Tv,
+  Play
 } from 'lucide-react'
 import './operator.css'
 
@@ -578,6 +582,7 @@ export const OperatorApp: React.FC = () => {
   const [recoverySnapshot, setRecoverySnapshot] = useState<SessionSnapshot | null>(null)
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState<boolean>(false)
   const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState<boolean>(false)
   const [isOutputHealthModalOpen, setIsOutputHealthModalOpen] = useState<boolean>(false)
   const [isRehearsalSummaryModalOpen, setIsRehearsalSummaryModalOpen] = useState<boolean>(false)
   const [rehearsalSummary, setRehearsalSummary] = useState<RehearsalSummary | null>(null)
@@ -614,12 +619,22 @@ export const OperatorApp: React.FC = () => {
     title: 'Crear Nueva Playlist de Culto',
     initialValue: ''
   })
+  const [blankSlideModal, setBlankSlideModal] = useState<{
+    isOpen: boolean
+    title: string
+    youtubeUrl: string
+  }>({
+    isOpen: false,
+    title: '',
+    youtubeUrl: ''
+  })
 
   // Check if any modal is currently visible on screen
   const isAnyModalOpen = Boolean(
     isDisplaysModalOpen ||
     isSettingsOpen ||
     newPlaylistModal.isOpen ||
+    blankSlideModal.isOpen ||
     isSongEditorOpen ||
     isPresentationEditorOpen ||
     isThemesModalOpen ||
@@ -1189,17 +1204,25 @@ export const OperatorApp: React.FC = () => {
     if (!currentServiceItem) return []
 
     if (currentServiceItem.type === 'blank') {
+      const ytUrl = currentServiceItem.youtubeConfig?.url || (currentServiceItem.notes && (currentServiceItem.notes.includes('youtube.com') || currentServiceItem.notes.includes('youtu.be')) ? currentServiceItem.notes : null)
+      const parsed = ytUrl ? parseYouTubeUrl(ytUrl) : null
+      const ytVideoId = (parsed && parsed.isValid && parsed.videoId) ? parsed.videoId : currentServiceItem.youtubeConfig?.youtubeId
+
       return [
         {
           id: `blank_${currentServiceItem.id}`,
           sourceId: currentServiceItem.id,
           sourceType: 'blank',
-          groupLabel: 'En Blanco',
+          groupLabel: ytUrl ? 'Video YouTube' : 'En Blanco',
           slideIndex: 1,
           totalSlidesInGroup: 1,
           title: currentServiceItem.name,
-          body: '',
-          subtitle: ''
+          body: currentServiceItem.name,
+          subtitle: ytUrl ? `▶ Enlace YouTube: ${ytUrl}` : '',
+          mediaUrl: ytUrl || undefined,
+          mediaType: ytUrl ? 'youtube' : undefined,
+          youtubeId: ytVideoId || undefined,
+          thumbnailUrl: ytVideoId ? `https://i.ytimg.com/vi/${ytVideoId}/hqdefault.jpg` : undefined
         }
       ]
     }
@@ -1236,18 +1259,25 @@ export const OperatorApp: React.FC = () => {
     }
 
     if (currentPresentation) {
-      return currentPresentation.slides.map((s, idx) => ({
-        id: s.id,
-        sourceId: currentPresentation.id,
-        sourceType: 'presentation' as const,
-        groupLabel: `Diapositiva ${idx + 1}`,
-        slideIndex: idx + 1,
-        totalSlidesInGroup: currentPresentation.slides.length,
-        title: s.title || currentPresentation.title,
-        body: s.body,
-        subtitle: s.subtitle,
-        background: s.background
-      }))
+      return currentPresentation.slides.map((s, idx) => {
+        const bgVal = s.background?.type === 'image' ? s.background.value : undefined
+        const imgUrl = (s as any).mediaUrl || (s as any).thumbnailUrl || bgVal
+        return {
+          id: s.id,
+          sourceId: currentPresentation.id,
+          sourceType: 'presentation' as const,
+          groupLabel: `Diapositiva ${idx + 1}`,
+          slideIndex: idx + 1,
+          totalSlidesInGroup: currentPresentation.slides.length,
+          title: s.title || currentPresentation.title,
+          body: s.body,
+          subtitle: s.subtitle,
+          background: s.background,
+          mediaUrl: imgUrl,
+          thumbnailUrl: imgUrl,
+          mediaType: imgUrl ? 'image' : undefined
+        }
+      })
     }
 
     if (currentServiceItem.type === 'video' || currentServiceItem.type === 'media') {
@@ -1337,6 +1367,9 @@ export const OperatorApp: React.FC = () => {
           subtitle: `Diapositiva ${s.index} de ${manifest.slideCount}`,
           body: s.speakerNotes || '',
           mediaUrl: s.imagePath,
+          thumbnailUrl: s.imagePath,
+          mediaType: 'image' as const,
+          background: { type: 'image' as const, value: s.imagePath },
           speakerNotes: s.speakerNotes,
           warnings: s.warnings
         }))
@@ -1757,9 +1790,12 @@ export const OperatorApp: React.FC = () => {
       // Modifiers
       if (e.ctrlKey || e.metaKey) {
         if (key === 'Y') {
-          e.preventDefault()
-          setActiveToolbarMode('youtube')
-          return
+          if (activeToolbarMode !== 'youtube') {
+            e.preventDefault()
+            setActiveToolbarMode('youtube')
+            return
+          }
+          // If already in YouTube mode, let YouTubeBrowserPanel handle toggling projection
         }
         if (key === 'M') {
           e.preventDefault()
@@ -2192,22 +2228,58 @@ export const OperatorApp: React.FC = () => {
     })
   }
 
+  const handleOpenYouTubeInApp = useCallback(async (rawUrl: string) => {
+    if (!rawUrl) return
+    setActiveToolbarMode('youtube')
+    setTimeout(async () => {
+      await window.churchPresenterApi?.navigateYouTubeBrowser?.('go', rawUrl)
+    }, 60)
+  }, [])
+
   const handleAddBlankItem = () => {
     if (!currentService) return
+    setBlankSlideModal({
+      isOpen: true,
+      title: 'Diapositiva en Blanco',
+      youtubeUrl: ''
+    })
+  }
+
+  const handleConfirmCreateBlankSlide = (title: string, youtubeUrl: string) => {
+    if (!currentService) return
+    const finalTitle = title.trim() || 'Diapositiva en Blanco'
+    const trimmedUrl = youtubeUrl.trim()
+    const parsed = trimmedUrl ? parseYouTubeUrl(trimmedUrl) : null
+
     const newItem: ServiceItem = {
       id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       type: 'blank',
-      name: 'Diapositiva en Blanco'
+      name: finalTitle,
+      notes: trimmedUrl || undefined,
+      youtubeConfig: (parsed && parsed.isValid && parsed.videoId) ? {
+        youtubeId: parsed.videoId,
+        url: parsed.canonicalUrl || trimmedUrl,
+        title: finalTitle,
+        duration: 0,
+        targetRoles: ['main', 'stage'],
+        audioRole: 'main',
+        endAction: 'freeze'
+      } : undefined
     }
+
     const updatedService: ServicePlan = {
       ...currentService,
       items: [...currentService.items, newItem],
       updatedAt: new Date().toISOString()
     }
+
     window.churchPresenterApi.saveService(updatedService).then((saved) => {
       setCurrentService(saved)
       setServices((prev) => prev.map((s) => (s.id === saved.id ? saved : s)))
+      setSelectedServiceItemIndex(saved.items.length - 1)
     })
+
+    setBlankSlideModal({ isOpen: false, title: '', youtubeUrl: '' })
   }
 
   // Service Management
@@ -2991,9 +3063,7 @@ export const OperatorApp: React.FC = () => {
   }
 
   const handleIdentifyDisplays = () => {
-    window.churchPresenterApi.openPreviewOutputWindow('main')
-    window.churchPresenterApi.openPreviewOutputWindow('stage')
-    window.churchPresenterApi.openPreviewOutputWindow('lobby')
+    window.churchPresenterApi.identifyDisplays()
   }
 
   // HTML5 Drag and Drop Handlers for Window
@@ -3270,6 +3340,7 @@ export const OperatorApp: React.FC = () => {
         onOpenSubtitles={() => setIsLiveSubtitlesModalOpen(true)}
         onOpenAiAssistant={() => setIsAiAssistantModalOpen(true)}
         onOpenSecondaryBackup={() => setIsSecondaryBackupModalOpen(true)}
+        onOpenAboutModal={() => setIsAboutModalOpen(true)}
       />
 
       {/* 2. ProPresenter Toolbar */}
@@ -3299,8 +3370,8 @@ export const OperatorApp: React.FC = () => {
         isMediaDrawerOpen={isMediaDrawerOpen}
         onToggleMediaDrawer={() => setIsMediaDrawerOpen(!isMediaDrawerOpen)}
         onOpenDisplaysModal={() => setIsDisplaysModalOpen(true)}
-        onOpenOutputPreviewOrSettings={(role) => {
-          window.churchPresenterApi.openPreviewOutputWindow(role)
+        onOpenOutputPreviewOrSettings={(_role) => {
+          setIsDisplaysModalOpen(true)
         }}
         remoteStatus={remoteStatus}
         onOpenRemoteSettings={() => setIsSettingsOpen(true)}
@@ -3535,6 +3606,7 @@ export const OperatorApp: React.FC = () => {
                   }
                 }}
                 onAddBlankItem={handleAddBlankItem}
+                onOpenYouTube={handleOpenYouTubeInApp}
                 onVerifyPlaylist={() => setIsYouTubeVerifyOpen(true)}
                 allThemes={themes}
                 onAssignItemTheme={(idx, themeId) => {
@@ -3628,7 +3700,21 @@ export const OperatorApp: React.FC = () => {
                       youtubeDuration: item.youtubeConfig.duration
                     }
                     await window.churchPresenterApi.sendSlide(slide, item.youtubeConfig.targetRoles)
+                    setLiveSlideId(slide.id)
+                    setLiveSourceId(slide.sourceId)
                   }
+                }}
+                onStopProjection={async () => {
+                  await window.churchPresenterApi.controlYouTube('stop')
+                  await window.churchPresenterApi.sendSlide({
+                    id: `clear_yt_${Date.now()}`,
+                    title: '',
+                    body: '',
+                    subtitle: '',
+                    background: { type: 'color', value: '#000000' }
+                  }, ['main', 'lobby', 'stage'])
+                  setLiveSlideId(null)
+                  setLiveSourceId(null)
                 }}
               />
             </div>
@@ -4196,6 +4282,121 @@ export const OperatorApp: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {currentServiceItem?.type === 'blank' && (currentServiceItem.youtubeConfig?.url || (currentServiceItem.notes && (currentServiceItem.notes.includes('youtube.com') || currentServiceItem.notes.includes('youtu.be')))) && (() => {
+                  const rawUrl = currentServiceItem.youtubeConfig?.url || currentServiceItem.notes!
+                  const parsed = parseYouTubeUrl(rawUrl)
+                  const vId = (parsed && parsed.isValid && parsed.videoId) ? parsed.videoId : currentServiceItem.youtubeConfig?.youtubeId
+                  return (
+                    <div
+                      className="pro-blank-yt-control-card"
+                      style={{
+                        backgroundColor: 'var(--bg-surface-raised, #18191c)',
+                        border: '1px solid #334155',
+                        borderRadius: 8,
+                        padding: 14,
+                        margin: '12px 16px 0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 16
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
+                        {vId ? (
+                          <img
+                            src={`https://i.ytimg.com/vi/${vId}/hqdefault.jpg`}
+                            alt=""
+                            style={{
+                              width: 110,
+                              height: 62,
+                              objectFit: 'cover',
+                              borderRadius: 6,
+                              backgroundColor: '#000',
+                              flexShrink: 0
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 50,
+                              height: 50,
+                              borderRadius: 6,
+                              backgroundColor: '#222',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}
+                          >
+                            <Tv size={22} color="#ef4444" />
+                          </div>
+                        )}
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span
+                              style={{
+                                backgroundColor: '#ef4444',
+                                color: '#fff',
+                                fontSize: 10,
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: 4
+                              }}
+                            >
+                              YOUTUBE ADJUNTO
+                            </span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main, #f8fafc)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                              {currentServiceItem.name}
+                            </span>
+                          </div>
+                          <a
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleOpenYouTubeInApp(rawUrl)
+                            }}
+                            title="Clic para abrir en la ventana interna de YouTube"
+                            style={{
+                              fontSize: 12,
+                              color: '#38bdf8',
+                              textDecoration: 'underline',
+                              display: 'block',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {rawUrl}
+                          </a>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenYouTubeInApp(rawUrl)}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 16px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          borderRadius: 6,
+                          border: 'none',
+                          cursor: 'pointer',
+                          flexShrink: 0
+                        }}
+                        title="Abrir este video en la ventana interna de YouTube"
+                      >
+                        <Play size={13} fill="currentColor" />
+                        <span>Abrir en YouTube Interno</span>
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {isLiveDirty && (
                   <div
@@ -5355,7 +5556,7 @@ export const OperatorApp: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="role-select-box">
+                      <div className="role-select-box" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <select
                           value={assignedStableId || 'none'}
                           onChange={async (e) => {
@@ -5366,12 +5567,32 @@ export const OperatorApp: React.FC = () => {
                           }}
                         >
                           <option value="none">-- Sin asignar --</option>
+                          {isAssigned && !isConnected && (
+                            <option value={assignedStableId}>
+                              Desconectada (Guardada)
+                            </option>
+                          )}
                           {displays.map((d) => (
                             <option key={d.stableId} value={d.stableId}>
                               {formatDisplayTitle(d)}
                             </option>
                           ))}
                         </select>
+                        {isAssigned && (
+                          <button
+                            type="button"
+                            className="secondary-action-btn"
+                            style={{ padding: '4px 8px', fontSize: 11, height: 'auto', whiteSpace: 'nowrap' }}
+                            title="Desvincular pantalla de este rol"
+                            onClick={async () => {
+                              await window.churchPresenterApi.assignRole(role.id, null)
+                              const updated = await window.churchPresenterApi.getRoleAssignments()
+                              setAssignments(updated)
+                            }}
+                          >
+                            Desvincular
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -5509,6 +5730,135 @@ export const OperatorApp: React.FC = () => {
                   style={{ backgroundColor: '#FF7A00', borderColor: '#FF7A00', color: '#FFFFFF' }}
                 >
                   {newPlaylistModal.mode === 'template' ? 'Guardar Plantilla' : 'Crear Playlist'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Nueva Diapositiva en Blanco con Enlace Opcional de YouTube */}
+      {blankSlideModal.isOpen && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setBlankSlideModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: 480, backgroundColor: '#18191c', border: '1px solid #334155', borderRadius: 10, padding: 0, overflow: 'hidden' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="modal-header"
+              style={{
+                backgroundColor: '#1f2227',
+                padding: '14px 18px',
+                borderBottom: '1px solid #2d333b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Tv size={18} color="#FF7A00" />
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc' }}>
+                  Nueva Diapositiva en Blanco
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                onClick={() => setBlankSlideModal((prev) => ({ ...prev, isOpen: false }))}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleConfirmCreateBlankSlide(blankSlideModal.title, blankSlideModal.youtubeUrl)
+              }}
+              style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1' }}>
+                  Título o nombre de la diapositiva: <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ej. Anuncios, Bienvenida, Video de Alabanza..."
+                  value={blankSlideModal.title}
+                  onChange={(e) => setBlankSlideModal((prev) => ({ ...prev, title: e.target.value }))}
+                  style={{
+                    backgroundColor: '#111215',
+                    border: '1px solid #3b4252',
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 800, padding: '1px 5px', borderRadius: 3 }}>
+                      YOUTUBE
+                    </span>
+                    Enlace de YouTube (opcional):
+                  </label>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>Opcional</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="https://www.youtube.com/watch?v=... o https://youtu.be/..."
+                  value={blankSlideModal.youtubeUrl}
+                  onChange={(e) => setBlankSlideModal((prev) => ({ ...prev, youtubeUrl: e.target.value }))}
+                  style={{
+                    backgroundColor: '#111215',
+                    border: '1px solid #3b4252',
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    outline: 'none'
+                  }}
+                />
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  Si introduces un link, se creará un botón de acceso directo para abrirlo en el navegador de YouTube interno.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="pro-btn-secondary"
+                  onClick={() => setBlankSlideModal((prev) => ({ ...prev, isOpen: false }))}
+                  style={{ padding: '8px 16px', fontSize: 13, borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="pro-btn-primary"
+                  style={{
+                    backgroundColor: '#FF7A00',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '8px 18px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Crear Diapositiva
                 </button>
               </div>
             </form>
@@ -6116,7 +6466,7 @@ export const OperatorApp: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="role-select-box">
+                              <div className="role-select-box" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <select
                                   value={assignedStableId || 'none'}
                                   onChange={async (e) => {
@@ -6127,12 +6477,32 @@ export const OperatorApp: React.FC = () => {
                                   }}
                                 >
                                   <option value="none">-- Sin asignar --</option>
+                                  {isAssigned && !isConnected && (
+                                    <option value={assignedStableId}>
+                                      Desconectada (Guardada)
+                                    </option>
+                                  )}
                                   {displays.map((d) => (
                                     <option key={d.stableId} value={d.stableId}>
                                       {formatDisplayTitle(d)}
                                     </option>
                                   ))}
                                 </select>
+                                {isAssigned && (
+                                  <button
+                                    type="button"
+                                    className="secondary-action-btn"
+                                    style={{ padding: '4px 8px', fontSize: 11, height: 'auto', whiteSpace: 'nowrap' }}
+                                    title="Desvincular pantalla de este rol"
+                                    onClick={async () => {
+                                      await window.churchPresenterApi.assignRole(role.id, null)
+                                      const updated = await window.churchPresenterApi.getRoleAssignments()
+                                      setAssignments(updated)
+                                    }}
+                                  >
+                                    Desvincular
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )
@@ -7934,6 +8304,13 @@ export const OperatorApp: React.FC = () => {
       <SecondaryBackupModal
         isOpen={isSecondaryBackupModalOpen}
         onClose={() => setIsSecondaryBackupModalOpen(false)}
+      />
+
+      {/* About Modal */}
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+        onOpenShortcuts={() => setIsShortcutsHelpOpen(true)}
       />
 
       {/* Toast Notifications */}

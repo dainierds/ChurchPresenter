@@ -5,6 +5,7 @@ import {
   RotateCw,
   Home,
   Tv,
+  Square,
   PlusCircle,
   Download,
   AlertTriangle,
@@ -20,18 +21,23 @@ import { parseYouTubeUrl } from '../../../shared/youtube-utils'
 interface YouTubeBrowserPanelProps {
   onAddToPlaylist: (item: ServiceItem) => void
   onProjectNow: (item: ServiceItem) => void
+  onStopProjection?: () => void
   isVisible?: boolean
 }
 
 export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   onAddToPlaylist,
   onProjectNow,
+  onStopProjection,
   isVisible = true
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const isAttachedRef = useRef<boolean>(false)
+  const lastBoundsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
   const [currentUrl, setCurrentUrl] = useState<string>('https://www.youtube.com')
   const [inputUrl, setInputUrl] = useState<string>('https://www.youtube.com')
   const [isAdActive, setIsAdActive] = useState<boolean>(false)
+  const [isProjecting, setIsProjecting] = useState<boolean>(false)
   const [isLoadingMeta, setIsLoadingMeta] = useState<boolean>(false)
   const [disclaimerOpen, setDisclaimerOpen] = useState<boolean>(false)
   const [statusToast, setStatusToast] = useState<{ message: string; type: 'info' | 'success' | 'warn' | 'error' } | null>(null)
@@ -58,9 +64,13 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
   // Manage WebContentsView positioning and lifecycle
   useEffect(() => {
     if (!isVisible) {
+      isAttachedRef.current = false
+      lastBoundsRef.current = null
       window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
       return
     }
+
+    let rafId: number | null = null
 
     const updateBounds = () => {
       if (!containerRef.current) return
@@ -73,24 +83,76 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
         height: Math.round(rect.height)
       }
       if (bounds.width > 50 && bounds.height > 50) {
-        window.churchPresenterApi?.openYouTubeBrowser(bounds)
-        window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
+        const last = lastBoundsRef.current
+        const changed =
+          !last ||
+          last.x !== bounds.x ||
+          last.y !== bounds.y ||
+          last.width !== bounds.width ||
+          last.height !== bounds.height
+
+        if (changed) {
+          lastBoundsRef.current = bounds
+          if (isAttachedRef.current) {
+            window.churchPresenterApi?.setYouTubeBrowserBounds?.(bounds)
+          } else {
+            window.churchPresenterApi?.openYouTubeBrowser(bounds)
+            window.churchPresenterApi?.setYouTubeBrowserVisible?.(true)
+            isAttachedRef.current = true
+          }
+        }
       }
     }
 
-    // Delay slightly to let layout settle
-    const timer = setTimeout(updateBounds, 120)
-    window.addEventListener('resize', updateBounds)
+    const scheduleUpdate = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        updateBounds()
+      })
+    }
+
+    // Call immediately and with fallback timers for layout settle
+    updateBounds()
+    const timer1 = setTimeout(updateBounds, 60)
+    const timer2 = setTimeout(updateBounds, 150)
+
+    // ResizeObserver dynamically detects container size changes (e.g. preview pane divider dragging)
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleUpdate()
+      })
+      resizeObserver.observe(containerRef.current)
+    }
+
+    window.addEventListener('resize', scheduleUpdate)
 
     return () => {
-      clearTimeout(timer)
-      window.removeEventListener('resize', updateBounds)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', scheduleUpdate)
+      isAttachedRef.current = false
+      lastBoundsRef.current = null
       window.churchPresenterApi?.setYouTubeBrowserVisible?.(false)
     }
   }, [isVisible])
 
   // Listen to events and poll URL only when visible
   useEffect(() => {
+    // Check initial projection status
+    window.churchPresenterApi?.controlYouTube?.('status').then((status) => {
+      if (status?.isLive) {
+        setIsProjecting(true)
+      }
+    }).catch(() => {})
+
     // Listen to ad status
     const unsubAd = window.churchPresenterApi?.onYouTubeAdStatus((isAd) => {
       setIsAdActive(isAd)
@@ -99,6 +161,15 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
     // Listen to download progress
     const unsubProgress = window.churchPresenterApi?.onYouTubeDownloadProgress?.((progress) => {
       setDownloadProgress(progress)
+    })
+
+    // Listen to YouTube Sync Tick from output windows to detect live projection state
+    const unsubSync = window.churchPresenterApi?.onYouTubeSyncTick?.((tick) => {
+      if (tick && Boolean(tick.videoId)) {
+        setIsProjecting(true)
+      } else {
+        setIsProjecting(false)
+      }
     })
 
     // Poll current URL periodically only when visible
@@ -119,6 +190,7 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
       clearInterval(pollInterval)
       unsubAd?.()
       unsubProgress?.()
+      unsubSync?.()
     }
   }, [isVisible, currentUrl])
 
@@ -214,11 +286,66 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
     }
 
     onProjectNow(item)
+    setIsProjecting(true)
     setStatusToast({
       message: `Proyectando en vivo: "${item.name}"`,
       type: 'success'
     })
   }
+
+  const handleStopProjection = async () => {
+    try {
+      if (onStopProjection) {
+        await onStopProjection()
+      } else {
+        await window.churchPresenterApi?.controlYouTube?.('stop')
+        await window.churchPresenterApi?.sendSlide?.({
+          id: `clear_yt_${Date.now()}`,
+          title: '',
+          body: '',
+          subtitle: '',
+          background: { type: 'color', value: '#000000' }
+        }, ['main', 'lobby', 'stage'])
+      }
+
+      // Navigate YouTube back to home screen so the operator can search for another video
+      await window.churchPresenterApi?.navigateYouTubeBrowser?.('home')
+      setCurrentUrl('https://www.youtube.com')
+      setInputUrl('https://www.youtube.com')
+      setIsProjecting(false)
+
+      setStatusToast({
+        message: 'Proyección detenida. Volviendo a la pantalla principal de YouTube.',
+        type: 'info'
+      })
+    } catch (err: any) {
+      console.error('Error stopping YouTube projection:', err)
+      setStatusToast({
+        message: `Error al detener proyección: ${err.message}`,
+        type: 'error'
+      })
+    }
+  }
+
+  // Keyboard shortcut Ctrl+Y toggles project / stop projection
+  useEffect(() => {
+    if (!isVisible) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (isProjecting) {
+          handleStopProjection()
+        } else {
+          handleProjectCurrentVideo()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isVisible, isProjecting, currentUrl])
 
   const handleAddToPlaylist = async () => {
     const item = await getActiveVideoData()
@@ -350,16 +477,28 @@ export const YouTubeBrowserPanel: React.FC<YouTubeBrowserPanelProps> = ({
             </div>
           )}
 
-          <button
-            className="pro-yt-action-btn pro-yt-project-btn"
-            onClick={handleProjectCurrentVideo}
-            disabled={isLoadingMeta}
-            title="Proyectar este video inmediatamente en las salidas (Ctrl+Y)"
-          >
-            <Tv size={15} />
-            <span>Proyectar este video</span>
-            <kbd className="pro-kbd-badge">Ctrl+Y</kbd>
-          </button>
+          {isProjecting ? (
+            <button
+              className="pro-yt-action-btn pro-yt-stop-project-btn"
+              onClick={handleStopProjection}
+              title="Dejar de proyectar en las pantallas, detener reproducción y volver al inicio (Ctrl+Y)"
+            >
+              <Square size={13} fill="#ffffff" />
+              <span>Dejar de proyectar</span>
+              <kbd className="pro-kbd-badge">Ctrl+Y</kbd>
+            </button>
+          ) : (
+            <button
+              className="pro-yt-action-btn pro-yt-project-btn"
+              onClick={handleProjectCurrentVideo}
+              disabled={isLoadingMeta}
+              title="Proyectar este video inmediatamente en las salidas (Ctrl+Y)"
+            >
+              <Tv size={15} />
+              <span>Proyectar este video</span>
+              <kbd className="pro-kbd-badge">Ctrl+Y</kbd>
+            </button>
+          )}
 
           <button
             className="pro-yt-action-btn"

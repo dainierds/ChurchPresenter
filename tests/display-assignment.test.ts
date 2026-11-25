@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   reconcileRoleAssignments,
   formatDisplayTitle,
-  enrichDisplaysWithStableIds
+  enrichDisplaysWithStableIds,
+  matchDisplayByStableId
 } from '../src/shared/display-utils'
 import { RoleAssignment } from '../src/shared/types'
 
@@ -73,5 +74,33 @@ describe('Display Assignment Logic', () => {
     const secondaryTitle = formatDisplayTitle(mockDisplays[1])
     expect(secondaryTitle).toContain('Pantalla 2: Auditorium Projector via Splitter (1920x1080)')
     expect(secondaryTitle).not.toContain('(Principal)')
+  })
+
+  it('determines role status as unassigned/deactivated when display is disconnected or absent', () => {
+    // Single connected monitor (e.g. laptop only)
+    const singleDisplay = [mockDisplays[0]]
+    const savedAssignments: RoleAssignment = {
+      main: 'disp_saved-projector_1920x1080_idx_1',
+      stage: 'disp_saved-stage_1920x1080_idx_2',
+      lobby: null
+    }
+
+    // Role is connected only if assigned AND matched with currently connected displays
+    const isMainConnected = Boolean(savedAssignments.main && matchDisplayByStableId(savedAssignments.main, singleDisplay))
+    const isStageConnected = Boolean(savedAssignments.stage && matchDisplayByStableId(savedAssignments.stage, singleDisplay))
+    const isLobbyConnected = Boolean(savedAssignments.lobby && matchDisplayByStableId(savedAssignments.lobby, singleDisplay))
+
+    expect(isMainConnected).toBe(false)
+    expect(isStageConnected).toBe(false)
+    expect(isLobbyConnected).toBe(false)
+
+    // Toolbar status class must be 'unassigned' (deactivated / grey dot) for all of them
+    const audienceStatus = isMainConnected ? 'connected' : 'unassigned'
+    const stageStatus = isStageConnected ? 'connected' : 'unassigned'
+    const lobbyStatus = isLobbyConnected ? 'connected' : 'unassigned'
+
+    expect(audienceStatus).toBe('unassigned')
+    expect(stageStatus).toBe('unassigned')
+    expect(lobbyStatus).toBe('unassigned')
   })
 })

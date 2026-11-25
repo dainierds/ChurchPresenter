@@ -16,6 +16,7 @@ import {
   Radio
 } from 'lucide-react'
 import { PresenterState, DisplayInfo, RoleAssignment, RemoteServerStatus, SystemMetrics, LoopStatus, BroadcastStatus } from '../../../shared/types'
+import { matchDisplayByStableId } from '../../../shared/display-utils'
 
 interface ProToolbarProps {
   searchQuery: string
@@ -91,35 +92,17 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
   loopStatus,
   onStopLoop
 }) => {
-  const isMainAssigned = Boolean(assignments.main)
   const isMainConnected =
-    isMainAssigned &&
-    displays.some((d) => d.stableId === assignments.main || String(d.id) === assignments.main)
-  const audienceStatusClass = !isMainAssigned
-    ? 'unassigned'
-    : isMainConnected
-    ? 'connected'
-    : 'disconnected'
+    Boolean(assignments.main && matchDisplayByStableId(assignments.main, displays))
+  const audienceStatusClass = isMainConnected ? 'connected' : 'unassigned'
 
-  const isStageAssigned = Boolean(assignments.stage)
   const isStageConnected =
-    isStageAssigned &&
-    displays.some((d) => d.stableId === assignments.stage || String(d.id) === assignments.stage)
-  const stageStatusClass = !isStageAssigned
-    ? 'unassigned'
-    : isStageConnected
-    ? 'connected'
-    : 'disconnected'
+    Boolean(assignments.stage && matchDisplayByStableId(assignments.stage, displays))
+  const stageStatusClass = isStageConnected ? 'connected' : 'unassigned'
 
-  const isLobbyAssigned = Boolean(assignments.lobby)
   const isLobbyConnected =
-    isLobbyAssigned &&
-    displays.some((d) => d.stableId === assignments.lobby || String(d.id) === assignments.lobby)
-  const lobbyStatusClass = !isLobbyAssigned
-    ? 'unassigned'
-    : isLobbyConnected
-    ? 'connected'
-    : 'disconnected'
+    Boolean(assignments.lobby && matchDisplayByStableId(assignments.lobby, displays))
+  const lobbyStatusClass = isLobbyConnected ? 'connected' : 'unassigned'
 
   const isMediaActive = Boolean(state?.currentSlide?.mediaUrl || state?.mediaSyncTick?.isPlaying)
 
@@ -227,18 +210,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             type="button"
             className={`pro-status-pill-btn ${audienceStatusClass}`}
             onClick={() => {
-              if (!isMainAssigned && onOpenDisplaysModal) {
+              if (onOpenDisplaysModal) {
                 onOpenDisplaysModal()
               } else {
                 onOpenOutputPreviewOrSettings?.('main')
               }
             }}
             title={
-              !isMainAssigned
-                ? 'Audiencia: No asignado (clic para configurar pantallas)'
-                : isMainConnected
-                ? 'Audiencia: Asignado y conectado (clic para vista previa)'
-                : 'Audiencia: Asignado pero desconectado (clic para configurar)'
+              !isMainConnected
+                ? 'Audiencia: Sin pantalla asignada (clic para configurar pantallas)'
+                : 'Audiencia: Conectada y activa (clic para configurar pantallas)'
             }
           >
             <span className="pro-status-dot" />
@@ -248,18 +229,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             type="button"
             className={`pro-status-pill-btn ${stageStatusClass}`}
             onClick={() => {
-              if (!isStageAssigned && onOpenDisplaysModal) {
+              if (onOpenDisplaysModal) {
                 onOpenDisplaysModal()
               } else {
                 onOpenOutputPreviewOrSettings?.('stage')
               }
             }}
             title={
-              !isStageAssigned
-                ? 'Escenario: No asignado (clic para configurar pantallas)'
-                : isStageConnected
-                ? 'Escenario: Asignado y conectado (clic para vista previa)'
-                : 'Escenario: Asignado pero desconectado (clic para configurar)'
+              !isStageConnected
+                ? 'Escenario: Sin pantalla asignada (clic para configurar pantallas)'
+                : 'Escenario: Conectada y activa (clic para configurar pantallas)'
             }
           >
             <span className="pro-status-dot" />
@@ -269,18 +248,16 @@ export const ProToolbar: React.FC<ProToolbarProps> = ({
             type="button"
             className={`pro-status-pill-btn ${lobbyStatusClass}`}
             onClick={() => {
-              if (!isLobbyAssigned && onOpenDisplaysModal) {
+              if (onOpenDisplaysModal) {
                 onOpenDisplaysModal()
               } else {
                 onOpenOutputPreviewOrSettings?.('lobby')
               }
             }}
             title={
-              !isLobbyAssigned
-                ? 'Vestíbulo: No asignado (clic para configurar pantallas)'
-                : isLobbyConnected
-                ? 'Vestíbulo: Asignado y conectado (clic para vista previa)'
-                : 'Vestíbulo: Asignado pero desconectado (clic para configurar)'
+              !isLobbyConnected
+                ? 'Vestíbulo: Sin pantalla asignada (clic para configurar pantallas)'
+                : 'Vestíbulo: Conectada y activa (clic para configurar pantallas)'
             }
           >
             <span className="pro-status-dot" />
